@@ -1,0 +1,78 @@
+# {{project.displayName}}
+
+Backend CRUD Spring Boot {{springBootVersion}}, Java 21 y PostgreSQL, generado desde el snapshot UML {{snapshotVersion}}. Proyecto Maven independiente de la herramienta de diseño.
+
+## Opcion 1: Docker (API y base de datos)
+
+Desde esta carpeta, copiar `.env.example` a `.env` y cambiar `DB_PASSWORD`:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+En Linux/macOS usar `cp .env.example .env`. Se requiere Docker con Compose. La primera compilacion descarga imagenes y dependencias; prepararlas antes de una demostracion sin internet.
+
+- API: http://localhost:8081/api/
+- Estado: http://localhost:8081/actuator/health
+- Swagger: http://localhost:8081/swagger-ui.html
+- OpenAPI: http://localhost:8081/v3/api-docs
+
+`APP_PORT` cambia el puerto publicado (8081 evita colision con el diseñador en 8080). PostgreSQL se publica solo en localhost, `DB_PORT=5433`, y guarda datos en un volumen. `docker compose stop` detiene conservando datos; `docker compose start` reanuda. No borrar el volumen si se desea conservar registros.
+
+## Opcion 2: IDE / Maven + PostgreSQL
+
+Requiere Java 21 y Maven 3.9+. Abrir `pom.xml` en el IDE como proyecto Maven. No modificar las clases generadas para configurar la conexion.
+
+Se puede levantar solo la base del paquete:
+
+```powershell
+docker compose up -d db
+$env:DATABASE_URL = 'jdbc:postgresql://localhost:5433/{{project.databaseName}}'
+$env:DB_USER = 'postgres'
+$env:DB_PASSWORD = 'cambiar-esta-clave'
+$env:PORT = '8081'
+mvn clean package
+java -jar target/{{project.artifactId}}-{{backendVersion}}.jar
+```
+
+Usar la misma clave, nombre y puerto de base que se configuraron en `.env`. Si ya hay un PostgreSQL local, crear la base vacia y apuntar `DATABASE_URL` a ella; no es necesario Docker. En Linux/macOS establecer las variables mediante `export NOMBRE='valor'`. En el IDE configurarlas en el perfil de ejecucion de `{{project.applicationClassName}}`.
+
+**`.env` lo carga Compose; Java/Maven no lo carga automaticamente.** Para ejecutar desde IDE o terminal se deben establecer esas variables. Tambien se admite `mvn spring-boot:run`. No ejecutar simultaneamente dos instancias en el mismo puerto.
+
+Hibernate crea/actualiza el esquema mediante las entidades (`ddl-auto=update`). Sirve para el arranque y demostracion; los cambios de esquema de produccion necesitan migraciones revisadas y respaldo. Un cambio de nombre de columna no implica una migracion automatica de sus datos.
+
+## Probar con Postman
+
+1. Importar `postman/collection.json` y `postman/local.environment.json`.
+2. Seleccionar el entorno local y ajustar `baseUrl` si cambio el puerto.
+3. En una **base de prueba vacia**, ejecutar la coleccion con Collection Runner. Primero crea entidades referenciadas, luego consulta/modifica y finalmente elimina en orden inverso.
+4. Revisar los tests HTTP/JSON y captura de identificadores. Los IDs estan en variables de coleccion; los cuerpos conservan tipos numericos o texto segun el diagrama.
+
+La coleccion completa **borra sus registros al terminar**. Para conservarlos, ejecutar solo las solicitudes anteriores a Eliminar. No utilizar IDs de registros reales. Las relaciones opcionales de los ejemplos empiezan en null; se pueden completar mediante PUT. Si existen ciclos de referencias obligatorias, la descripcion de la coleccion lo advierte: se necesitan datos previos o revisar esas multiplicidades.
+
+## Capas y contrato para Flutter
+
+Flujo: HTTP → Controller → Service → Repository → PostgreSQL. El controlador recibe/devuelve DTOs; el servicio transforma entre DTO y entidad dentro de la transaccion.
+
+- `model`: entidades JPA, tipos, claves, restricciones y relaciones.
+- `repository`: persistencia JPA y consultas por claves foraneas.
+- `service`: CRUD, transacciones, validacion de referencias y conversion a DTO.
+- `controller`: rutas REST GET/POST/PUT/DELETE.
+- `dto`: records Java planos, campos heredados y relaciones como IDs; validacion de obligatorios, longitudes y decimales.
+- `exception`: errores JSON consistentes, con `fieldErrors` para asociarlos a controles del frontend.
+- `config`: CORS configurable para clientes web. Postman y Flutter nativo no necesitan CORS.
+- `docs/flutter-api.md`: reglas del contrato, tipos, conexion desde emulador/telefono y ejemplos especificos de cada DTO.
+- `docs/dto-contract.json`: campos, anulabilidad, tipos Java/JSON/Dart, filtros y ejemplos de cada recurso. OpenAPI completo disponible al ejecutar la API.
+- `generation-manifest.json`: snapshot y archivos emitidos.
+
+## Despliegue
+
+El mismo Compose funciona en un servidor con Docker. Para un servicio de contenedores con PostgreSQL externo, construir el `Dockerfile` e inyectar `DATABASE_URL` (formato JDBC), `DB_USER`, `DB_PASSWORD` y `PORT`. El contenedor ejecuta Java con usuario sin privilegios. Comprobar `/actuator/health` antes de dirigir trafico.
+
+{{#if mobileRuntime}}
+Este perfil incluye login de administrador con Bearer token y `/mobile-sync` para la cola offline del Android adjunto. Configurar `AUTH_USERNAME`, `AUTH_PASSWORD` y `AUTH_TOKEN_SECRET`; en Postman ejecutar primero Iniciar sesion. Consultar `../mobile/README.md` para conflictos, limites y preparacion Android. Para produccion configurar HTTPS, permisos del negocio y gestion de usuarios segun el caso de uso. Reglas como cobros o descuento de stock no se infieren de las relaciones UML.
+{{else}}
+Si se utiliza Flutter web, configurar `CORS_ALLOWED_ORIGINS` con origenes exactos separados por comas. El generado no incluye autenticacion ni permisos de negocio: añadirlos y configurar HTTPS antes de exponer datos en internet. La sincronizacion offline y reglas como cobros o descuento de stock se implementan en su caso de uso; no se infieren de las relaciones UML.
+{{/if}}

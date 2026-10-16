@@ -1,0 +1,11 @@
+[Unit]
+Description=Comprobar HTTPS, disponibilidad, copias y disco de UML
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/uml
+Environment=UML_ENV_FILE=/etc/uml/production.env
+EnvironmentFile=-/etc/uml/monitor.env
+ExecStart=/bin/bash /opt/uml/scripts/production.sh monitor
+# Connect systemd failures or the public /api/ready endpoint to your alerting service.

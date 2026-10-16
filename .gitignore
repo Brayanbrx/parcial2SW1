@@ -1,0 +1,115 @@
+# Dependencias
+node_modules/
+.pnp.*
+.npm/
+
+# Compilacion
+dist/
+dist-types/
+*.tsbuildinfo
+*.timestamp-*.mjs
+
+# Entorno (RNF-08: el real nunca se versiona, el ejemplo si)
+.env
+.env.*
+!.env.example
+infra/.env
+*.env
+!*.env.example
+*.dump
+*.dump.partial
+
+# Secretos y firmas locales
+*.pem
+*.keystore
+*.jks
+key.properties
+
+# Salidas de herramientas
+reports/
+coverage/
+.vite/
+playwright-report/
+blob-report/
+test-results/
+.eslintcache
+.prettiercache
+.cache/
+
+# Registros
+logs/
+*.log
+npm-debug.log*
+
+# Prisma
+backend/prisma/generated/
+
+# Artefactos generados por la plataforma
+generated-output/
+*.zip
+
+# Trabajo local fuera del producto: scripts desechables y sus salidas
+# (modelos de Enterprise Architect, figuras, documentos exportados).
+/tmp/
+/temp/
+/output/
+*.tmp
+*.bak
+
+# Enterprise Architect: modelos y bloqueos que genera al abrirlos.
+*.eap
+*.eapx
+*.qea
+*.qeax
+*.ldb
+
+# Documentos de Office abiertos (archivos de bloqueo).
+~$*
+
+# Java / Maven (proyectos generados que se compilen localmente)
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.iml
+*.class
+hs_err_pid*
+
+# Flutter / Dart / Android (apps generadas que se compilen localmente)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.gradle/
+.kotlin/
+.cxx/
+local.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+build/
+
+# Editores y sistema
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Herramientas de asistencia: configuracion de la maquina, no del proyecto.
+.agents/
+.claude/
+.github/modernize/
+skills-lock.json
+
+# Documentos de trabajo que no se versionan: el plan maestro y la especificacion
+# de apoyo. La documentacion que si se versiona —ADR, requisitos, arquitectura,
+# despliegue— vive en el resto de `docs/`. Anclado a la raiz: sin la barra
+# inicial tambien ignoraba `templates/flutter/docs/`, que es codigo del generador.
+contexto/
+docs/
+

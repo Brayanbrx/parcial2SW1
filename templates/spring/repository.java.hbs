@@ -1,0 +1,11 @@
+package {{project.packageName}}.repository;
+
+{{#each repositoryImports}}
+import {{this}};
+{{/each}}
+
+public interface {{entity.repositoryName}} extends JpaRepository<{{entity.className}}, {{primaryKey.javaType}}> {
+{{#each entity.relationships}}
+    List<{{../entity.className}}> {{finderMethodName}}({{targetPrimaryKeyJavaType}} {{queryParameterName}});
+{{/each}}
+}

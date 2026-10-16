@@ -1,0 +1,56 @@
+package {{project.packageName}}.model;
+
+{{#each entityImports}}
+import {{this}};
+{{/each}}
+
+@Entity
+@Table(name = "{{entity.tableName}}")
+{{#if inheritanceAnnotation}}
+{{{inheritanceAnnotation}}}
+{{/if}}
+{{#if primaryKeyJoinAnnotation}}
+{{{primaryKeyJoinAnnotation}}}
+{{/if}}
+public class {{entity.className}}{{#if entity.superClassName}} extends {{entity.superClassName}}{{/if}} {
+{{#if mobileRuntime}}{{#unless entity.superClassName}}
+    @jakarta.persistence.Version
+    @Column(name = "_uml_sync_version", nullable = false)
+    private long umlSyncVersion;
+{{/unless}}{{/if}}
+
+{{#each declaredAttributes}}
+{{#if primaryKey}}
+    @Id
+{{/if}}
+    {{{columnAnnotation}}}
+    private {{javaType}} {{fieldName}};
+
+{{/each}}
+{{#each declaredRelationships}}
+    {{{associationAnnotation}}}
+    {{{joinColumnAnnotation}}}
+    private {{targetClassName}} {{fieldName}};
+
+{{/each}}
+{{#each declaredAttributes}}
+    public {{javaType}} {{getterName}}() {
+        return {{fieldName}};
+    }
+
+    public void {{setterName}}({{javaType}} {{fieldName}}) {
+        this.{{fieldName}} = {{fieldName}};
+    }
+
+{{/each}}
+{{#each declaredRelationships}}
+    public {{targetClassName}} {{getterName}}() {
+        return {{fieldName}};
+    }
+
+    public void {{setterName}}({{targetClassName}} {{fieldName}}) {
+        this.{{fieldName}} = {{fieldName}};
+    }
+
+{{/each}}
+}

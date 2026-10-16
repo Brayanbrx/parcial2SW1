@@ -1,0 +1,110 @@
+package {{project.packageName}}.service;
+
+{{#each serviceImports}}
+import {{this}};
+{{/each}}
+
+@Service
+@Transactional
+public class {{entity.serviceName}} {
+
+{{#each dependencies}}
+    private final {{type}} {{fieldName}};
+{{/each}}
+
+    public {{entity.serviceName}}(
+{{#each dependencies}}
+            {{type}} {{fieldName}}{{#unless last}},{{/unless}}
+{{/each}}
+    ) {
+{{#each dependencies}}
+        this.{{fieldName}} = {{fieldName}};
+{{/each}}
+    }
+
+    @Transactional(readOnly = true)
+    public List<{{entity.dtoName}}> findAll() {
+        return repository.findAll().stream().map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public {{entity.dtoName}} findById({{primaryKey.javaType}} id) {
+        return toDto(requireEntity(id));
+    }
+
+{{#each relationships}}
+    @Transactional(readOnly = true)
+    public List<{{../entity.dtoName}}> {{serviceFinderMethodName}}({{queryJavaType}} id) {
+        return repository.{{finderMethodName}}(id).stream().map(this::toDto).toList();
+    }
+
+{{/each}}
+    public {{entity.dtoName}} create({{entity.dtoName}} dto) {
+        var id = dto.{{primaryKey.fieldName}}();
+{{#if primaryKey.uuid}}
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+{{else}}
+        if (id == null) {
+            throw new IllegalArgumentException("La clave primaria es obligatoria.");
+        }
+{{/if}}
+        var existing = repository.findById(id);
+        if (existing.isPresent()) {
+            return toDto(existing.get());
+        }
+
+        var entity = new {{entity.className}}();
+        entity.{{primaryKey.setterName}}(id);
+        apply(dto, entity);
+        return toDto(repository.save(entity));
+    }
+
+    public {{entity.dtoName}} update({{primaryKey.javaType}} id, {{entity.dtoName}} dto) {
+        if (dto.{{primaryKey.fieldName}}() != null && !id.equals(dto.{{primaryKey.fieldName}}())) {
+            throw new IllegalArgumentException("La clave del cuerpo debe coincidir con la ruta.");
+        }
+        var entity = requireEntity(id);
+        apply(dto, entity);
+        return toDto(repository.save(entity));
+    }
+
+    public void delete({{primaryKey.javaType}} id) {
+        var entity = requireEntity(id);
+        repository.delete(entity);
+        repository.flush();
+    }
+
+    private {{entity.className}} requireEntity({{primaryKey.javaType}} id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("{{entity.className}}", id));
+    }
+
+    private void apply({{entity.dtoName}} dto, {{entity.className}} entity) {
+{{#each nonPrimaryAttributes}}
+        entity.{{setterName}}(dto.{{fieldName}}());
+{{/each}}
+{{#each relationships}}
+{{#if optional}}
+        if (dto.{{queryParameterName}}() == null) {
+            entity.{{setterName}}(null);
+        } else {
+            entity.{{setterName}}({{repositoryFieldName}}.findById(dto.{{queryParameterName}}())
+                    .orElseThrow(() -> new ResourceNotFoundException("{{targetClassName}}", dto.{{queryParameterName}}())));
+        }
+{{else}}
+        entity.{{setterName}}({{repositoryFieldName}}.findById(dto.{{queryParameterName}}())
+                .orElseThrow(() -> new ResourceNotFoundException("{{targetClassName}}", dto.{{queryParameterName}}())));
+{{/if}}
+{{/each}}
+    }
+
+    private {{entity.dtoName}} toDto({{entity.className}} entity) {
+        return new {{entity.dtoName}}(
+{{#each dtoValues}}
+                {{{expression}}}{{#unless last}},{{/unless}}
+{{/each}}
+        );
+    }
+}

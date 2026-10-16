@@ -1,0 +1,8 @@
+package {{project.packageName}}.exception;
+
+public class ResourceNotFoundException extends RuntimeException {
+
+    public ResourceNotFoundException(String resource, Object id) {
+        super(resource + " con identificador " + id + " no existe.");
+    }
+}

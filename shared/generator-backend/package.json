@@ -1,0 +1,28 @@
+{
+  "name": "@uml/generator-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Emision determinista del proyecto Spring Boot a partir de la representacion intermedia (RA-07).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@uml/contracts": "*",
+    "@uml/generation-ir": "*",
+    "archiver": "^8.0.0",
+    "handlebars": "^4.7.9"
+  }
+}

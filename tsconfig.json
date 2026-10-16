@@ -1,0 +1,38 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "shared/contracts"
+    },
+    {
+      "path": "shared/domain-core"
+    },
+    {
+      "path": "fixtures"
+    },
+    {
+      "path": "shared/generation-ir"
+    },
+    {
+      "path": "shared/generator-backend"
+    },
+    {
+      "path": "shared/xmi"
+    },
+    {
+      "path": "shared/ai"
+    },
+    {
+      "path": "shared/yjs-adapter"
+    },
+    {
+      "path": "backend/api"
+    },
+    {
+      "path": "backend/collab"
+    },
+    {
+      "path": "frontend"
+    }
+  ]
+}

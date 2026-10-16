@@ -1,0 +1,178 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T06",
+  "title": "Inscripciones",
+  "coverage": "Muchos a muchos con atributos, resuelto con entidad intermedia (RM-01)",
+  "semantic": {
+    "classes": [
+      {
+        "id": "69f11a2a-3285-5af2-8414-feef53c4be80",
+        "displayName": "Alumno",
+        "codeName": "Alumno",
+        "databaseName": "alumno",
+        "attributes": [
+          {
+            "id": "0a7a22a8-db7e-5a0b-93aa-f6dea52f357e",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "3b94fd3a-c6b0-5c87-9c73-bb37bc38db61",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "7f0d81f8-e8bc-5efc-b982-164775d3647c",
+            "displayName": "registro",
+            "codeName": "registro",
+            "databaseName": "registro",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          }
+        ]
+      },
+      {
+        "id": "2f52aed7-9a27-5ca0-8dc0-81a96d3185a1",
+        "displayName": "Materia",
+        "codeName": "Materia",
+        "databaseName": "materia",
+        "attributes": [
+          {
+            "id": "eb3ffca8-0b45-58cf-af9f-a1362dcccbad",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "001e1dfc-2e0c-5ba4-b174-2b7acb8b1e82",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "9d83eb5d-719f-5e9e-a9a0-63e396a1a778",
+            "displayName": "sigla",
+            "codeName": "sigla",
+            "databaseName": "sigla",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          },
+          {
+            "id": "d811634e-74f9-58a7-af8c-b2b6bcf8c403",
+            "displayName": "creditos",
+            "codeName": "creditos",
+            "databaseName": "creditos",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "48f30e54-1b79-51c6-82d5-ffdf8563bf8c",
+        "displayName": "Inscripcion",
+        "codeName": "Inscripcion",
+        "databaseName": "inscripcion",
+        "attributes": [
+          {
+            "id": "2daf863c-1c08-5cc5-bbe9-fac531676d82",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "83d5f4ee-817b-55fc-b338-0b27957ea241",
+            "displayName": "gestion",
+            "codeName": "gestion",
+            "databaseName": "gestion",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "f24e37b4-c620-5de0-ac97-6dde680c8cfd",
+            "displayName": "nota",
+            "codeName": "nota",
+            "databaseName": "nota",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          },
+          {
+            "id": "73896890-d093-53a9-a43a-d6a6c5c6d351",
+            "displayName": "fecha",
+            "codeName": "fecha",
+            "databaseName": "fecha",
+            "type": "Date",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "04755607-1fae-54f7-ac92-083e069cf5a6",
+        "sourceClassId": "69f11a2a-3285-5af2-8414-feef53c4be80",
+        "targetClassId": "48f30e54-1b79-51c6-82d5-ffdf8563bf8c",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "913d512d-e004-5056-aed2-9995c0fd5454",
+        "sourceClassId": "2f52aed7-9a27-5ca0-8dc0-81a96d3185a1",
+        "targetClassId": "48f30e54-1b79-51c6-82d5-ffdf8563bf8c",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "69f11a2a-3285-5af2-8414-feef53c4be80": {
+        "x": 0,
+        "y": 0
+      },
+      "2f52aed7-9a27-5ca0-8dc0-81a96d3185a1": {
+        "x": 320,
+        "y": 0
+      },
+      "48f30e54-1b79-51c6-82d5-ffdf8563bf8c": {
+        "x": 640,
+        "y": 0
+      }
+    },
+    "sizes": {}
+  }
+}

@@ -1,0 +1,184 @@
+# Integracion continua de la plataforma (RNF-13).
+#
+# En la fase 0 el flujo verifica formato, lint, tipos, pruebas y que el esquema
+# de base de datos es valido. A partir de la fase 2 se anade el banco de
+# regresion del generador: cada cambio ejecuta al menos T01 y la rama principal
+# el banco completo.
+#
+# RNF-15 y 15.5: las pruebas del dominio no necesitan base de datos, navegador
+# ni proveedor de IA, y por eso `npm test` corre en milisegundos.
+#
+# Las otras dos levantan PostgreSQL en Docker porque no tiene sentido probarlas
+# sin el: la integracion de la API comprueba autorizacion, membresias y
+# cascadas, que solo existen de verdad en la base; y la del generador exige
+# comprobar el backend generado en ejecucion.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.15.0'
+
+jobs:
+  produccion:
+    name: HTTPS, WebSocket y restauracion aislada
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:production
+
+  verificacion:
+    name: Formato, lint, tipos y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          # El POM se genera en tiempo de prueba; esta plantilla es la entrada
+          # estable que determina sus dependencias y siempre existe en checkout.
+          cache-dependency-path: templates/spring/pom.xml.hbs
+
+      - name: Instalar dependencias exactas del lockfile
+        run: npm ci
+
+      - name: Formato
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Pruebas
+        run: npm test
+
+      - name: Integracion de la API
+        run: npm run test:api
+
+      - name: Backend generado T01
+        run: npm run test:generated
+
+      - name: Esquema de base de datos
+        run: npm run db:validate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-vitest
+          path: reports/
+          if-no-files-found: ignore
+
+  # RNF-13: cada cambio ejecuta al menos T01; la rama principal, el banco
+  # completo. Los ocho modelos se compilan, arrancan y ejecutan su CRUD, y eso
+  # cuesta minutos que no tiene sentido pagar en cada propuesta de cambio.
+  banco-completo:
+    name: Banco de regresion T01-T08 (incluye T07R)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: templates/spring/pom.xml.hbs
+
+      - name: Instalar dependencias exactas del lockfile
+        run: npm ci
+
+      - name: Banco completo del backend generado
+        run: npm run test:bank
+
+  extremo-a-extremo:
+    name: Dos navegadores contra el entorno completo
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias exactas del lockfile
+        run: npm ci
+
+      - name: Instalar el navegador
+        run: npm run e2e:install
+
+      - name: Configuracion del entorno
+        run: |
+          cp infra/.env.example infra/.env
+          sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 16)/" infra/.env
+          sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" infra/.env
+
+      - name: Levantar la plataforma
+        run: npm run up
+
+      - name: Esperar a que todo este sano
+        run: |
+          for intento in $(seq 1 60); do
+            if curl -fs http://localhost:8080/api/health > /dev/null                && curl -fs http://localhost:8080/collab/health > /dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/compose.yml --env-file infra/.env ps
+          docker compose -f infra/compose.yml --env-file infra/.env logs --tail 80
+          exit 1
+
+      - name: Pruebas de dos navegadores
+        run: npm run test:e2e
+
+      - name: Registros si algo fallo
+        if: failure()
+        run: docker compose -f infra/compose.yml --env-file infra/.env logs --tail 200
+
+      - name: Publicar trazas
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trazas-playwright
+          path: test-results/
+          if-no-files-found: ignore

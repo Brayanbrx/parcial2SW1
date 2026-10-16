@@ -1,0 +1,25 @@
+{
+  "name": "@uml/domain-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nucleo de dominio: normalizacion de nombres, aplicador de comandos y validador. Sin dependencias de navegador, base de datos, WebSocket, IA ni sistema de archivos (RNF-15).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@uml/contracts": "*"
+  }
+}

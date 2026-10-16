@@ -1,0 +1,28 @@
+{
+  "name": "@uml/fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Banco de regresion T01-T07 y demas material de prueba compartido.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "emit": "tsx src/emit.ts",
+    "report": "tsx src/report.ts"
+  },
+  "dependencies": {
+    "@uml/contracts": "*",
+    "@uml/domain-core": "*"
+  }
+}

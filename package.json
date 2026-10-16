@@ -1,0 +1,73 @@
+{
+  "name": "plataforma-uml",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.15.0",
+    "npm": ">=11.0.0"
+  },
+  "workspaces": [
+    "shared/*",
+    "fixtures",
+    "backend/api",
+    "backend/collab",
+    "frontend"
+  ],
+  "scripts": {
+    "postinstall": "prisma generate",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc --build && tsc -p config/tsconfig.test.json",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pretest:generated": "npm run build",
+    "test:generated": "tsx shared/generator-backend/tests/verify-bank.ts T01",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "clean": "tsc --build --clean",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "dev:api": "npm run dev --workspace @uml/api",
+    "dev:collab": "npm run dev --workspace @uml/collab",
+    "dev:web": "npm run dev --workspace @uml/web",
+    "up": "docker compose -f infra/compose.yml --env-file infra/.env up -d",
+    "down": "docker compose -f infra/compose.yml --env-file infra/.env down",
+    "ps": "docker compose -f infra/compose.yml --env-file infra/.env ps",
+    "db:validate": "prisma validate",
+    "fixtures:emit": "npm run emit --workspace @uml/fixtures",
+    "bank:report": "npm run report --workspace @uml/fixtures",
+    "test:api": "vitest run --config config/vitest.integration.config.ts",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "test:offline": "npm run build --workspace @uml/web && playwright test --config e2e/offline/playwright.config.ts",
+    "test:production": "node scripts/verify-production.mjs",
+    "e2e:install": "playwright install --with-deps chromium",
+    "test:bank": "tsx shared/generator-backend/tests/verify-bank.ts",
+    "demo:backend": "tsx scripts/generate-demo-backend.ts",
+    "predemo:mobile": "tsc --build shared/generator-backend fixtures shared/xmi",
+    "demo:mobile": "tsx scripts/generate-demo-backend.ts --mobile",
+    "seed": "tsx scripts/seed-demo.ts"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "mysql2": "3.24.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@hocuspocus/provider": "^4.6.0",
+    "@playwright/test": "^1.62.1",
+    "@types/archiver": "^8.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.0.0",
+    "prettier": "^3.3.0",
+    "prisma": "7.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}

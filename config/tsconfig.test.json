@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "noEmit": true,
+    "types": ["node", "vitest/globals"],
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "../shared/*/tests/**/*.ts",
+    "../backend/*/tests/**/*.ts",
+    "../frontend/tests/**/*.ts",
+    "../fixtures/tests/**/*.ts",
+    "../e2e/**/*.ts",
+    "../vitest.config.ts",
+    "./vitest.integration.config.ts",
+    "../prisma.config.ts"
+  ]
+}

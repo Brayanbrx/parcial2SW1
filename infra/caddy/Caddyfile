@@ -1,0 +1,25 @@
+# Origen unico para la demostracion. El navegador solo conoce esta direccion:
+# desaparecen los problemas de origen cruzado y las otras computadoras del aula
+# llegan a un puerto en lugar de tres.
+#
+# Los dos procesos sirven sus rutas en la raiz (`/health`, no `/api/health`), asi
+# que el prefijo se despoja aqui. Es el mismo comportamiento que nginx aplica en
+# el perfil por defecto: una sola forma de direccionar, dos lugares donde se
+# resuelve.
+
+:80 {
+	encode gzip
+
+	handle_path /api/* {
+		reverse_proxy api:3001
+	}
+
+	# `/collab*` y no `/collab/*`: el cliente conecta a `/collab` a secas.
+	handle_path /collab* {
+		reverse_proxy collab:3002
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+}

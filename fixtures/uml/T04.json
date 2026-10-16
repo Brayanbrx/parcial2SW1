@@ -1,0 +1,217 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T04",
+  "title": "Inventario de activos",
+  "coverage": "Varias claves foraneas sobre una entidad y una relacion opcional",
+  "semantic": {
+    "classes": [
+      {
+        "id": "11300ccd-5687-582a-a712-697e994b86db",
+        "displayName": "Categoria",
+        "codeName": "Categoria",
+        "databaseName": "categoria",
+        "attributes": [
+          {
+            "id": "eec00aca-4575-5ed0-ae97-8dd4d2f674a9",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "2c537302-c703-5a6a-9e25-ec7cddb6b4f0",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          }
+        ]
+      },
+      {
+        "id": "e2e59853-70cc-54ab-8d78-6075d15b4535",
+        "displayName": "Responsable",
+        "codeName": "Responsable",
+        "databaseName": "responsable",
+        "attributes": [
+          {
+            "id": "616572e2-ce53-5c75-bc63-d813cf695aeb",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "db207452-6c56-5a1b-af27-b879a1c9e2d6",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "807b9fbb-176f-55c9-a411-10f8b272b1bf",
+            "displayName": "correo",
+            "codeName": "correo",
+            "databaseName": "correo",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          }
+        ]
+      },
+      {
+        "id": "31469068-5a95-5c6a-a181-c2fed6343073",
+        "displayName": "Activo",
+        "codeName": "Activo",
+        "databaseName": "activo",
+        "attributes": [
+          {
+            "id": "8bc8a8bc-b7b0-5612-9f6d-965625d08dfd",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "39e3a2f3-bb0f-5757-9bab-866641de47cd",
+            "displayName": "codigo",
+            "codeName": "codigo",
+            "databaseName": "codigo",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          },
+          {
+            "id": "a7f8f493-37c4-5390-a550-cfe4c80ea5d5",
+            "displayName": "descripcion",
+            "codeName": "descripcion",
+            "databaseName": "descripcion",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "eed0e047-10fc-5ae2-bcfd-cc066d0805b5",
+            "displayName": "valor",
+            "codeName": "valor",
+            "databaseName": "valor",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "db89e420-b497-598a-bb30-36a34b270dc1",
+            "displayName": "fecha alta",
+            "codeName": "fechaAlta",
+            "databaseName": "fecha_alta",
+            "type": "Date",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "1dafe79a-7f2b-538f-a97f-7bb7a65f58cb",
+        "displayName": "Asignacion",
+        "codeName": "Asignacion",
+        "databaseName": "asignacion",
+        "attributes": [
+          {
+            "id": "044e4a6d-6154-51b5-af42-fa74703248ab",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "d90ffa21-f9e4-5260-878e-06ab20370423",
+            "displayName": "fecha inicio",
+            "codeName": "fechaInicio",
+            "databaseName": "fecha_inicio",
+            "type": "Date",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "f79caa8b-4d0d-56de-82fa-ebfcbf90c4f4",
+            "displayName": "fecha fin",
+            "codeName": "fechaFin",
+            "databaseName": "fecha_fin",
+            "type": "Date",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "8818023a-21a4-575b-98a8-8951b1c8c1f6",
+        "sourceClassId": "11300ccd-5687-582a-a712-697e994b86db",
+        "targetClassId": "31469068-5a95-5c6a-a181-c2fed6343073",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "30950165-8362-50a3-a3f5-0a4fb02b7525",
+        "sourceClassId": "31469068-5a95-5c6a-a181-c2fed6343073",
+        "targetClassId": "1dafe79a-7f2b-538f-a97f-7bb7a65f58cb",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "b823bfb9-dca6-59e4-b594-5bd2ffe779ba",
+        "sourceClassId": "e2e59853-70cc-54ab-8d78-6075d15b4535",
+        "targetClassId": "1dafe79a-7f2b-538f-a97f-7bb7a65f58cb",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "11300ccd-5687-582a-a712-697e994b86db": {
+        "x": 0,
+        "y": 0
+      },
+      "e2e59853-70cc-54ab-8d78-6075d15b4535": {
+        "x": 320,
+        "y": 0
+      },
+      "31469068-5a95-5c6a-a181-c2fed6343073": {
+        "x": 640,
+        "y": 0
+      },
+      "1dafe79a-7f2b-538f-a97f-7bb7a65f58cb": {
+        "x": 960,
+        "y": 0
+      }
+    },
+    "sizes": {}
+  }
+}

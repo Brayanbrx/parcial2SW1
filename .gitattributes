@@ -1,0 +1,22 @@
+# El repositorio guarda y entrega LF en todas las plataformas.
+#
+# Sin esto, un checkout en Windows convierte a CRLF y `prettier --check` marca
+# como mal formateado todo el arbol, mientras en Linux pasa. Es una diferencia
+# entre maquinas del equipo que no aporta nada y cuesta media tarde diagnosticar.
+* text=auto eol=lf
+
+# Binarios: nunca tocar.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.jar binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+
+# El lockfile es generado: no ensucia las revisiones.
+package-lock.json linguist-generated=true -diff

@@ -1,0 +1,28 @@
+{
+  "name": "@uml/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Puertos de IA (LlmPort, VisionPort, SpeechPort) y sus adaptadores intercambiables por configuracion.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
+    "@uml/contracts": "*",
+    "@uml/domain-core": "*",
+    "zod": "^3.23.0"
+  }
+}

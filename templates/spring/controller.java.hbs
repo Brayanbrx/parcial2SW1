@@ -1,0 +1,60 @@
+package {{project.packageName}}.controller;
+
+{{#each controllerImports}}
+import {{this}};
+{{/each}}
+
+@RestController
+@RequestMapping("/api/{{entity.resourcePath}}")
+public class {{entity.controllerName}} {
+
+    private final {{entity.serviceName}} service;
+
+    public {{entity.controllerName}}({{entity.serviceName}} service) {
+        this.service = service;
+    }
+
+    @GetMapping
+{{#if relationships}}
+    public List<{{entity.dtoName}}> findAll(
+{{#each relationships}}
+            @RequestParam(required = false) {{queryJavaType}} {{queryParameterName}}{{#unless @last}},{{/unless}}
+{{/each}}
+    ) {
+{{#each relationships}}
+        if ({{queryParameterName}} != null) {
+            return service.{{serviceFinderMethodName}}({{queryParameterName}});
+        }
+{{/each}}
+        return service.findAll();
+    }
+{{else}}
+    public List<{{entity.dtoName}}> findAll() {
+        return service.findAll();
+    }
+{{/if}}
+
+    @GetMapping("/{id}")
+    public {{entity.dtoName}} findById(@PathVariable {{primaryKey.javaType}} id) {
+        return service.findById(id);
+    }
+
+    @PostMapping
+    public ResponseEntity<{{entity.dtoName}}> create(@Valid @RequestBody {{entity.dtoName}} dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
+    }
+
+    @PutMapping("/{id}")
+    public {{entity.dtoName}} update(
+            @PathVariable {{primaryKey.javaType}} id,
+            @Valid @RequestBody {{entity.dtoName}} dto
+    ) {
+        return service.update(id, dto);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable {{primaryKey.javaType}} id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+}

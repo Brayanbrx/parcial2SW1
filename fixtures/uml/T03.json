@@ -1,0 +1,227 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T03",
+  "title": "Barberia",
+  "coverage": "Caso de la aplicacion movil: varias claves foraneas en la entidad de registro",
+  "semantic": {
+    "classes": [
+      {
+        "id": "875b487f-fbb2-58f3-80a8-834ba557fdef",
+        "displayName": "Cliente",
+        "codeName": "Cliente",
+        "databaseName": "cliente",
+        "attributes": [
+          {
+            "id": "3058f4ee-e933-5fdb-88ac-8385295558f0",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "428b8f09-1151-51e4-88d7-51085004a964",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "1f14b606-a556-5742-8cf3-27a2cff88dd4",
+            "displayName": "telefono",
+            "codeName": "telefono",
+            "databaseName": "telefono",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "d23717ac-2406-5717-8541-fc074f734075",
+        "displayName": "Barbero",
+        "codeName": "Barbero",
+        "databaseName": "barbero",
+        "attributes": [
+          {
+            "id": "3bb64daf-3e85-5128-a569-bf166038fd8a",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "cb9a7201-1ea8-5117-975f-1d68a41a1cbf",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "c98bab7a-206a-5771-a1ac-a704746a55d4",
+            "displayName": "activo",
+            "codeName": "activo",
+            "databaseName": "activo",
+            "type": "Boolean",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "8d046b34-f050-5bcb-aa05-15977688b3c0",
+        "displayName": "Servicio",
+        "codeName": "Servicio",
+        "databaseName": "servicio",
+        "attributes": [
+          {
+            "id": "472436bb-9888-5188-8150-289735ec2f38",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "7bc9f89d-1089-5a1e-947c-1daebb676032",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "5ab77bb0-5216-5214-b6d3-479fee0415c3",
+            "displayName": "precio",
+            "codeName": "precio",
+            "databaseName": "precio",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "3217360a-1a58-56d2-b08a-7723649f1597",
+            "displayName": "duracion minutos",
+            "codeName": "duracionMinutos",
+            "databaseName": "duracion_minutos",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "52b7ccb1-e17c-5ac3-9240-a500e9cd5dbe",
+        "displayName": "Atencion",
+        "codeName": "Atencion",
+        "databaseName": "atencion",
+        "attributes": [
+          {
+            "id": "ba475b51-ec76-5f0c-b575-a2bcd72a91b2",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "c7fad8ea-e760-5c45-8f61-8cfbb5f80281",
+            "displayName": "fecha",
+            "codeName": "fecha",
+            "databaseName": "fecha",
+            "type": "DateTime",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "deb85216-3a57-5268-b8c9-25725d335faa",
+            "displayName": "monto",
+            "codeName": "monto",
+            "databaseName": "monto",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "505ec32a-54a4-5660-82be-2321d773918b",
+            "displayName": "observacion",
+            "codeName": "observacion",
+            "databaseName": "observacion",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "82f0088e-4ee9-5793-b9d5-edabd8461d39",
+        "sourceClassId": "875b487f-fbb2-58f3-80a8-834ba557fdef",
+        "targetClassId": "52b7ccb1-e17c-5ac3-9240-a500e9cd5dbe",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "23b8acf3-97a4-55f1-84a6-cbe129ed7636",
+        "sourceClassId": "d23717ac-2406-5717-8541-fc074f734075",
+        "targetClassId": "52b7ccb1-e17c-5ac3-9240-a500e9cd5dbe",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "886b0609-d33f-564a-8535-ef202e2ba90c",
+        "sourceClassId": "8d046b34-f050-5bcb-aa05-15977688b3c0",
+        "targetClassId": "52b7ccb1-e17c-5ac3-9240-a500e9cd5dbe",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "875b487f-fbb2-58f3-80a8-834ba557fdef": {
+        "x": 0,
+        "y": 0
+      },
+      "d23717ac-2406-5717-8541-fc074f734075": {
+        "x": 320,
+        "y": 0
+      },
+      "8d046b34-f050-5bcb-aa05-15977688b3c0": {
+        "x": 640,
+        "y": 0
+      },
+      "52b7ccb1-e17c-5ac3-9240-a500e9cd5dbe": {
+        "x": 960,
+        "y": 0
+      }
+    },
+    "sizes": {}
+  }
+}

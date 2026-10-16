@@ -1,0 +1,218 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T07",
+  "title": "Modelo hostil",
+  "coverage": "Reservada de PostgreSQL, tildes y espacios, reservada de Java, clase sin clave, colision al normalizar, dos relaciones entre el mismo par con roles, 0..1 y unico",
+  "semantic": {
+    "classes": [
+      {
+        "id": "26eefe47-5b04-56dd-853e-50a26d558917",
+        "displayName": "Order",
+        "codeName": "Order",
+        "databaseName": "app_order",
+        "attributes": [
+          {
+            "id": "30789d7c-5d2e-59a0-8454-6b2315e69d75",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "2c441d40-60bc-5efb-81e6-57acce2f6243",
+            "displayName": "fecha",
+            "codeName": "fecha",
+            "databaseName": "fecha",
+            "type": "DateTime",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "bf70dc14-9a66-50c3-8b64-0b23ca52c6bf",
+            "displayName": "class",
+            "codeName": "appClass",
+            "databaseName": "class",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          },
+          {
+            "id": "22223df4-de09-505f-8b3b-1793b856aaf8",
+            "displayName": "total",
+            "codeName": "total",
+            "databaseName": "total",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "fdb7e841-b6b2-50b5-854f-62d788b1ce4d",
+        "displayName": "Número de Cuenta",
+        "codeName": "NumeroCuenta",
+        "databaseName": "numero_cuenta",
+        "attributes": [
+          {
+            "id": "80a25007-00cb-5573-ba69-c0842ddc02b4",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "1a1040aa-5b83-53a0-9fe4-59d93ab9845c",
+            "displayName": "código",
+            "codeName": "codigo",
+            "databaseName": "codigo",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          }
+        ]
+      },
+      {
+        "id": "cbf21ff8-e8ac-54ce-acac-393afe4c21fb",
+        "displayName": "Cliente",
+        "codeName": "Cliente",
+        "databaseName": "cliente",
+        "attributes": [
+          {
+            "id": "78e8beaa-a0a7-5b81-bf7e-845a127e257e",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "66d716d4-7b13-58d1-9048-34a9e348ed24",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "ffdd6910-942a-5351-b4a6-77bcec4f915e",
+        "displayName": "Detalle de Venta",
+        "codeName": "DetalleVenta",
+        "databaseName": "detalle_venta",
+        "attributes": [
+          {
+            "id": "a1ee557f-c153-5492-878b-430112394175",
+            "displayName": "cantidad",
+            "codeName": "cantidad",
+            "databaseName": "cantidad",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "7760470c-33fa-57e9-8bb4-03d0ce66da77",
+        "displayName": "detalle venta",
+        "codeName": "DetalleVenta",
+        "databaseName": "detalle_venta",
+        "attributes": [
+          {
+            "id": "fc4b3ce6-fd77-5c87-9cb0-b931695aecf2",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "8750cbd1-2a40-56c0-9b8b-c31cab64bbd9",
+            "displayName": "nota",
+            "codeName": "nota",
+            "databaseName": "nota",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "ef05e4dd-23a3-50f6-81f6-92a228ad0776",
+        "sourceClassId": "cbf21ff8-e8ac-54ce-acac-393afe4c21fb",
+        "targetClassId": "26eefe47-5b04-56dd-853e-50a26d558917",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*",
+        "sourceRoleName": "facturacion"
+      },
+      {
+        "id": "a8f8ed74-d437-5bb4-9c05-2a909c4ebcc0",
+        "sourceClassId": "cbf21ff8-e8ac-54ce-acac-393afe4c21fb",
+        "targetClassId": "26eefe47-5b04-56dd-853e-50a26d558917",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*",
+        "sourceRoleName": "envio"
+      },
+      {
+        "id": "8825752b-2a2f-5877-bc99-0727e00f3653",
+        "sourceClassId": "cbf21ff8-e8ac-54ce-acac-393afe4c21fb",
+        "targetClassId": "fdb7e841-b6b2-50b5-854f-62d788b1ce4d",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..1"
+      },
+      {
+        "id": "4a1dcbc1-1b83-53ee-9b2b-5556446af894",
+        "sourceClassId": "26eefe47-5b04-56dd-853e-50a26d558917",
+        "targetClassId": "ffdd6910-942a-5351-b4a6-77bcec4f915e",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "26eefe47-5b04-56dd-853e-50a26d558917": {
+        "x": 0,
+        "y": 0
+      },
+      "fdb7e841-b6b2-50b5-854f-62d788b1ce4d": {
+        "x": 320,
+        "y": 0
+      },
+      "cbf21ff8-e8ac-54ce-acac-393afe4c21fb": {
+        "x": 640,
+        "y": 0
+      },
+      "ffdd6910-942a-5351-b4a6-77bcec4f915e": {
+        "x": 960,
+        "y": 0
+      },
+      "7760470c-33fa-57e9-8bb4-03d0ce66da77": {
+        "x": 0,
+        "y": 260
+      }
+    },
+    "sizes": {}
+  }
+}

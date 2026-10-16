@@ -1,0 +1,243 @@
+# Composicion de la plataforma. Corresponde a la seccion 13 del plan maestro.
+#
+# Reglas que se aplican aqui:
+#  - cada servicio declara comprobacion de salud y quien depende de el la espera;
+#  - los datos viven en volumenes con nombre, solo `down -v` los borra;
+#  - toda la configuracion entra por variables de entorno, sin secretos escritos;
+#  - los puertos se exponen solo donde hacen falta.
+#
+# Uso:
+#   docker compose up -d                      entorno de desarrollo
+#   docker compose --profile demo up -d       anade el origen unico
+#   docker compose --profile tools up -d      anade la inspeccion de la base
+
+name: plataforma-uml
+
+services:
+  # PostgreSQL de la plataforma. No es la base del backend generado: esa viaja
+  # dentro del ZIP con su propia composicion (13.5).
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - '${DB_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # Aplica las migraciones y termina. Es un servicio y no un paso dentro del
+  # arranque de `api` para que su salida se lea sola (`compose logs migrate`) y
+  # para que dos procesos no intenten migrar a la vez.
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+      target: migrate
+    restart: 'no'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+
+  # Proceso HTTP: sesion, proyectos, pizarras, IA, imagen, XMI y generacion.
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      API_PORT: 3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio; copia infra/.env.example a infra/.env}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-2592000}
+      INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-604800}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COLLAB_INTERNAL_URL: http://collab:3002
+      # Correo para la recuperacion de contrasena. `log` por defecto: la
+      # plataforma arranca y el flujo funciona sin ninguna cuenta configurada.
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-log}
+      MAIL_FROM: ${MAIL_FROM:-no-responder@plataforma-uml.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Plataforma UML}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      PASSWORD_RESET_TTL_SECONDS: ${PASSWORD_RESET_TTL_SECONDS:-3600}
+      # Capa de IA (6.3 y ADR-019). Por defecto el adaptador simulado: la
+      # plataforma arranca y el asistente responde sin ninguna clave ni conexion.
+      #
+      # Se reenvia la lista **completa**, incluidas las variables que hoy suelen
+      # ir vacias. Antes faltaban `AI_VISION_MODEL` y `AI_MAX_RETRIES`, y el
+      # sintoma era que el instructivo pedia ponerlas, uno las ponia, y dentro
+      # del contenedor no existian: se configuraba algo que nadie leia.
+      AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-mock}
+      AI_LLM_MODEL: ${AI_LLM_MODEL:-}
+      AI_LLM_FALLBACK_PROVIDER: ${AI_LLM_FALLBACK_PROVIDER:-}
+      AI_LLM_FALLBACK_MODEL: ${AI_LLM_FALLBACK_MODEL:-}
+      AI_VISION_PROVIDER: ${AI_VISION_PROVIDER:-mock}
+      AI_VISION_MODEL: ${AI_VISION_MODEL:-}
+      AI_VISION_FALLBACK_PROVIDER: ${AI_VISION_FALLBACK_PROVIDER:-}
+      AI_VISION_FALLBACK_MODEL: ${AI_VISION_FALLBACK_MODEL:-}
+      AI_SPEECH_PROVIDER: ${AI_SPEECH_PROVIDER:-mock}
+      AI_SPEECH_MODEL: ${AI_SPEECH_MODEL:-}
+      AI_SPEECH_FALLBACK_PROVIDER: ${AI_SPEECH_FALLBACK_PROVIDER:-}
+      AI_SPEECH_FALLBACK_MODEL: ${AI_SPEECH_FALLBACK_MODEL:-}
+      # Credenciales: una por proveedor, no una por puerto.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-15000}
+      AI_VISION_TIMEOUT_MS: ${AI_VISION_TIMEOUT_MS:-}
+      AI_MAX_RETRIES: ${AI_MAX_RETRIES:-0}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      ZAI_API_KEY: ${ZAI_API_KEY:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      SAMBANOVA_API_KEY: ${SAMBANOVA_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      MODELSCOPE_API_KEY: ${MODELSCOPE_API_KEY:-}
+      SENSENOVA_API_KEY: ${SENSENOVA_API_KEY:-}
+      MISTRAL_BASE_URL: ${MISTRAL_BASE_URL:-}
+      ZAI_BASE_URL: ${ZAI_BASE_URL:-}
+      MOONSHOT_BASE_URL: ${MOONSHOT_BASE_URL:-}
+      SAMBANOVA_BASE_URL: ${SAMBANOVA_BASE_URL:-}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-}
+      NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-}
+      COHERE_BASE_URL: ${COHERE_BASE_URL:-}
+      MODELSCOPE_BASE_URL: ${MODELSCOPE_BASE_URL:-}
+      SENSENOVA_BASE_URL: ${SENSENOVA_BASE_URL:-}
+      AI_CHAIN_TIMEOUT_MS: ${AI_CHAIN_TIMEOUT_MS:-}
+      AI_VISION_CHAIN_TIMEOUT_MS: ${AI_VISION_CHAIN_TIMEOUT_MS:-}
+      AI_SPEECH_CHAIN_TIMEOUT_MS: ${AI_SPEECH_CHAIN_TIMEOUT_MS:-}
+      AI_QUOTA_COOLDOWN_MS: ${AI_QUOTA_COOLDOWN_MS:-}
+      AI_COMPATIBLE_MAX_OUTPUT_TOKENS: ${AI_COMPATIBLE_MAX_OUTPUT_TOKENS:-}
+      AI_LLM_FALLBACKS: ${AI_LLM_FALLBACKS:-}
+      AI_VISION_FALLBACKS: ${AI_VISION_FALLBACKS:-}
+      AI_SPEECH_FALLBACKS: ${AI_SPEECH_FALLBACKS:-}
+      AI_LOG_USAGE: ${AI_LOG_USAGE:-true}
+    ports:
+      - '${API_PORT:-3001}:3001'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  # Proceso WebSocket: salas por pizarra, presencia, persistencia y autorizacion.
+  collab:
+    build:
+      context: ..
+      dockerfile: infra/collab.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      COLLAB_PORT: 3002
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # El mismo secreto que el proceso HTTP: uno emite los tokens y el otro los
+      # verifica al autorizar la conexion (RA-15).
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio; copia infra/.env.example a infra/.env}
+      STORE_DEBOUNCE_MS: ${STORE_DEBOUNCE_MS:-2000}
+      STORE_MAX_DEBOUNCE_MS: ${STORE_MAX_DEBOUNCE_MS:-10000}
+    ports:
+      - '${COLLAB_PORT:-3002}:3002'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  # Interfaz React servida como estatico.
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1/']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Origen unico para la demostracion: las otras computadoras del aula llegan a
+  # una sola direccion en lugar de tres puertos (plan maestro 4.3).
+  proxy:
+    image: caddy:2-alpine
+    profiles: ['demo']
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      collab:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    volumes:
+      - ../infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - '${PROXY_PORT:-80}:80'
+
+  # Inspeccion de la base durante el desarrollo.
+  adminer:
+    image: adminer:5
+    profiles: ['tools']
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    ports:
+      - '${ADMINER_PORT:-8081}:8080'
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

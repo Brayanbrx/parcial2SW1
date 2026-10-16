@@ -1,0 +1,624 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmi:version="2.1"
+         xmlns:uml="http://schema.omg.org/spec/UML/2.1"
+         xmlns:xmi="http://schema.omg.org/spec/XMI/2.1">
+  <xmi:Documentation exporter="Plataforma UML" exporterVersion="1.0"/>
+  <uml:Model xmi:type="uml:Model" xmi:id="_model" name="Ejemplo" visibility="public">
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_String" name="String"/>
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_Integer" name="Integer"/>
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_Long" name="Long"/>
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_Decimal" name="Decimal"/>
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_Boolean" name="Boolean"/>
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_Date" name="Date"/>
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_DateTime" name="DateTime"/>
+    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="_primitive_UUID" name="UUID"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_43cefcf9-9f53-4971-b8da-178964033977" name="Departamento" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_df168dcf-27d9-4b40-b7d9-c41b2e325802" name="idDepartamento" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_df168dcf-27d9-4b40-b7d9-c41b2e325802_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_df168dcf-27d9-4b40-b7d9-c41b2e325802_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_a55eb856-5387-43ed-b6ed-6606700e0164" name="nombre" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_a55eb856-5387-43ed-b6ed-6606700e0164_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_a55eb856-5387-43ed-b6ed-6606700e0164_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_23d1d576-67b3-4fc2-a3f5-a8737748c42d" name="ubicacion" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_23d1d576-67b3-4fc2-a3f5-a8737748c42d_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_23d1d576-67b3-4fc2-a3f5-a8737748c42d_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_442d9948-4199-4506-8805-6381f3c250dc" name="Estudiante" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_31b41509-842a-4484-b3fd-f21307e915ff" name="registro" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_31b41509-842a-4484-b3fd-f21307e915ff_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_31b41509-842a-4484-b3fd-f21307e915ff_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_f983ca2c-1979-49a9-b5e9-39d5eb05e850" name="fechaIngreso" visibility="private">
+        <type xmi:idref="_primitive_Date"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_f983ca2c-1979-49a9-b5e9-39d5eb05e850_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_f983ca2c-1979-49a9-b5e9-39d5eb05e850_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_9efeac44-da57-4b41-a37a-849bedc75870" name="estado" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_9efeac44-da57-4b41-a37a-849bedc75870_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_9efeac44-da57-4b41-a37a-849bedc75870_upper" value="1"/>
+      </ownedAttribute>
+      <generalization xmi:type="uml:Generalization" xmi:id="_fc1daf83-e5f1-4983-91d1-11babaa7cadd" general="_4efe38b9-6e58-46e7-b245-c49c17472b0f"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_4efe38b9-6e58-46e7-b245-c49c17472b0f" name="Persona" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_bfb9a49e-c39f-491e-8d8b-d1649f98e9d3" name="idPersona" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_bfb9a49e-c39f-491e-8d8b-d1649f98e9d3_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_bfb9a49e-c39f-491e-8d8b-d1649f98e9d3_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_db268abe-fb72-46d7-b2e4-5b08352c02d1" name="ci" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_db268abe-fb72-46d7-b2e4-5b08352c02d1_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_db268abe-fb72-46d7-b2e4-5b08352c02d1_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_7a6ca7a0-a1af-45f9-bfe7-3b6869c9adba" name="nombre" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_7a6ca7a0-a1af-45f9-bfe7-3b6869c9adba_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_7a6ca7a0-a1af-45f9-bfe7-3b6869c9adba_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_0da7496e-ab68-460a-8286-12132848c12c" name="apellido" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_0da7496e-ab68-460a-8286-12132848c12c_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_0da7496e-ab68-460a-8286-12132848c12c_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_2ad4132a-9ec9-44df-95d8-ad1e231109ce" name="correo" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_2ad4132a-9ec9-44df-95d8-ad1e231109ce_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_2ad4132a-9ec9-44df-95d8-ad1e231109ce_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_95aaefc9-02cf-4d32-9c63-807892fcdac9" name="telefono" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_95aaefc9-02cf-4d32-9c63-807892fcdac9_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_95aaefc9-02cf-4d32-9c63-807892fcdac9_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_8b3c040b-d8cd-4f5b-9e69-943a11d16e2c" name="fechaNacimiento" visibility="private">
+        <type xmi:idref="_primitive_Date"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_8b3c040b-d8cd-4f5b-9e69-943a11d16e2c_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_8b3c040b-d8cd-4f5b-9e69-943a11d16e2c_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_51644175-4c7c-4ccc-abac-c926a8eccede" name="Materia" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_60b56f5e-5483-4316-a47d-2249079dbc46" name="idMateria" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_60b56f5e-5483-4316-a47d-2249079dbc46_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_60b56f5e-5483-4316-a47d-2249079dbc46_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_f0a0e94d-0204-4843-9d50-23ef483a7c14" name="sigla" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_f0a0e94d-0204-4843-9d50-23ef483a7c14_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_f0a0e94d-0204-4843-9d50-23ef483a7c14_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_e07f6311-33d8-4393-8aa1-d85af4eb2d88" name="nombre" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_e07f6311-33d8-4393-8aa1-d85af4eb2d88_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_e07f6311-33d8-4393-8aa1-d85af4eb2d88_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_fd4d1ff5-be0b-428d-bc75-640228339374" name="creditos" visibility="private">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_fd4d1ff5-be0b-428d-bc75-640228339374_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_fd4d1ff5-be0b-428d-bc75-640228339374_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_2e164a45-15b7-48d3-bb96-cf30c8e5fc1d" name="semestre" visibility="private">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_2e164a45-15b7-48d3-bb96-cf30c8e5fc1d_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_2e164a45-15b7-48d3-bb96-cf30c8e5fc1d_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_84a443d0-7999-4363-ac1b-4a3a101ba1b3" name="CarnetEstudiante" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_4d8b4cb3-db90-4a49-9da5-932f83610e3e" name="idCarnet" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_4d8b4cb3-db90-4a49-9da5-932f83610e3e_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_4d8b4cb3-db90-4a49-9da5-932f83610e3e_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_e619d0c1-3160-4fb2-b7bc-985dd5168a93" name="codigo" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_e619d0c1-3160-4fb2-b7bc-985dd5168a93_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_e619d0c1-3160-4fb2-b7bc-985dd5168a93_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_a401ea40-cce1-49e6-85fb-2abad6e6920b" name="fechaEmision" visibility="private">
+        <type xmi:idref="_primitive_Date"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_a401ea40-cce1-49e6-85fb-2abad6e6920b_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_a401ea40-cce1-49e6-85fb-2abad6e6920b_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_b007c1dc-16a6-4a0e-ba87-43dcd69c4560" name="fechaVencimiento" visibility="private">
+        <type xmi:idref="_primitive_Date"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_b007c1dc-16a6-4a0e-ba87-43dcd69c4560_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_b007c1dc-16a6-4a0e-ba87-43dcd69c4560_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_9adf524c-ef0a-45f5-b2df-7e226b167f2f" name="Aula" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_a2ed3efb-34ba-4506-bd7f-5e07b0d16479" name="idAula" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_a2ed3efb-34ba-4506-bd7f-5e07b0d16479_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_a2ed3efb-34ba-4506-bd7f-5e07b0d16479_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_deae2ebe-9811-471a-b8da-761b7622ce3a" name="nombre" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_deae2ebe-9811-471a-b8da-761b7622ce3a_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_deae2ebe-9811-471a-b8da-761b7622ce3a_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_d1c7a2f3-831f-4827-a588-cb504e2b1f7b" name="capacidad" visibility="private">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_d1c7a2f3-831f-4827-a588-cb504e2b1f7b_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_d1c7a2f3-831f-4827-a588-cb504e2b1f7b_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_5baefab9-ecad-4840-9304-830eec9cff3a" name="bloque" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_5baefab9-ecad-4840-9304-830eec9cff3a_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_5baefab9-ecad-4840-9304-830eec9cff3a_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_9cf8b8b6-e106-4da1-9234-fcd869014005" name="Inscripcion" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_ea40a74d-37f9-439c-b456-f893ae3ceac4" name="fecha" visibility="private">
+        <type xmi:idref="_primitive_Date"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_ea40a74d-37f9-439c-b456-f893ae3ceac4_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_ea40a74d-37f9-439c-b456-f893ae3ceac4_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_b42a17ad-a72f-4e71-be44-018b75c0459e" name="estado" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_b42a17ad-a72f-4e71-be44-018b75c0459e_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_b42a17ad-a72f-4e71-be44-018b75c0459e_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_52f3cd4d-46de-4cf7-8d8b-816e9e90a403" name="notaFinal" visibility="private">
+        <type xmi:idref="_primitive_Decimal"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_52f3cd4d-46de-4cf7-8d8b-816e9e90a403_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_52f3cd4d-46de-4cf7-8d8b-816e9e90a403_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_c12f7000-807a-485d-93e6-06d437d5c384" name="Curso" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_5c9e09ec-a4ed-4a2b-91bd-0bd2005e1d7b" name="idCurso" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_5c9e09ec-a4ed-4a2b-91bd-0bd2005e1d7b_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_5c9e09ec-a4ed-4a2b-91bd-0bd2005e1d7b_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_22e301ae-76ac-40d9-a6d0-1600d6f77a86" name="grupo" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_22e301ae-76ac-40d9-a6d0-1600d6f77a86_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_22e301ae-76ac-40d9-a6d0-1600d6f77a86_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_8741c289-9608-48be-8670-ab5ebfdfe369" name="gestion" visibility="private">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_8741c289-9608-48be-8670-ab5ebfdfe369_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_8741c289-9608-48be-8670-ab5ebfdfe369_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_c985e92c-c835-4bd5-b03d-920b821d5861" name="periodo" visibility="private">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_c985e92c-c835-4bd5-b03d-920b821d5861_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_c985e92c-c835-4bd5-b03d-920b821d5861_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_4b045145-b4ea-49cf-b882-08852108d4f6" name="horario" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_4b045145-b4ea-49cf-b882-08852108d4f6_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_4b045145-b4ea-49cf-b882-08852108d4f6_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_cab85542-207d-4beb-bb45-8470ad5406c5" name="Carrera" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_66060648-ab20-47b0-a7f7-407326e82936" name="idCarrera" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_66060648-ab20-47b0-a7f7-407326e82936_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_66060648-ab20-47b0-a7f7-407326e82936_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_5c5a5247-defb-41b7-989b-6a5f599923e5" name="nombre" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_5c5a5247-defb-41b7-989b-6a5f599923e5_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_5c5a5247-defb-41b7-989b-6a5f599923e5_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_095678a0-b6ac-4ff1-833c-345f127fb292" name="duracionSemestre" visibility="private">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_095678a0-b6ac-4ff1-833c-345f127fb292_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_095678a0-b6ac-4ff1-833c-345f127fb292_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_d9d34536-68ff-425e-ae5e-23a684cdc192" name="Calificacion" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_92ff5297-7373-4a3a-a803-aac5518f3a1f" name="idCalificacion" visibility="private" isID="true">
+        <type xmi:idref="_primitive_Integer"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_92ff5297-7373-4a3a-a803-aac5518f3a1f_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_92ff5297-7373-4a3a-a803-aac5518f3a1f_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_6f3c88e5-bad0-487a-baf0-60b759c7cf86" name="nombre" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_6f3c88e5-bad0-487a-baf0-60b759c7cf86_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_6f3c88e5-bad0-487a-baf0-60b759c7cf86_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_c6a5f155-4c5b-490e-b027-f5e5120ceda6" name="porcentaje" visibility="private">
+        <type xmi:idref="_primitive_Decimal"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_c6a5f155-4c5b-490e-b027-f5e5120ceda6_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_c6a5f155-4c5b-490e-b027-f5e5120ceda6_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_9013bb2c-eb94-480e-ae4b-0a6e8b98ef00" name="nota" visibility="private">
+        <type xmi:idref="_primitive_Decimal"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_9013bb2c-eb94-480e-ae4b-0a6e8b98ef00_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_9013bb2c-eb94-480e-ae4b-0a6e8b98ef00_upper" value="1"/>
+      </ownedAttribute>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Class" xmi:id="_f9a179f2-8168-4a79-bc10-bceeff2f8992" name="Docente" visibility="public">
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_bc144720-1e79-4932-9884-00aba5bb8430" name="codigoDocente" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_bc144720-1e79-4932-9884-00aba5bb8430_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_bc144720-1e79-4932-9884-00aba5bb8430_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_423a1f4f-75fb-41a2-80c1-55c09db588ee" name="especialidad" visibility="private">
+        <type xmi:idref="_primitive_String"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_423a1f4f-75fb-41a2-80c1-55c09db588ee_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_423a1f4f-75fb-41a2-80c1-55c09db588ee_upper" value="1"/>
+      </ownedAttribute>
+      <ownedAttribute xmi:type="uml:Property" xmi:id="_d6d7b33d-0dab-4780-b547-f66aedfee9fe" name="fechaContratacion" visibility="private">
+        <type xmi:idref="_primitive_Date"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_d6d7b33d-0dab-4780-b547-f66aedfee9fe_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_d6d7b33d-0dab-4780-b547-f66aedfee9fe_upper" value="1"/>
+      </ownedAttribute>
+      <generalization xmi:type="uml:Generalization" xmi:id="_66582bd0-b1c8-4614-853f-4c366a35e543" general="_4efe38b9-6e58-46e7-b245-c49c17472b0f"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_00001d60-5790-4c76-8a3d-c9f78f83560c" visibility="public">
+      <memberEnd xmi:idref="_00001d60-5790-4c76-8a3d-c9f78f83560c_src"/>
+      <memberEnd xmi:idref="_00001d60-5790-4c76-8a3d-c9f78f83560c_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_00001d60-5790-4c76-8a3d-c9f78f83560c_src" name="estudiante" visibility="public" association="_00001d60-5790-4c76-8a3d-c9f78f83560c">
+        <type xmi:idref="_442d9948-4199-4506-8805-6381f3c250dc"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_00001d60-5790-4c76-8a3d-c9f78f83560c_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_00001d60-5790-4c76-8a3d-c9f78f83560c_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_00001d60-5790-4c76-8a3d-c9f78f83560c_tgt" name="inscripcion" visibility="public" association="_00001d60-5790-4c76-8a3d-c9f78f83560c">
+        <type xmi:idref="_9cf8b8b6-e106-4da1-9234-fcd869014005"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_00001d60-5790-4c76-8a3d-c9f78f83560c_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_00001d60-5790-4c76-8a3d-c9f78f83560c_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_092c0798-bcb0-4a0f-869d-985451357373" visibility="public">
+      <memberEnd xmi:idref="_092c0798-bcb0-4a0f-869d-985451357373_src"/>
+      <memberEnd xmi:idref="_092c0798-bcb0-4a0f-869d-985451357373_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_092c0798-bcb0-4a0f-869d-985451357373_src" name="departamento" visibility="public" association="_092c0798-bcb0-4a0f-869d-985451357373">
+        <type xmi:idref="_43cefcf9-9f53-4971-b8da-178964033977"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_092c0798-bcb0-4a0f-869d-985451357373_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_092c0798-bcb0-4a0f-869d-985451357373_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_092c0798-bcb0-4a0f-869d-985451357373_tgt" name="carrera" visibility="public" association="_092c0798-bcb0-4a0f-869d-985451357373">
+        <type xmi:idref="_cab85542-207d-4beb-bb45-8470ad5406c5"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_092c0798-bcb0-4a0f-869d-985451357373_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_092c0798-bcb0-4a0f-869d-985451357373_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_113d3baf-57ed-48a0-a948-d2bd5743e068" visibility="public">
+      <memberEnd xmi:idref="_113d3baf-57ed-48a0-a948-d2bd5743e068_src"/>
+      <memberEnd xmi:idref="_113d3baf-57ed-48a0-a948-d2bd5743e068_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_113d3baf-57ed-48a0-a948-d2bd5743e068_src" name="materia" visibility="public" association="_113d3baf-57ed-48a0-a948-d2bd5743e068">
+        <type xmi:idref="_51644175-4c7c-4ccc-abac-c926a8eccede"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_113d3baf-57ed-48a0-a948-d2bd5743e068_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_113d3baf-57ed-48a0-a948-d2bd5743e068_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_113d3baf-57ed-48a0-a948-d2bd5743e068_tgt" name="curso" visibility="public" association="_113d3baf-57ed-48a0-a948-d2bd5743e068">
+        <type xmi:idref="_c12f7000-807a-485d-93e6-06d437d5c384"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_113d3baf-57ed-48a0-a948-d2bd5743e068_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_113d3baf-57ed-48a0-a948-d2bd5743e068_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_1d28cdb7-566e-4b75-a478-e20ff3e510a3" visibility="public">
+      <memberEnd xmi:idref="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_src"/>
+      <memberEnd xmi:idref="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_src" name="curso" visibility="public" association="_1d28cdb7-566e-4b75-a478-e20ff3e510a3">
+        <type xmi:idref="_c12f7000-807a-485d-93e6-06d437d5c384"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_tgt" name="inscripcion" visibility="public" association="_1d28cdb7-566e-4b75-a478-e20ff3e510a3">
+        <type xmi:idref="_9cf8b8b6-e106-4da1-9234-fcd869014005"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_1d28cdb7-566e-4b75-a478-e20ff3e510a3_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_2b3268e6-979b-4e37-92ed-40838046e59f" visibility="public">
+      <memberEnd xmi:idref="_2b3268e6-979b-4e37-92ed-40838046e59f_src"/>
+      <memberEnd xmi:idref="_2b3268e6-979b-4e37-92ed-40838046e59f_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_2b3268e6-979b-4e37-92ed-40838046e59f_src" name="departamento" visibility="public" association="_2b3268e6-979b-4e37-92ed-40838046e59f">
+        <type xmi:idref="_43cefcf9-9f53-4971-b8da-178964033977"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_2b3268e6-979b-4e37-92ed-40838046e59f_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_2b3268e6-979b-4e37-92ed-40838046e59f_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_2b3268e6-979b-4e37-92ed-40838046e59f_tgt" name="docente" visibility="public" association="_2b3268e6-979b-4e37-92ed-40838046e59f">
+        <type xmi:idref="_f9a179f2-8168-4a79-bc10-bceeff2f8992"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_2b3268e6-979b-4e37-92ed-40838046e59f_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_2b3268e6-979b-4e37-92ed-40838046e59f_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746" visibility="public">
+      <memberEnd xmi:idref="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_src"/>
+      <memberEnd xmi:idref="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_src" name="estudiante" visibility="public" association="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746">
+        <type xmi:idref="_442d9948-4199-4506-8805-6381f3c250dc"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_tgt" name="carnetEstudiante" visibility="public" association="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746">
+        <type xmi:idref="_84a443d0-7999-4363-ac1b-4a3a101ba1b3"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_tgt_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_381e1cd9-b9bc-4dee-8be1-5c3c71ce3746_tgt_upper" value="1"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_57afe465-719d-4d10-b7cd-52986c885fdb" visibility="public">
+      <memberEnd xmi:idref="_57afe465-719d-4d10-b7cd-52986c885fdb_src"/>
+      <memberEnd xmi:idref="_57afe465-719d-4d10-b7cd-52986c885fdb_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_57afe465-719d-4d10-b7cd-52986c885fdb_src" name="carrera" visibility="public" association="_57afe465-719d-4d10-b7cd-52986c885fdb">
+        <type xmi:idref="_cab85542-207d-4beb-bb45-8470ad5406c5"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_57afe465-719d-4d10-b7cd-52986c885fdb_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_57afe465-719d-4d10-b7cd-52986c885fdb_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_57afe465-719d-4d10-b7cd-52986c885fdb_tgt" name="materia" visibility="public" association="_57afe465-719d-4d10-b7cd-52986c885fdb">
+        <type xmi:idref="_51644175-4c7c-4ccc-abac-c926a8eccede"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_57afe465-719d-4d10-b7cd-52986c885fdb_tgt_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_57afe465-719d-4d10-b7cd-52986c885fdb_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c" visibility="public">
+      <memberEnd xmi:idref="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_src"/>
+      <memberEnd xmi:idref="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_src" name="aula" visibility="public" association="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c">
+        <type xmi:idref="_9adf524c-ef0a-45f5-b2df-7e226b167f2f"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_tgt" name="curso" visibility="public" association="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c">
+        <type xmi:idref="_c12f7000-807a-485d-93e6-06d437d5c384"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_9f8dedb9-5575-4f8c-b8ec-431b3a23e44c_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b" visibility="public">
+      <memberEnd xmi:idref="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_src"/>
+      <memberEnd xmi:idref="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_src" name="docente" visibility="public" association="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b">
+        <type xmi:idref="_f9a179f2-8168-4a79-bc10-bceeff2f8992"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_tgt" name="curso" visibility="public" association="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b">
+        <type xmi:idref="_c12f7000-807a-485d-93e6-06d437d5c384"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_d998e72a-bb0d-4e57-bc04-e45b5ff83c2b_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_f2e84f55-6224-47e4-affa-d0197b445e31" visibility="public">
+      <memberEnd xmi:idref="_f2e84f55-6224-47e4-affa-d0197b445e31_src"/>
+      <memberEnd xmi:idref="_f2e84f55-6224-47e4-affa-d0197b445e31_tgt"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_f2e84f55-6224-47e4-affa-d0197b445e31_src" name="inscripcion" visibility="public" association="_f2e84f55-6224-47e4-affa-d0197b445e31">
+        <type xmi:idref="_9cf8b8b6-e106-4da1-9234-fcd869014005"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_f2e84f55-6224-47e4-affa-d0197b445e31_src_lower" value="1"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_f2e84f55-6224-47e4-affa-d0197b445e31_src_upper" value="1"/>
+      </ownedEnd>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_f2e84f55-6224-47e4-affa-d0197b445e31_tgt" name="calificacion" visibility="public" association="_f2e84f55-6224-47e4-affa-d0197b445e31">
+        <type xmi:idref="_d9d34536-68ff-425e-ae5e-23a684cdc192"/>
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="_f2e84f55-6224-47e4-affa-d0197b445e31_tgt_lower" value="0"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="_f2e84f55-6224-47e4-affa-d0197b445e31_tgt_upper" value="*"/>
+      </ownedEnd>
+    </packagedElement>
+  </uml:Model>
+  <xmi:Extension extender="Enterprise Architect">
+    <elements>
+      <element xmi:idref="_43cefcf9-9f53-4971-b8da-178964033977" xmi:type="uml:Class" name="Departamento" scope="public">
+        <attributes>
+          <attribute xmi:idref="_df168dcf-27d9-4b40-b7d9-c41b2e325802" name="idDepartamento" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_a55eb856-5387-43ed-b6ed-6606700e0164" name="nombre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_23d1d576-67b3-4fc2-a3f5-a8737748c42d" name="ubicacion" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_442d9948-4199-4506-8805-6381f3c250dc" xmi:type="uml:Class" name="Estudiante" scope="public">
+        <attributes>
+          <attribute xmi:idref="_31b41509-842a-4484-b3fd-f21307e915ff" name="registro" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_f983ca2c-1979-49a9-b5e9-39d5eb05e850" name="fechaIngreso" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Date" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_9efeac44-da57-4b41-a37a-849bedc75870" name="estado" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_4efe38b9-6e58-46e7-b245-c49c17472b0f" xmi:type="uml:Class" name="Persona" scope="public">
+        <attributes>
+          <attribute xmi:idref="_bfb9a49e-c39f-491e-8d8b-d1649f98e9d3" name="idPersona" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_db268abe-fb72-46d7-b2e4-5b08352c02d1" name="ci" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_7a6ca7a0-a1af-45f9-bfe7-3b6869c9adba" name="nombre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_0da7496e-ab68-460a-8286-12132848c12c" name="apellido" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_2ad4132a-9ec9-44df-95d8-ad1e231109ce" name="correo" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_95aaefc9-02cf-4d32-9c63-807892fcdac9" name="telefono" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_8b3c040b-d8cd-4f5b-9e69-943a11d16e2c" name="fechaNacimiento" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Date" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_51644175-4c7c-4ccc-abac-c926a8eccede" xmi:type="uml:Class" name="Materia" scope="public">
+        <attributes>
+          <attribute xmi:idref="_60b56f5e-5483-4316-a47d-2249079dbc46" name="idMateria" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_f0a0e94d-0204-4843-9d50-23ef483a7c14" name="sigla" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_e07f6311-33d8-4393-8aa1-d85af4eb2d88" name="nombre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_fd4d1ff5-be0b-428d-bc75-640228339374" name="creditos" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_2e164a45-15b7-48d3-bb96-cf30c8e5fc1d" name="semestre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_84a443d0-7999-4363-ac1b-4a3a101ba1b3" xmi:type="uml:Class" name="CarnetEstudiante" scope="public">
+        <attributes>
+          <attribute xmi:idref="_4d8b4cb3-db90-4a49-9da5-932f83610e3e" name="idCarnet" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_e619d0c1-3160-4fb2-b7bc-985dd5168a93" name="codigo" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_a401ea40-cce1-49e6-85fb-2abad6e6920b" name="fechaEmision" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Date" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_b007c1dc-16a6-4a0e-ba87-43dcd69c4560" name="fechaVencimiento" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Date" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_9adf524c-ef0a-45f5-b2df-7e226b167f2f" xmi:type="uml:Class" name="Aula" scope="public">
+        <attributes>
+          <attribute xmi:idref="_a2ed3efb-34ba-4506-bd7f-5e07b0d16479" name="idAula" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_deae2ebe-9811-471a-b8da-761b7622ce3a" name="nombre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_d1c7a2f3-831f-4827-a588-cb504e2b1f7b" name="capacidad" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_5baefab9-ecad-4840-9304-830eec9cff3a" name="bloque" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_9cf8b8b6-e106-4da1-9234-fcd869014005" xmi:type="uml:Class" name="Inscripcion" scope="public">
+        <attributes>
+          <attribute xmi:idref="_ea40a74d-37f9-439c-b456-f893ae3ceac4" name="fecha" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Date" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_b42a17ad-a72f-4e71-be44-018b75c0459e" name="estado" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_52f3cd4d-46de-4cf7-8d8b-816e9e90a403" name="notaFinal" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Decimal" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_c12f7000-807a-485d-93e6-06d437d5c384" xmi:type="uml:Class" name="Curso" scope="public">
+        <attributes>
+          <attribute xmi:idref="_5c9e09ec-a4ed-4a2b-91bd-0bd2005e1d7b" name="idCurso" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_22e301ae-76ac-40d9-a6d0-1600d6f77a86" name="grupo" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_8741c289-9608-48be-8670-ab5ebfdfe369" name="gestion" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_c985e92c-c835-4bd5-b03d-920b821d5861" name="periodo" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_4b045145-b4ea-49cf-b882-08852108d4f6" name="horario" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_cab85542-207d-4beb-bb45-8470ad5406c5" xmi:type="uml:Class" name="Carrera" scope="public">
+        <attributes>
+          <attribute xmi:idref="_66060648-ab20-47b0-a7f7-407326e82936" name="idCarrera" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_5c5a5247-defb-41b7-989b-6a5f599923e5" name="nombre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_095678a0-b6ac-4ff1-833c-345f127fb292" name="duracionSemestre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_d9d34536-68ff-425e-ae5e-23a684cdc192" xmi:type="uml:Class" name="Calificacion" scope="public">
+        <attributes>
+          <attribute xmi:idref="_92ff5297-7373-4a3a-a803-aac5518f3a1f" name="idCalificacion" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Integer" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_6f3c88e5-bad0-487a-baf0-60b759c7cf86" name="nombre" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_c6a5f155-4c5b-490e-b027-f5e5120ceda6" name="porcentaje" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Decimal" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_9013bb2c-eb94-480e-ae4b-0a6e8b98ef00" name="nota" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Decimal" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+      <element xmi:idref="_f9a179f2-8168-4a79-bc10-bceeff2f8992" xmi:type="uml:Class" name="Docente" scope="public">
+        <attributes>
+          <attribute xmi:idref="_bc144720-1e79-4932-9884-00aba5bb8430" name="codigoDocente" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_423a1f4f-75fb-41a2-80c1-55c09db588ee" name="especialidad" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="String" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+          <attribute xmi:idref="_d6d7b33d-0dab-4780-b547-f66aedfee9fe" name="fechaContratacion" scope="Private">
+            <bounds lower="0" upper="1"/>
+            <properties type="Date" collection="false" duplicates="0" changeability="changeable"/>
+          </attribute>
+        </attributes>
+      </element>
+    </elements>
+  </xmi:Extension>
+</xmi:XMI>

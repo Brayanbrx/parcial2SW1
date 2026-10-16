@@ -1,0 +1,54 @@
+package {{project.packageName}}.exception;
+
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Instant;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiError> notFound(ResourceNotFoundException error, HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, error.getMessage(), request);
+    }
+
+    @ExceptionHandler({DataIntegrityViolationException.class, ObjectOptimisticLockingFailureException.class})
+    public ResponseEntity<ApiError> conflict(RuntimeException error, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "La operacion viola la integridad de los datos.", request);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiError> validation(MethodArgumentNotValidException error, HttpServletRequest request) {
+        var message = error.getBindingResult().getFieldErrors().stream()
+                .map(item -> item.getField() + ": " + item.getDefaultMessage())
+                .collect(Collectors.joining("; "));
+        var fields = error.getBindingResult().getFieldErrors().stream()
+                .collect(Collectors.toMap(item -> item.getField(), item -> String.valueOf(item.getDefaultMessage()), (first, next) -> first));
+        return ResponseEntity.badRequest().body(new ApiError(Instant.now(), 400, "Bad Request", message, request.getRequestURI(), fields));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> badRequest(RuntimeException error, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, error.getMessage(), request);
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ApiError> invalidFormat(Exception error, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "JSON, tipo de campo o identificador invalido. Revisa el contrato del DTO.", request);
+    }
+
+    private ResponseEntity<ApiError> response(HttpStatus status, String message, HttpServletRequest request) {
+        var body = new ApiError(Instant.now(), status.value(), status.getReasonPhrase(), message, request.getRequestURI(), Map.of());
+        return ResponseEntity.status(status).body(body);
+    }
+}

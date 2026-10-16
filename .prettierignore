@@ -1,0 +1,18 @@
+dist/
+dist-types/
+node_modules/
+reports/
+package-lock.json
+backend/prisma/migrations/
+templates/
+*.md
+
+# Herramientas instaladas, no codigo del proyecto: se dejan tal cual vienen.
+.agents/
+.claude/
+test-results/
+playwright-report/
+generated-output/
+output/
+tmp/
+temp/

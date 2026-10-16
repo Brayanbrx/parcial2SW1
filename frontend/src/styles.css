@@ -1,0 +1,4000 @@
+/* ==================================================================== */
+/* Sistema visual                                                        */
+/*                                                                       */
+/* Una herramienta de productividad, no una pagina de presentacion: el    */
+/* lienzo manda y todo lo demas es cromo que tiene que estorbar poco.     */
+/*                                                                       */
+/* Los valores viven aqui porque antes habia 43 tamanos distintos         */
+/* repartidos por el archivo —0.64rem, 0.68rem, 0.72rem…— que nadie podia */
+/* recordar ni respetar. Una escala corta se recuerda.                    */
+/* ==================================================================== */
+
+:root {
+  /* Base estructural; design.css define las paletas claro y oscuro. */
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+
+  /* --- Superficies ---------------------------------------------------
+     Cuatro niveles, del fondo hacia arriba. Cada uno se distingue del
+     anterior por luminosidad, no por sombra: en oscuro una sombra no se
+     ve, y apilar sombras para simular profundidad ensucia la pantalla. */
+  --fondo: #0b0d10;
+  --superficie: #13161b;
+  --superficie-2: #181c23;
+  --superficie-3: #1e232b;
+  /* Opaco a proposito: las barras pegadas al pie de un panel que se
+     desplaza necesitan tapar lo que pasa por debajo. */
+  --fondo-panel: #13161b;
+  --suave: rgb(255 255 255 / 4%);
+  --suave-fuerte: rgb(255 255 255 / 8%);
+
+  /* --- Texto ---------------------------------------------------------
+     Tres niveles y ninguna opacidad: `opacity` sobre texto pequeno baja
+     del 4.5:1 que pide WCAG, y un gris declarado se puede medir. */
+  --texto: #f4f7fa;
+  --texto-suave: #9ca6b4;
+  --texto-tenue: #8793a3;
+
+  /* --- Bordes --------------------------------------------------------
+     Blanco translucido, no gris solido: asi funcionan igual sobre las
+     cuatro superficies sin tener una variante por nivel. */
+  --borde: rgb(255 255 255 / 8%);
+  --borde-fuerte: rgb(255 255 255 / 14%);
+
+  /* --- Color con significado -----------------------------------------
+     El acento dirige la atencion; el resto solo aparece cuando hay algo
+     que decir. Rojo unicamente para lo que destruye. */
+  --acento: #2f78c4;
+  --acento-vivo: #3b8ddd;
+  --acento-texto: #9dcbf5;
+  --acento-suave: rgb(47 120 196 / 15%);
+
+  --error: #ef4444;
+  --error-texto: #fca5a5;
+  --error-suave: rgb(239 68 68 / 12%);
+
+  --aviso: #d99a2b;
+  --aviso-texto: #f0c274;
+  --aviso-suave: rgb(217 154 43 / 12%);
+
+  --ok: #2ea36a;
+  --ok-texto: #6ee7a8;
+  --ok-suave: rgb(46 163 106 / 14%);
+
+  /* --- Escala de espacio ---------------------------------------------
+     4, 6, 8, 12, 16, 24, 32, 40 px. */
+  --e-1: 0.25rem;
+  --e-2: 0.375rem;
+  --e-3: 0.5rem;
+  --e-4: 0.75rem;
+  --e-5: 1rem;
+  --e-6: 1.5rem;
+  --e-7: 2rem;
+  --e-8: 2.5rem;
+
+  /* --- Escala tipografica --------------------------------------------
+     11, 12, 13, 14, 16, 20, 28 px. Siete tamanos para toda la aplicacion. */
+  --t-xs: 0.6875rem;
+  --t-sm: 0.75rem;
+  --t-md: 0.8125rem;
+  --t-base: 0.875rem;
+  --t-lg: 1rem;
+  --t-xl: 1.25rem;
+  --t-2xl: 1.75rem;
+  --mono: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+
+  /* --- Radios ---------------------------------------------------------
+     Controles 8, tarjetas 10, paneles 12. Nada mas redondo que eso: una
+     interfaz tecnica con esquinas de pastilla parece un juguete. */
+  --r-sm: 0.25rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.625rem;
+  --r-xl: 0.75rem;
+  --r-completo: 999px;
+
+  /* --- Elevacion ------------------------------------------------------
+     Dos niveles y muy contenidos. En oscuro la profundidad la da el
+     escalon de superficie; la sombra solo separa lo que flota. */
+  --sombra-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --sombra-2: 0 8px 24px rgb(0 0 0 / 45%);
+
+  /* --- Controles ------------------------------------------------------ */
+  --alto-control: 2.125rem;
+  --alto-control-sm: 1.75rem;
+  --foco: 2px;
+  --transicion: 140ms ease;
+}
+
+.colaboradores-proyecto {
+  margin-block: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+  background: var(--superficie);
+}
+.lista-colaboradores {
+  list-style: none;
+  padding: 0;
+}
+.lista-colaboradores > li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--borde);
+}
+.lista-colaboradores > li > span:first-child {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lista-colaboradores small {
+  display: block;
+  color: var(--texto-suave);
+}
+.lista-colaboradores code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.operacion-candidato {
+  position: relative;
+  border-bottom: 1px solid var(--borde);
+}
+.operacion-candidato > .quitar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.15rem 0.3rem;
+}
+.operacion-candidato > .fila-candidato {
+  padding-right: 2rem;
+  grid-template-columns: minmax(5rem, 1fr) minmax(6rem, 1.25fr);
+}
+.validacion-candidato {
+  padding: 0.75rem;
+  background: var(--superficie-2);
+}
+.validacion-candidato ul {
+  max-height: 10rem;
+  overflow: auto;
+}
+.operacion-candidato .relacion-candidato {
+  display: flex;
+  flex-wrap: wrap;
+}
+.operacion-candidato .relacion-candidato > label {
+  min-width: 0;
+  flex: 1 1 9rem;
+}
+.operacion-candidato .relacion-candidato input,
+.operacion-candidato .relacion-candidato select {
+  max-width: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Foco visible, en un solo sitio y para todo.
+   No habia ninguna regla de foco en todo el archivo: quien navega con el
+   teclado no podia saber donde estaba. Es WCAG 2.4.7, y ademas es lo que
+   hace usable el editor sin soltar las manos del teclado.
+   `:focus-visible` y no `:focus`: el anillo aparece al tabular y no al
+   hacer clic, que es lo que molesta y lleva a que alguien lo quite. */
+:focus-visible {
+  outline: var(--foco) solid var(--acento);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/* Botones                                                             */
+/*                                                                     */
+/* Cinco variantes y ninguna mas: secundario (por defecto), principal,  */
+/* fantasma, peligro e icono. Cada pantalla tiene UNA accion principal. */
+/* ------------------------------------------------------------------ */
+
+button {
+  font: inherit;
+  font-size: var(--t-base);
+  font-weight: 500;
+  min-height: var(--alto-control);
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-md);
+  background: var(--superficie-2);
+  color: var(--texto);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-2);
+  white-space: nowrap;
+  transition:
+    background-color var(--transicion),
+    border-color var(--transicion),
+    color var(--transicion);
+}
+
+button:hover:not(:disabled) {
+  background: var(--superficie-3);
+  border-color: rgb(255 255 255 / 22%);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Principal: la accion que la pantalla existe para hacer. Relleno de
+   acento, uno por vista. Antes era verde —el color de «correcto»— y eso
+   dejaba sin distintivo a la accion de verdad. */
+button.principal {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+  font-weight: 600;
+}
+
+button.principal:hover:not(:disabled) {
+  background: var(--acento-vivo);
+  border-color: var(--acento-vivo);
+}
+
+/* Fantasma: acciones discretas que no compiten con nada. */
+button.fantasma {
+  background: transparent;
+  border-color: transparent;
+  color: var(--texto-suave);
+}
+
+button.fantasma:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+
+/* Peligro: solo lo que destruye. Discreto en reposo y rojo al apuntarlo,
+   para que se lea como una advertencia y no como una invitacion. */
+button.peligro {
+  background: transparent;
+  border-color: transparent;
+  color: var(--texto-suave);
+}
+
+/* Con texto necesita borde: sin el, «Eliminar clase» se lee como un enlace
+   y no como el boton que es. Los de icono se quedan limpios. */
+button.peligro:not(.icono) {
+  border-color: var(--borde-fuerte);
+}
+
+button.peligro:hover:not(:disabled) {
+  background: var(--error-suave);
+  border-color: rgb(239 68 68 / 35%);
+  color: var(--error-texto);
+}
+
+/* Boton de icono: cuadrado, sin fondo hasta que se apunta. 34px de area,
+   que es el minimo comodo con raton en una herramienta de escritorio. */
+button.icono {
+  min-width: var(--alto-control);
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--texto-suave);
+}
+
+button.icono:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+
+button.icono.peligro:hover:not(:disabled) {
+  background: var(--error-suave);
+  color: var(--error-texto);
+}
+
+/* ------------------------------------------------------------------ */
+/* Campos                                                              */
+/* ------------------------------------------------------------------ */
+
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: var(--t-base);
+  min-height: var(--alto-control);
+  padding: 0 var(--e-3);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-md);
+  background: var(--fondo);
+  color: var(--texto);
+  transition:
+    border-color var(--transicion),
+    box-shadow var(--transicion);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 22%);
+}
+
+/* El foco de un campo se marca con el acento y un halo, no con el anillo
+   del navegador: dentro de un formulario oscuro el contorno solo se pierde. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+input:disabled,
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+input::placeholder {
+  color: var(--texto-tenue);
+}
+
+/* Las casillas conservan su tamaño; la etiqueta ofrece el área táctil. */
+input[type='checkbox'],
+input[type='radio'] {
+  width: 1.125rem;
+  height: 1.125rem;
+  min-height: 0;
+  flex: 0 0 1.125rem;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--acento);
+}
+
+label.opcion-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--e-3);
+  min-height: 2.75rem;
+  padding-block: var(--e-2);
+  cursor: pointer;
+}
+
+.opcion-checkbox > span {
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.opcion-checkbox small {
+  display: block;
+  color: var(--texto-suave);
+  font-size: var(--t-md);
+}
+
+/* Un campo con error se marca en rojo ademas de con su mensaje. */
+input[aria-invalid='true'] {
+  border-color: var(--error);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+  font-size: var(--t-md);
+}
+
+/* El texto de una etiqueta, cuando el control va al lado y no debajo. */
+label > span:first-child {
+  color: var(--texto-suave);
+  font-weight: 500;
+}
+
+.error {
+  color: var(--error-texto);
+}
+
+.pista {
+  color: var(--texto-suave);
+}
+
+/* Movimiento reducido: quien lo pide en su sistema no quiere transiciones,
+   y este es el unico sitio donde hay que decirlo para toda la aplicacion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Pantallas de ruta: cargando, error, sin permiso                     */
+/*                                                                     */
+/* Eran un parrafo suelto centrado en una pagina en blanco. Con un      */
+/* titulo, una explicacion y una salida, quien se topa con una dice     */
+/* que le pasa y que puede hacer.                                      */
+/* ------------------------------------------------------------------ */
+
+.estado-ruta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e-3);
+  max-width: 26rem;
+  text-align: center;
+}
+
+.estado-ruta h1 {
+  font-size: var(--t-lg);
+  margin: 0;
+  color: var(--texto);
+}
+
+.estado-ruta p {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: var(--t-base);
+}
+
+/* El enlace de salida se ve como un boton: es la accion de la pantalla. */
+.estado-ruta a {
+  margin-top: var(--e-2);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--alto-control);
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+  background: var(--suave);
+  color: inherit;
+  text-decoration: none;
+  font-size: var(--t-base);
+}
+
+.estado-ruta a:hover {
+  background: var(--suave-fuerte);
+  border-color: var(--borde-fuerte);
+}
+
+/* Indicador de carga. Un circulo que gira dice «esto sigue vivo», que es
+   justo lo que un texto quieto no dice. */
+.girando {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--borde-fuerte);
+  border-top-color: var(--acento);
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Solo para lectores de pantalla: texto que da contexto a un control que
+   visualmente ya se entiende por su posicion. */
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Armazon de las pantallas administrativas                            */
+/* ------------------------------------------------------------------ */
+
+.marco {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-3) var(--e-6);
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-bar .separa {
+  flex: 1;
+}
+
+.marca {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-3);
+  text-decoration: none;
+  color: var(--texto);
+}
+
+/* Isotipo: dos clases unidas, sobre el acento. Es lo unico de la interfaz
+   que lleva el color de marca en relleno. */
+.isotipo {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-md);
+  background: linear-gradient(160deg, var(--acento-vivo), var(--acento));
+  color: #fff;
+}
+
+.isotipo.grande {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-lg);
+}
+
+.nombre-producto {
+  font-size: var(--t-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* --- Menu del usuario --- */
+
+.menu-usuario {
+  position: relative;
+}
+
+.disparador-usuario {
+  padding: 0 var(--e-2) 0 var(--e-1);
+  gap: var(--e-2);
+}
+
+.nombre-usuario {
+  font-size: var(--t-md);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.desplegable {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--e-2));
+  min-width: 13rem;
+  padding: var(--e-1);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-lg);
+  background: var(--superficie-2);
+  box-shadow: var(--sombra-2);
+  z-index: 20;
+  animation: aparecer 140ms ease;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.cabecera-desplegable {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0;
+  padding: var(--e-3) var(--e-3) var(--e-2);
+  border-bottom: 1px solid var(--borde);
+}
+
+.cabecera-desplegable .titulo {
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.cabecera-desplegable .meta {
+  font-size: var(--t-xs);
+  color: var(--texto-tenue);
+}
+
+.opcion-desplegable {
+  width: 100%;
+  justify-content: flex-start;
+  margin-top: var(--e-1);
+  color: var(--texto);
+}
+
+/* ------------------------------------------------------------------ */
+/* Paginas                                                             */
+/* ------------------------------------------------------------------ */
+
+.centrado {
+  min-height: 60vh;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--e-7);
+  gap: var(--e-4);
+  text-align: center;
+  color: var(--texto-suave);
+}
+
+.pagina {
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: var(--e-7) var(--e-6) var(--e-8);
+}
+
+.encabezado-pagina {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  margin-bottom: var(--e-6);
+}
+
+.encabezado-pagina h1 {
+  font-size: var(--t-2xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitulo {
+  margin: var(--e-1) 0 0;
+  font-size: var(--t-base);
+  color: var(--texto-suave);
+}
+
+.volver {
+  display: inline-grid;
+  place-items: center;
+  width: var(--alto-control);
+  height: var(--alto-control);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+  text-decoration: none;
+  color: var(--texto-suave);
+  flex-shrink: 0;
+}
+
+.volver:hover {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+
+/* --- Barra de acciones: crear a la izquierda, unirse al lado --- */
+
+.barra-acciones {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--e-4);
+  margin-bottom: var(--e-6);
+}
+
+.accion-principal,
+.accion-secundaria {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--e-3);
+  padding: var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-xl);
+  background: var(--superficie);
+}
+
+.accion-principal label,
+.accion-secundaria label {
+  flex: 1;
+  min-width: 0;
+}
+
+.accion-secundaria.invitaciones {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--e-2);
+}
+
+.etiqueta-bloque {
+  font-size: var(--t-md);
+  font-weight: 500;
+  color: var(--texto-suave);
+}
+
+.botones-invitar {
+  display: flex;
+  gap: var(--e-2);
+}
+
+.botones-invitar button {
+  flex: 1;
+}
+
+.codigo {
+  padding: var(--e-2) var(--e-3);
+  border-radius: var(--r-md);
+  background: var(--fondo);
+  border: 1px dashed var(--borde-fuerte);
+  font-family: var(--mono);
+  font-size: var(--t-md);
+  color: var(--acento-texto);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+/* --- Tarjetas de proyecto y de pizarra --- */
+
+.rejilla-tarjetas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--e-4);
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+}
+
+.tarjeta-recurso {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borde);
+  border-radius: var(--r-lg);
+  background: var(--superficie);
+  overflow: hidden;
+  transition:
+    border-color var(--transicion),
+    background-color var(--transicion);
+}
+
+.tarjeta-recurso:hover {
+  border-color: var(--borde-fuerte);
+  background: var(--superficie-2);
+}
+
+/* El cuerpo es el enlace: casi toda la tarjeta abre el recurso, y las
+   acciones viven abajo para que pulsar «eliminar» no sea pulsar la tarjeta. */
+.cuerpo-tarjeta {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-5) var(--e-5) var(--e-4);
+  text-decoration: none;
+  color: inherit;
+  flex: 1;
+}
+
+.cuerpo-tarjeta strong {
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.icono-recurso {
+  display: inline-grid;
+  place-items: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: var(--r-md);
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+  flex-shrink: 0;
+}
+
+.pie-tarjeta {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-3) var(--e-3) var(--e-3) var(--e-5);
+  border-top: 1px solid var(--borde);
+  font-size: var(--t-md);
+  color: var(--texto-suave);
+}
+
+.dato-tarjeta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-1);
+  white-space: nowrap;
+}
+
+/* Las acciones destructivas se separan del resto y solo se tinen al
+   apuntarlas: presentes, discretas, nunca lo primero que se ve. */
+.accion-tarjeta {
+  margin-left: auto;
+}
+
+/* El modificador va con prefijo —`rol-editor`, no `editor`— y esto no es
+   cosmetica: la version sin prefijo colisionaba con `.editor`, la clase del
+   armazon del editor UML, que declara `height: 100vh`. La insignia de un
+   EDITOR medía 720 pixeles de alto y estiraba la tarjeta entera. Con OWNER no
+   se veia, porque `.owner` no choca con nada. */
+.insignia-rol {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.1rem var(--e-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--borde-fuerte);
+  color: var(--texto-tenue);
+}
+
+.insignia-rol.rol-owner {
+  border-color: rgb(99 102 241 / 40%);
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+}
+
+/* --- Estado vacio --- */
+
+.estado-vacio-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-8) var(--e-6);
+  border: 1px dashed var(--borde-fuerte);
+  border-radius: var(--r-xl);
+  text-align: center;
+}
+
+.estado-vacio-panel h2 {
+  font-size: var(--t-lg);
+  margin: var(--e-2) 0 0;
+}
+
+.estado-vacio-panel p {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--texto-suave);
+  font-size: var(--t-base);
+}
+
+.icono-vacio {
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--r-lg);
+  background: var(--superficie-2);
+  color: var(--texto-suave);
+}
+
+/* --- Mensajes --- */
+
+.aviso-error {
+  display: flex;
+  gap: var(--e-2);
+  margin: 0 0 var(--e-5);
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid rgb(239 68 68 / 35%);
+  border-radius: var(--r-md);
+  background: var(--error-suave);
+  color: var(--error-texto);
+  font-size: var(--t-base);
+}
+
+/* ------------------------------------------------------------------ */
+/* Perfil de la cuenta                                                 */
+/* ------------------------------------------------------------------ */
+
+/* Formularios y no una rejilla de tarjetas: se leen en vertical, uno detras
+   de otro, y no compiten por el ancho. */
+.pagina-estrecha {
+  max-width: 46rem;
+}
+
+.panel-perfil {
+  padding: var(--e-6);
+  margin-bottom: var(--e-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-xl);
+  background: var(--superficie);
+}
+
+.cabecera-panel {
+  margin-bottom: var(--e-5);
+}
+
+.cabecera-panel h2 {
+  font-size: var(--t-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.cabecera-panel .subtitulo {
+  font-size: var(--t-md);
+}
+
+.formulario-perfil {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+  max-width: 24rem;
+}
+
+.acciones-formulario {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin-top: var(--e-1);
+  flex-wrap: wrap;
+}
+
+.fila-foto {
+  display: flex;
+  align-items: center;
+  gap: var(--e-5);
+  flex-wrap: wrap;
+}
+
+.avatar-grande {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--borde-fuerte);
+}
+
+.acciones-foto {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+}
+
+/* Confirmacion de una operacion que salio bien. Verde y discreta: dice que
+   ocurrio, no celebra. */
+.aviso-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  margin: 0;
+  font-size: var(--t-md);
+  color: var(--ok-texto);
+}
+
+.ayuda.error {
+  color: var(--error-texto);
+}
+
+/* Enlace de texto dentro de un formulario: «olvide mi contrasena», «volver». */
+.enlace-discreto {
+  align-self: center;
+  font-size: var(--t-md);
+  min-height: var(--alto-control-sm);
+  color: var(--texto-suave);
+  text-decoration: none;
+}
+
+.enlace-discreto:hover {
+  color: var(--texto);
+}
+
+/* Una opcion del menu que es enlace y no boton: se ve igual. */
+.enlace-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: var(--alto-control);
+  padding: 0 var(--e-4);
+  border-radius: var(--r-md);
+  font-size: var(--t-base);
+  text-decoration: none;
+  color: var(--texto);
+}
+
+.enlace-menu:hover {
+  background: var(--suave-fuerte);
+}
+
+/* La pantalla de restablecer no tiene panel de marca: la tarjeta va sola. */
+.acceso-suelto {
+  min-height: 100vh;
+}
+
+.acceso-suelto .acceso-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+
+/* ------------------------------------------------------------------ */
+/* Acceso                                                              */
+/* ------------------------------------------------------------------ */
+
+.acceso {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+}
+
+.acceso-marca {
+  display: grid;
+  place-items: center;
+  padding: var(--e-8);
+  border-right: 1px solid var(--borde);
+  /* Un solo degradado, muy contenido, y un tinte de acento: suficiente para
+     que el panel no sea un rectangulo plano, lejos del neon. */
+  background:
+    radial-gradient(120% 80% at 15% 0%, rgb(99 102 241 / 12%), transparent 60%), var(--superficie);
+}
+
+.acceso-marca-contenido {
+  max-width: 26rem;
+}
+
+.acceso-marca h2 {
+  font-size: var(--t-2xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: var(--e-5) 0 0;
+}
+
+.acceso-marca .lema {
+  margin: var(--e-2) 0 0;
+  font-size: var(--t-lg);
+  color: var(--acento-texto);
+}
+
+.acceso-detalle {
+  margin: var(--e-3) 0 0;
+  color: var(--texto-suave);
+  font-size: var(--t-base);
+}
+
+.acceso-diagrama {
+  width: 100%;
+  max-width: 20rem;
+  margin-top: var(--e-7);
+  color: var(--borde-fuerte);
+}
+
+.acceso-diagrama .caja {
+  stroke: rgb(255 255 255 / 22%);
+  fill: var(--superficie-2);
+  stroke-width: 1.5;
+}
+
+.acceso-formulario {
+  display: grid;
+  place-items: center;
+  padding: var(--e-7) var(--e-6);
+}
+
+.tarjeta {
+  width: min(24rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+  padding: var(--e-6);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-xl);
+  background: var(--superficie);
+  box-shadow: var(--sombra-2);
+  text-align: left;
+}
+
+.acceso-titulo h1 {
+  font-size: var(--t-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.acceso-titulo .subtitulo {
+  font-size: var(--t-md);
+}
+
+/* Interruptor segmentado. Antes las dos opciones se veian igual de activas. */
+.pestanas {
+  display: flex;
+  gap: var(--e-1);
+  padding: var(--e-1);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+}
+
+.pestanas button {
+  flex: 1;
+  min-height: var(--alto-control-sm);
+  border-color: transparent;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: var(--t-md);
+}
+
+.pestanas button.activa {
+  background: var(--superficie-3);
+  border-color: var(--borde-fuerte);
+  color: var(--texto);
+  font-weight: 600;
+}
+
+/* Campo con un boton dentro, como mostrar u ocultar la contrasena. */
+.campo-con-accion {
+  display: flex;
+  gap: var(--e-2);
+  align-items: center;
+}
+
+.campo-con-accion input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ver-password {
+  font-size: var(--t-sm);
+  min-height: var(--alto-control);
+  padding: 0 var(--e-3);
+}
+
+.ayuda {
+  font-size: var(--t-sm);
+  color: var(--texto-tenue);
+}
+
+/* --- Adaptacion de las pantallas administrativas --- */
+
+@media (max-width: 1024px) {
+  .barra-acciones {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .acceso {
+    grid-template-columns: 1fr;
+  }
+
+  /* El panel de marca pasa a ser una franja: presenta el producto sin
+     robarle la pantalla al formulario. */
+  .acceso-marca {
+    border-right: 0;
+    border-bottom: 1px solid var(--borde);
+    padding: var(--e-6);
+  }
+
+  .acceso-diagrama {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .acceso {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acceso-formulario {
+    min-width: 0;
+    padding-inline: var(--e-5);
+  }
+
+  .acceso-formulario .tarjeta {
+    min-width: 0;
+    padding: var(--e-5);
+  }
+
+  .pagina {
+    padding: var(--e-5) var(--e-4) var(--e-7);
+  }
+
+  .app-bar {
+    padding: var(--e-3) var(--e-4);
+  }
+
+  .nombre-producto,
+  .nombre-usuario {
+    display: none;
+  }
+
+  .accion-principal,
+  .accion-secundaria {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rejilla-tarjetas {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Editor                                                              */
+/* ------------------------------------------------------------------ */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--fondo);
+}
+
+/* Barra superior en tres zonas: identidad a la izquierda, accion en el
+   centro, estado y personas a la derecha. Antes era una fila donde «Nueva
+   clase», el estado de conexion y «Salir» estaban al mismo nivel, asi que
+   nada destacaba y la accion principal no se distinguia de una insignia. */
+.barra-editor {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-2) var(--e-4);
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1);
+  z-index: 2;
+}
+
+.barra-editor .identidad {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-width: 0;
+}
+
+/* Proyecto › Pizarra. Estando dentro del editor no se veia de que proyecto
+   era la pizarra abierta, y volver era una flecha sin nombre. */
+.barra-editor .miga {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e-2);
+  min-width: 0;
+  font-size: var(--t-md);
+}
+
+.barra-editor .miga a {
+  color: var(--texto-suave);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 14rem;
+}
+
+.barra-editor .miga a:hover {
+  color: var(--texto);
+  text-decoration: underline;
+}
+
+.barra-editor .miga .separador {
+  color: var(--texto-tenue);
+}
+
+.barra-editor h1 {
+  font-size: var(--t-lg);
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Empuja el estado y las personas al extremo derecho. */
+.barra-editor .separa {
+  flex: 1;
+}
+
+.controles-vista {
+  display: flex;
+  align-items: center;
+  gap: var(--e-1);
+  padding-left: var(--e-2);
+  border-left: 1px solid var(--borde);
+}
+
+.barra-editor button.boton-panel {
+  min-height: var(--alto-control-sm);
+  padding-inline: var(--e-2);
+  font-size: var(--t-sm);
+}
+
+.icono-panel {
+  width: 0.9rem;
+  height: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.icono-panel-izquierdo {
+  box-shadow: inset 3px 0 0 currentColor;
+}
+
+.icono-panel-derecho {
+  box-shadow: inset -3px 0 0 currentColor;
+}
+
+.barra-editor .estado-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+
+.conexion {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-1);
+  font-size: var(--t-sm);
+  padding: 0.15rem var(--e-3);
+  border-radius: var(--r-completo);
+  border: 1px solid var(--borde);
+  color: var(--texto-suave);
+  white-space: nowrap;
+}
+
+/* El punto delante: el estado no se transmite solo con color, que es lo que
+   pide WCAG 1.4.1 y lo que necesita quien no distingue verde de rojo. La
+   forma del punto cambia con el estado. */
+.conexion::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.conexion.conectando::before {
+  animation: latido 1.2s ease-in-out infinite;
+}
+
+.conexion.conectado {
+  color: var(--ok-texto);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+
+.conexion.desconectado,
+.conexion.rechazado {
+  color: var(--error-texto);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+@keyframes latido {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conexion.conectando::before {
+    animation: none;
+  }
+}
+
+.solo-lectura {
+  font-size: var(--t-sm);
+  padding: 0.15rem var(--e-3);
+  border-radius: var(--r-completo);
+  border: 1px solid color-mix(in srgb, var(--aviso) 45%, transparent);
+  background: color-mix(in srgb, var(--aviso) 15%, transparent);
+  color: var(--aviso-texto);
+  white-space: nowrap;
+}
+
+.presencia {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* Superpuestos: ocupan menos y se leen como un grupo, no como una lista. */
+  padding-left: 0.4rem;
+}
+
+.presencia li {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: #fff;
+  margin-left: -0.4rem;
+  border: 2px solid var(--superficie);
+  cursor: default;
+}
+
+.banda {
+  margin: 0;
+  padding: var(--e-3) var(--e-5);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+  font-size: var(--t-base);
+}
+
+.lienzo {
+  flex: 1;
+  display: grid;
+  /* 26rem y no 22: con cinco paneles apilados en 22rem cada uno se quedaba con
+     unos centimetros. Las herramientas van ahora en pestanas, y el ancho extra
+     es para que el asistente y el candidato de importacion se lean. */
+  grid-template-columns: 1fr 26rem;
+  min-height: 0;
+}
+
+.paneles {
+  border-left: 1px solid var(--borde);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Nada se sale de la columna: cada region tiene su propio desplazamiento. */
+  overflow: hidden;
+  background: var(--superficie);
+}
+
+/* Pestanas de herramienta: asistente, importar, generar. */
+.pestanas-panel {
+  display: flex;
+  border-bottom: 1px solid var(--borde);
+  flex-shrink: 0;
+}
+
+.pestanas-panel button {
+  flex: 1;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: var(--e-3) var(--e-2);
+  font-size: var(--t-md);
+  color: var(--texto-suave);
+}
+
+.pestanas-panel button:hover:not(.activa) {
+  background: var(--suave);
+  color: var(--texto);
+}
+
+/* La pestana activa se marca con el acento y no solo con el peso de la
+   letra: en una fila de tres, «un poco mas negrita» no se ve. */
+.pestanas-panel button.activa {
+  color: var(--acento-texto);
+  font-weight: 600;
+  border-bottom-color: var(--acento);
+  background: color-mix(in srgb, var(--acento) 7%, transparent);
+}
+
+/* El hueco de la herramienta activa.
+   `flex: 0 1 auto` y no `1 1 55%`: una herramienta corta —generar son dos
+   controles— dejaba medio panel en blanco. Asi cada una ocupa lo que necesita,
+   hasta el tope, y el inspector se queda con el resto. */
+.herramienta {
+  /* No se encoge. Antes cedia altura al inspector y al panel de validacion
+     hasta quedarse por debajo de su contenido, y lo primero que caia fuera
+     era el campo de entrada del asistente. Quien cede es quien puede
+     desplazarse sin perder su accion principal. */
+  flex: 0 0 auto;
+  /* 65% y no 60: el candidato de importacion con avisos no cabia, y lo que
+     sobresalia era justo la fila de botones. */
+  max-height: 65%;
+  /* Y un suelo: las tres regiones de la columna pedian juntas mas del 100%,
+     asi que la herramienta se encogia hasta que su propio campo de entrada
+     quedaba debajo del borde. La herramienta es donde se trabaja; el que
+     cede espacio es el panel de validacion, que es de consulta. */
+  min-height: 12.5rem;
+  overflow-y: auto;
+}
+
+/* El tope del asistente lo pone su conversacion: asi el panel entero nunca
+   supera lo que la columna puede darle, y lo que se desplaza es la lista de
+   mensajes y no la caja que contiene el campo de escribir. */
+
+/* Cuando hay una vista previa que la persona debe revisar, la herramienta deja
+   de competir por altura como si fuera un formulario corto. Reservarle espacio
+   evita que la barra fija de Aplicar tape precisamente los atributos editables. */
+.herramienta:has(.candidato) {
+  flex: 0 0 68%;
+  max-height: 68%;
+}
+
+.herramienta > div {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Sin esto las tres herramientas se ven a la vez: la regla de arriba declara
+   `display` y gana a la del navegador para `[hidden]`, que es la que deberia
+   ocultarlas. */
+.herramienta > div[hidden] {
+  display: none;
+}
+
+.inspector {
+  flex: 1 1 auto;
+  min-height: 7rem;
+  border-top: 1px solid var(--borde);
+  overflow-y: auto;
+  padding: var(--e-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  margin: calc(var(--e-1) * -1) 0 0;
+  padding-bottom: var(--e-3);
+  border-bottom: 1px solid var(--borde);
+}
+
+.inspector-header h2 {
+  margin: 0;
+  font-size: var(--t-base);
+  font-weight: 650;
+}
+
+.inspector-header span {
+  padding: 0.1rem var(--e-2);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-completo);
+  color: var(--texto-suave);
+  font-size: var(--t-xs);
+}
+
+.inspector-vacio {
+  margin: auto 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--e-2);
+  padding: var(--e-5);
+  color: var(--texto-suave);
+  text-align: center;
+}
+
+.inspector-vacio > span {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-md);
+  background: var(--superficie-2);
+  color: var(--acento-texto);
+  font-size: var(--t-lg);
+}
+
+.inspector-vacio p,
+.inspector-vacio small {
+  margin: 0;
+}
+
+.inspector-vacio small {
+  color: var(--texto-tenue);
+  line-height: 1.45;
+}
+
+/* Titulo de seccion del panel. Se repite el patron de la barra de estado:
+   mayusculas pequenas, color atenuado, para que separe sin gritar. */
+.inspector h3 {
+  font-size: var(--t-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texto-suave);
+  margin: var(--e-2) 0 0;
+  padding-bottom: var(--e-1);
+  border-bottom: 1px solid var(--borde);
+}
+
+/* Los nombres derivados: como quedara la clase en el codigo y en la base.
+   En monoespaciada porque son identificadores, no prosa. */
+.derivados {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--texto-suave);
+  font-family: var(--mono);
+}
+
+.derivados > span:not([aria-hidden='true']) {
+  font-family: system-ui, sans-serif;
+  color: var(--texto-tenue);
+}
+
+.lista-atributos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+
+.lista-atributos li {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(5.5rem, 0.7fr) auto;
+  gap: var(--e-1);
+  align-items: center;
+  padding: var(--e-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+}
+
+.lista-atributos li:hover {
+  background: var(--suave);
+}
+
+.lista-atributos input,
+.lista-atributos select {
+  min-width: 0;
+  min-height: var(--alto-control-sm);
+  font-size: var(--t-md);
+}
+
+.lista-atributos li > input {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.lista-atributos li > select {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.lista-atributos li > .quitar {
+  grid-column: 3;
+  grid-row: 1 / 3;
+}
+
+.lista-atributos li.atributos-vacios {
+  display: block;
+  padding: var(--e-3);
+  border-style: dashed;
+  color: var(--texto-suave);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
+/* PK / NN / U: tres casillas en muy poco sitio. La etiqueta va pegada a su
+   casilla y el conjunto se lee como una unidad. */
+.marcadores {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  display: flex;
+  gap: var(--e-4);
+  font-size: var(--t-xs);
+  color: var(--texto-suave);
+}
+
+.marcadores label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.1rem;
+  cursor: pointer;
+}
+
+.marcadores input {
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--acento);
+}
+
+.extremos-relacion {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e-3);
+}
+
+.extremos-relacion fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: var(--e-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+}
+
+.extremos-relacion legend {
+  max-width: 100%;
+  padding-inline: var(--e-1);
+  overflow: hidden;
+  color: var(--texto);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extremos-relacion select,
+.extremos-relacion input {
+  width: 100%;
+}
+
+.quitar {
+  min-height: var(--alto-control-sm);
+  min-width: var(--alto-control-sm);
+  padding: 0 var(--e-2);
+  line-height: 1;
+}
+
+.nuevo-atributo {
+  display: flex;
+  gap: var(--e-2);
+}
+
+.nuevo-atributo input {
+  flex: 1;
+  min-width: 0;
+}
+
+.validacion {
+  flex: 0 1 auto;
+  border-top: 1px solid var(--borde);
+  max-height: 30%;
+  min-height: 2.75rem;
+  overflow-y: auto;
+  padding: var(--e-4);
+  background: var(--superficie);
+}
+
+.validacion header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.contador {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  padding: 0.1rem var(--e-3);
+  border-radius: var(--r-completo);
+  border: 1px solid var(--borde);
+  color: var(--texto-suave);
+}
+
+/* Un contador en cero no tiene por que llamar la atencion; en rojo, si. */
+.contador.error {
+  color: var(--error-texto);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.contador.aviso {
+  color: var(--aviso-texto);
+  border-color: color-mix(in srgb, var(--aviso) 40%, transparent);
+  background: color-mix(in srgb, var(--aviso) 10%, transparent);
+}
+
+.contador.ok {
+  color: var(--texto-tenue);
+}
+
+.estado {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.estado.bloqueado {
+  color: var(--error-texto);
+}
+
+.estado.listo {
+  color: var(--ok-texto);
+}
+
+.validacion ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+
+.validacion li button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--e-1);
+  font-size: var(--t-md);
+  padding: var(--e-2) var(--e-3);
+  border-left-width: 3px;
+}
+
+.validacion li.error button {
+  border-left-color: var(--error);
+}
+
+.validacion li.aviso button {
+  border-left-color: var(--aviso);
+}
+
+/* La sugerencia dice como arreglarlo. Va debajo del mensaje y mas tenue:
+   se lee cuando hace falta, no compite con el titulo del hallazgo. */
+.sugerencia {
+  color: var(--texto-suave);
+  font-size: var(--t-sm);
+  white-space: normal;
+}
+
+/* Barra de estado: lo que se mira de reojo sin dejar de dibujar. */
+.barra-estado {
+  display: flex;
+  align-items: center;
+  gap: var(--e-5);
+  padding: var(--e-1) var(--e-5);
+  border-top: 1px solid var(--borde);
+  background: var(--superficie);
+  font-size: var(--t-sm);
+  color: var(--texto-suave);
+}
+
+.barra-estado .separa {
+  flex: 1;
+}
+
+.barra-estado .dato {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-1);
+  white-space: nowrap;
+}
+
+/* Igual que las insignias de conexion: un punto delante para que el estado
+   no dependa solo del color. */
+.barra-estado .dato.listo,
+.barra-estado .dato.bloqueado {
+  font-weight: 600;
+}
+
+.barra-estado .dato.listo {
+  color: var(--ok-texto);
+}
+
+.barra-estado .dato.bloqueado {
+  color: var(--error-texto);
+}
+
+.barra-estado .dato.listo::before,
+.barra-estado .dato.bloqueado::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ------------------------------------------------------------------ */
+/* El diagrama                                                         */
+/*                                                                     */
+/* Notacion UML 2.5 con el aspecto de una herramienta de modelado y no  */
+/* el de un grafo: caja con compartimentos, linea recta fina, y las     */
+/* multiplicidades en su extremo.                                      */
+/*                                                                     */
+/* El lienzo es claro aunque la aplicacion sea oscura, y es deliberado: */
+/* un diagrama es un documento. Se proyecta, se imprime y se compara    */
+/* con el de Enterprise Architect, y en claro se lee igual en los tres  */
+/* sitios. El cromo de alrededor sigue siendo oscuro.                   */
+/* ------------------------------------------------------------------ */
+
+.lienzo {
+  --diagrama-fondo: #f4f2ed;
+  --diagrama-punto: #cdc8be;
+  --diagrama-linea: #4a4740;
+  --clase-borde: #857a63;
+  --clase-cabecera: #f2e3c4;
+  --clase-cuerpo: #fdf7e9;
+  --clase-texto: #23201b;
+  --clase-tenue: #7a7266;
+  --clase-seleccion: #2f6fd0;
+}
+
+.react-flow__pane,
+.react-flow__renderer {
+  background: var(--diagrama-fondo);
+}
+
+/* --- La caja de una clase --- */
+
+.nodo-clase {
+  /* El ancho y el alto los declara el nodo de React Flow: la tarjeta los ocupa
+     enteros para que lo dibujado coincida con lo que el minimapa y las aristas
+     creen que mide. */
+  width: 100%;
+  height: 100%;
+  /* Esquinas rectas: una caja UML es un rectangulo. El redondeo la convertia
+     en una tarjeta de aplicacion. */
+  border: 1px solid var(--clase-borde);
+  border-radius: 0;
+  background: var(--clase-cuerpo);
+  color: var(--clase-texto);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+  font-size: 0.78rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.nodo-clase .atributos {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Seleccion: el marco se refuerza y se anade un halo. En un diagrama impreso
+   el color no siempre esta, asi que el grosor tambien cambia. */
+.nodo-clase.seleccionado {
+  border-color: var(--clase-seleccion);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--clase-seleccion) 35%, transparent);
+}
+
+.nodo-clase.con-error {
+  border-color: #b3261e;
+}
+
+.nodo-clase.con-aviso {
+  border-color: #a5761b;
+}
+
+/* Compartimento del nombre: centrado y en negrita, como manda UML. */
+.nodo-clase header {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--clase-borde);
+  background: var(--clase-cabecera);
+  text-align: center;
+}
+
+.nodo-clase.con-error header {
+  background: #f3d9d6;
+}
+
+.nodo-clase.con-aviso header {
+  background: #f4e6c3;
+}
+
+.nodo-clase .nombre {
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.nodo-clase .tecnico {
+  font-size: 0.62rem;
+  color: var(--clase-tenue);
+  font-family: ui-monospace, monospace;
+}
+
+.nodo-clase .editando {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.25rem;
+  font-size: 0.58rem;
+  color: #fff;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+}
+
+/* --- Compartimento de atributos --- */
+
+.atributos {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+/* `- nombre: Tipo`, y las marcas de clave a la derecha. La visibilidad ocupa
+   una columna fija para que los nombres queden alineados. */
+.atributos li {
+  display: grid;
+  grid-template-columns: 0.7rem 1fr auto;
+  gap: 0.25rem;
+  align-items: baseline;
+  padding: 0.06rem 0.45rem;
+  line-height: 1.45;
+}
+
+.atributos .visibilidad {
+  color: var(--clase-tenue);
+  text-align: center;
+}
+
+.atributos .campo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atributos .separador,
+.atributos .tipo {
+  color: var(--clase-tenue);
+}
+
+.atributos .obligatorio {
+  color: #a5761b;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.atributos .vacio {
+  display: block;
+  padding: 0.2rem 0.5rem;
+  color: var(--clase-tenue);
+  font-style: italic;
+}
+
+.atributos .marcas {
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.atributos .pk {
+  color: #8a6d1b;
+  text-decoration: none;
+}
+
+.atributos .uq {
+  color: var(--clase-tenue);
+  text-decoration: none;
+}
+
+/* --- La asociacion --- */
+
+.asociacion-linea {
+  fill: none;
+  stroke: var(--diagrama-linea);
+  stroke-width: 1.2;
+}
+
+/* Franja invisible para poder acertarle con el raton: una linea de un pixel
+   es casi imposible de seleccionar. */
+.asociacion-zona {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+}
+
+.asociacion:hover .asociacion-linea {
+  stroke-width: 1.8;
+}
+
+.asociacion.seleccionada .asociacion-linea {
+  stroke: var(--clase-seleccion);
+  stroke-width: 2;
+}
+
+.arista-con-error .asociacion-linea {
+  stroke: #b3261e;
+  stroke-width: 1.8;
+}
+
+/* Las multiplicidades: pequenas, del color de la linea y sin fondo, como en
+   cualquier herramienta UML. */
+.multiplicidad,
+.rol-asociacion {
+  fill: var(--clase-texto);
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: var(--diagrama-fondo);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  pointer-events: none;
+  user-select: none;
+}
+
+.rol-asociacion {
+  font-style: italic;
+  fill: var(--clase-tenue);
+}
+
+/* Los conectores solo se ven al apuntar la clase: cuatro puntos por caja
+   convierten el diagrama en un erizo. */
+.nodo-clase .react-flow__handle {
+  width: 7px;
+  height: 7px;
+  background: var(--clase-seleccion);
+  border: 1px solid #fff;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle {
+  opacity: 1;
+}
+
+/* Los dos anclajes inferiores de una autorrelacion quedan separados, como en
+   Enterprise Architect. React Flow los mantiene unidos al nodo al moverlo. */
+.nodo-clase .react-flow__handle-bottom.conector-bucle-origen {
+  left: 42%;
+}
+
+.nodo-clase .react-flow__handle-bottom.conector-bucle-destino {
+  left: 58%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Asistente                                                           */
+/* ------------------------------------------------------------------ */
+
+/* El alto lo pone la conversacion, no el panel.
+   `max-height: 40%` no hacia nada: el contenedor tiene alto automatico y un
+   porcentaje contra un alto indefinido se ignora. El resultado era que el
+   asistente crecia con la conversacion hasta que el panel lo recortaba, y lo
+   primero que desaparecia era su propio campo de entrada. */
+.asistente {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--borde);
+  min-height: 9rem;
+}
+
+.asistente > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-3) var(--e-4) 0;
+}
+
+.asistente-aprendizaje {
+  padding: var(--e-2) var(--e-4) 0;
+}
+
+.asistente-aprendizaje > button {
+  width: 100%;
+}
+
+.guia-ia {
+  box-sizing: border-box;
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  padding: var(--e-5);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-lg);
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: var(--sombra-2);
+}
+
+.guia-ia::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.guia-ia-cabecera,
+.guia-ia-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--e-3);
+}
+
+.guia-ia-cabecera h2 {
+  margin: 0;
+  flex: 1 1 12rem;
+  font-size: var(--t-lg);
+}
+
+.guia-ia-paso {
+  color: var(--acento-texto);
+  font-weight: 600;
+}
+
+.guia-ia-consejo,
+.guia-ia-ejemplo {
+  padding: var(--e-3);
+  background: var(--superficie-2);
+  border-radius: var(--r-md);
+}
+
+.guia-ia-ejemplo h4 {
+  margin: 0;
+}
+
+.guia-ia-nota {
+  color: var(--texto-suave);
+  font-size: var(--t-sm);
+}
+
+.guia-ia-practica {
+  min-width: 0;
+  margin: 0;
+  padding: var(--e-3);
+  border: 1px solid var(--borde-fuerte);
+}
+
+.guia-ia-practica label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e-2);
+  margin-block: var(--e-3);
+}
+
+.guia-ia-practica input {
+  width: auto;
+  flex-shrink: 0;
+  margin-top: 0.35rem;
+}
+
+.guia-ia-acciones,
+.guia-ia-ayuda {
+  margin-top: var(--e-4);
+}
+
+.guia-ia-ayuda summary {
+  cursor: pointer;
+}
+
+.ayuda-software-boton {
+  flex-shrink: 0;
+}
+
+.tour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.tour-spotlight {
+  position: fixed;
+  border-radius: var(--r-md);
+  outline: 3px solid var(--acento);
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 25%);
+  pointer-events: none;
+}
+
+.tour-coach {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(23rem, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  padding: var(--e-4);
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sombra-2);
+  font-size: var(--t-base);
+  overflow-wrap: anywhere;
+}
+
+.tour-coach header,
+.tour-coach nav {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+}
+
+.tour-eyebrow {
+  font-size: var(--t-xs);
+  letter-spacing: 0.06em;
+  color: var(--acento-texto);
+  font-weight: 600;
+}
+
+.tour-progress-label,
+.tour-note {
+  font-size: var(--t-sm);
+  color: var(--texto-suave);
+}
+
+.tour-coach progress {
+  flex-shrink: 0;
+  width: 100%;
+  height: 0.4rem;
+  accent-color: var(--acento);
+}
+
+.tour-coach h2 {
+  flex-shrink: 0;
+  font-size: var(--t-lg);
+  line-height: 1.4;
+}
+
+.tour-feedback {
+  padding: var(--e-3);
+  background: var(--superficie-2);
+  border-radius: var(--r-md);
+}
+
+.tour-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tour-target-button {
+  margin-bottom: var(--e-3);
+}
+
+.tour-note {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  .tour-coach {
+    max-height: 45dvh;
+  }
+
+  .tour-note {
+    display: none;
+  }
+}
+
+.guia-software {
+  width: min(62rem, calc(100vw - 2rem));
+  text-align: left;
+  font-weight: 400;
+  font-size: var(--t-md);
+}
+
+.guia-software-progreso {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e-3);
+  margin-block: var(--e-4);
+}
+
+.guia-software-busqueda {
+  display: grid;
+  gap: var(--e-2);
+}
+
+.guia-software-contenido {
+  display: grid;
+  grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+  gap: var(--e-5);
+  margin-top: var(--e-4);
+}
+
+.guia-software-temas {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--e-2);
+}
+
+.guia-software-temas button {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+  white-space: normal;
+}
+
+.guia-software-temas button[aria-current='step'] {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+}
+
+.guia-software-temas small {
+  margin-left: var(--e-2);
+}
+
+.guia-software-leccion li {
+  margin-bottom: var(--e-3);
+}
+
+.guia-software-leido {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--e-2);
+}
+
+.guia-software-leido input {
+  width: auto;
+}
+
+@media (max-width: 700px) {
+  .guia-software-contenido {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .guia-software-temas {
+    max-height: 11rem;
+    overflow-y: auto;
+  }
+}
+
+.conversacion {
+  flex: 1;
+  /* En unidades de ventana y no en porcentaje: asi el campo de entrada y el
+     boton de aplicar caben siempre, que es lo unico que no puede quedar
+     debajo del borde. */
+  max-height: 34vh;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: var(--e-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  font-size: var(--t-md);
+}
+
+.conversacion li p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.45rem;
+  background: var(--suave);
+}
+
+.conversacion li.usuario p {
+  align-self: flex-end;
+  border: 1px solid var(--borde);
+}
+
+.conversacion .ancla-conversacion {
+  height: 0;
+  padding: 0;
+}
+
+.propuesta {
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--ok);
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.propuesta .advertencia {
+  margin: 0;
+  color: var(--aviso);
+  background: none;
+  padding: 0;
+}
+
+.propuesta .resumen {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  /* Con tope, igual que el candidato de importacion: una propuesta de treinta
+     operaciones empujaba el boton de aplicar fuera del panel. */
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+/* Y el boton se queda pegado al pie de su propuesta, por si aun asi no cabe. */
+.propuesta > button {
+  position: sticky;
+  bottom: 0;
+  align-self: flex-start;
+  background: var(--fondo-panel);
+}
+
+.propuesta .aplicada {
+  margin: 0;
+  color: var(--ok);
+  background: none;
+  padding: 0;
+  font-size: 0.75rem;
+}
+
+.contexto-asistente {
+  margin: 0 0.9rem 0.15rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--aviso) 55%, var(--borde));
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--aviso) 8%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+}
+
+.contexto-asistente button {
+  flex: none;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.7rem;
+}
+
+.entrada {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.6rem 0.9rem;
+  border-top: 1px solid var(--borde);
+}
+
+.entrada textarea {
+  flex: 1;
+  flex-basis: 100%;
+  min-width: 0;
+  resize: vertical;
+  max-height: 15rem;
+}
+
+.estado-dictado,
+.revision-dictado,
+.limite-asistente {
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.revision-dictado p {
+  margin: 0 0 0.4rem;
+}
+
+.entrada button.escuchando {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+/* ------------------------------------------------------------------ */
+/* Importacion y exportacion                                           */
+/* ------------------------------------------------------------------ */
+
+.importacion {
+  border-bottom: 1px solid var(--borde);
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.importacion h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+  margin: 0;
+}
+
+.importacion .modo {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: space-between;
+}
+
+.importacion .acciones {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.importacion .acciones button {
+  font-size: 0.75rem;
+  flex: 1;
+  min-width: 7rem;
+}
+
+.importacion .aplicada {
+  margin: 0;
+  color: var(--ok);
+  font-size: 0.75rem;
+}
+
+.candidato {
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--aviso);
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  /* Sin recorte propio: el que se desplaza es el panel de la herramienta.
+     Con `overflow` aqui, la barra de acciones se pegaba al pie **de esta caja**,
+     y esta caja la recortaba el panel por debajo — el boton salia cortado por la
+     mitad. Una captura lo enseño; la asercion no, porque `toBeInViewport` se
+     conforma con un pixel. */
+}
+
+.candidato .advertencia {
+  margin: 0;
+  color: var(--aviso);
+}
+
+.candidato-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.candidato-cabecera > span {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, currentColor 68%, transparent);
+  font-size: 0.7rem;
+}
+
+.bloque-avisos,
+.resumen-tecnico {
+  border: 1px solid color-mix(in srgb, var(--aviso) 45%, var(--borde));
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.bloque-avisos > summary,
+.resumen-tecnico > summary {
+  cursor: pointer;
+  color: var(--aviso);
+  font-weight: 600;
+}
+
+.editor-candidato {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.fila-candidato {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(8rem, 1.25fr);
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem;
+  border: 1px solid var(--borde);
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--fondo-panel) 85%, white 3%);
+}
+
+.fila-candidato > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, currentColor 68%, transparent);
+}
+
+.atributo-candidato {
+  grid-template-columns: minmax(7rem, 1fr) minmax(6rem, 1fr);
+}
+
+.atributo-candidato > span:first-child {
+  grid-column: 1 / -1;
+}
+
+.relacion-candidato {
+  grid-template-columns: minmax(8rem, 1fr) 4.5rem auto 4.5rem;
+}
+
+.marca-candidato {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+  font-size: 0.68rem;
+}
+
+.marca-candidato input {
+  width: auto;
+}
+
+.fila-candidato.solo-lectura {
+  grid-template-columns: 1fr;
+  opacity: 0.8;
+}
+
+.estado-vacio {
+  margin: 0;
+  color: var(--ok);
+  line-height: 1.4;
+}
+
+/* Las dos listas del candidato tienen tope y su propio desplazamiento.
+   Sin tope, un archivo con un aviso por atributo empuja «Aplicar» fuera del
+   panel: se ven avisos, no se ve ningun boton, y la conclusion razonable es que
+   la importacion no funciona. Lo que hace falta ver primero es la accion. */
+.avisos-importacion,
+.candidato .resumen {
+  max-height: 7.5rem;
+  overflow-y: auto;
+}
+
+.avisos-importacion {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.72rem;
+  color: var(--aviso);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* La accion se queda pegada al pie del panel que se desplaza —la herramienta—,
+   no al del candidato: es la unica forma de que no la recorte el borde de
+   abajo. Los margenes negativos hacen que la banda ocupe todo el ancho del
+   candidato, para que el contenido no se vea pasar por los lados. */
+.candidato .acciones {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 0 -0.6rem -0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--fondo-panel);
+  border-top: 1px solid var(--borde);
+}
+
+/* Generacion (RF-060 a RF-072) */
+.generacion {
+  border-bottom: 1px solid var(--borde);
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.generacion h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+  margin: 0;
+}
+
+.generacion .paquete {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+.generacion .descargas {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.generacion .descargas button {
+  font-size: 0.75rem;
+  flex: 1;
+  min-width: 7rem;
+}
+
+.generacion .aviso,
+.generacion .error {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.generacion .historial {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.generacion .historial li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.generacion .historial .estado {
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  padding: 0.08rem 0.35rem;
+  margin-left: auto;
+}
+
+.generacion .historial .estado-ready {
+  color: var(--exito);
+}
+
+.generacion .historial .estado-failed {
+  color: var(--error);
+}
+
+/* El manifiesto congelado: nombre y paquete con los que se genero. */
+.generacion .historial .manifiesto {
+  flex-basis: 100%;
+  padding-left: 2.2rem;
+  opacity: 0.75;
+  font-family: ui-monospace, monospace;
+  font-size: 0.64rem;
+}
+
+.generacion .historial li.fallida .manifiesto {
+  color: var(--error);
+  opacity: 1;
+}
+
+.generacion .historial button {
+  min-height: var(--alto-control-sm);
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.generacion .historial .acciones-historial {
+  display: flex;
+  gap: 0.3rem;
+  padding-left: 2.2rem;
+  flex-wrap: wrap;
+}
+
+/* Retirar una generacion es irreversible: se distingue de las descargas y se
+   empuja al final de la fila para que no quede al lado de «Backend». */
+.generacion .historial .acciones-historial .eliminar {
+  margin-left: auto;
+  color: var(--error);
+}
+
+/* Tiradores de redimension: solo con la tarjeta seleccionada, y del color
+   de la seleccion para que se lean como parte de ella. */
+.tirador-redimension {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--superficie);
+  border-radius: 2px;
+  background: var(--acento);
+}
+
+.borde-redimension {
+  border-color: var(--acento);
+}
+
+/* ------------------------------------------------------------------ */
+/* Cromo de React Flow                                                 */
+/* ------------------------------------------------------------------ */
+
+/* Los controles y el minimapa vienen con fondo blanco por defecto. Sobre el
+   lienzo oscuro quedaban como dos rectangulos blancos flotando, que es lo
+   primero que se ve en una captura de pantalla. `colorMode="system"` hace que
+   React Flow aplique su propio tema; esto ajusta lo que queda para que use los
+   colores de la aplicacion en lugar de los suyos. */
+/* El cromo de React Flow vive sobre el lienzo claro, no sobre la aplicacion
+   oscura: se le da la paleta del diagrama para que no aparezcan dos
+   rectangulos de otro tema flotando encima. */
+.react-flow__controls,
+.react-flow__minimap {
+  border: 1px solid var(--clase-borde);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+  background: var(--clase-cuerpo);
+}
+
+/* Los controles traen su propia geometria; aqui solo se ajusta al tema y se
+   respeta el alto que ellos declaran. */
+.react-flow__controls-button {
+  min-height: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--clase-borde);
+  border-radius: 0;
+  background: var(--clase-cuerpo);
+  color: var(--clase-texto);
+}
+
+.react-flow__controls-button:hover:not(:disabled) {
+  background: var(--clase-cabecera);
+  border-color: var(--clase-borde);
+}
+
+/* El icono es un SVG que hereda `fill`, no `color`. */
+.react-flow__controls-button svg {
+  fill: var(--clase-texto);
+  max-width: 13px;
+  max-height: 13px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Adaptacion a la pantalla                                            */
+/*                                                                     */
+/* La prioridad es el escritorio y, dentro de el, el lienzo: lo que se  */
+/* estrecha es la columna de paneles, nunca el diagrama. Se calibra en  */
+/* 1920x1080, 1600x900 y 1366x768, que son las tres pantallas donde     */
+/* esto se va a usar de verdad.                                        */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 1500px) {
+  .lienzo {
+    grid-template-columns: 1fr 23rem;
+  }
+}
+
+@media (max-width: 1200px) {
+  .lienzo {
+    grid-template-columns: 1fr 21rem;
+  }
+
+  .barra-editor .miga a {
+    max-width: 8rem;
+  }
+}
+
+/* Portatiles de 768px de alto: el cromo vertical se recorta para que la
+   herramienta y el inspector sigan cabiendo. */
+@media (max-height: 800px) {
+  .conversacion {
+    max-height: 26vh;
+  }
+
+  .herramienta {
+    min-height: 11rem;
+  }
+
+  .validacion {
+    max-height: 26%;
+  }
+}
+
+/* Por debajo de esto la columna estorba mas de lo que ayuda: pasa a ocupar
+   el ancho completo debajo del lienzo en lugar de comerselo. */
+@media (max-width: 900px) {
+  .lienzo {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(18rem, 1fr) auto;
+  }
+
+  .paneles {
+    border-left: 0;
+    border-top: 1px solid var(--borde);
+    max-height: 45vh;
+  }
+}
+
+/* Acciones sobre una pizarra o un proyecto en las listas. */
+.acciones-pizarra {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0 0.6rem 0.6rem;
+}
+
+.acciones-pizarra button,
+.tarjetas li > .quitar {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.tarjetas li > .quitar {
+  margin: 0 0.6rem 0.6rem;
+}
+
+/* Salir no destruye nada: en rojo competia con las acciones que si lo hacen
+   y con las insignias de estado, que es lo que hay que mirar en esa barra. */
+.barra-editor .salir {
+  font-size: var(--t-md);
+  min-height: var(--alto-control-sm);
+  background: transparent;
+  border-color: transparent;
+  color: var(--texto-suave);
+}
+
+.barra-editor .salir:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+
+/* ================================================================== */
+/* Toolbox UML                                                        */
+/*                                                                    */
+/* La paleta adopta la densidad de una herramienta de escritorio. No  */
+/* intenta reproducir todo Enterprise Architect: muestra solamente lo */
+/* que esta pizarra entiende y puede llevar al proyecto del examen.    */
+/* ================================================================== */
+
+.lienzo {
+  --ancho-toolbox: 15rem;
+  --ancho-panel: 26rem;
+
+  grid-template-columns: var(--ancho-toolbox) minmax(0, 1fr) var(--ancho-panel);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.lienzo.sin-toolbox {
+  --ancho-toolbox: 0rem;
+}
+
+.lienzo.sin-panel {
+  --ancho-panel: 0rem;
+}
+
+.contenedor-toolbox {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.contenedor-toolbox[hidden],
+.paneles[hidden] {
+  display: none;
+}
+
+.contenedor-toolbox > .toolbox {
+  width: 100%;
+  height: 100%;
+}
+
+.tablero {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.paneles {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.toolbox {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto);
+  z-index: 1;
+}
+
+.toolbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  min-height: 3.5rem;
+  padding: var(--e-3) var(--e-4);
+  border-bottom: 1px solid var(--borde);
+}
+
+.toolbox-header h2 {
+  margin: 0;
+  font-size: var(--t-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.toolbox-eyebrow {
+  display: block;
+  color: var(--texto-tenue);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.toolbox-badge {
+  padding: 0.12rem 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--acento) 45%, var(--borde));
+  border-radius: var(--r-sm);
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.toolbox-search {
+  position: relative;
+  display: block;
+  padding: var(--e-3);
+  border-bottom: 1px solid var(--borde);
+}
+
+.toolbox-search svg {
+  position: absolute;
+  top: 50%;
+  left: 1.05rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--texto-tenue);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.toolbox-search input {
+  width: 100%;
+  min-height: 1.85rem;
+  padding-left: 1.85rem;
+  border-radius: var(--r-sm);
+  background: var(--fondo);
+  font-size: var(--t-sm);
+}
+
+.toolbox-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--e-2) 0;
+}
+
+.toolbox-section + .toolbox-section {
+  margin-top: var(--e-2);
+  padding-top: var(--e-2);
+  border-top: 1px solid var(--borde);
+}
+
+.toolbox-section h3 {
+  margin: 0;
+  padding: var(--e-2) var(--e-4);
+  color: var(--texto-tenue);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.toolbox-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 var(--e-2);
+}
+
+button.toolbox-item {
+  width: 100%;
+  min-height: 3rem;
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+  gap: var(--e-2);
+  align-items: center;
+  justify-content: initial;
+  padding: var(--e-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+}
+
+button.toolbox-item:hover:not(:disabled) {
+  border-color: var(--borde);
+  background: var(--suave);
+}
+
+button.toolbox-item.active {
+  border-color: color-mix(in srgb, var(--acento) 45%, var(--borde));
+  background: var(--acento-suave);
+  color: #fff;
+  box-shadow: inset 2px 0 0 var(--acento);
+}
+
+.toolbox-item.active .toolbox-item-copy small {
+  color: #c7def3;
+}
+
+.toolbox-item-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-sm);
+  background: var(--superficie-2);
+  color: var(--texto-suave);
+}
+
+.toolbox-item.active .toolbox-item-icon {
+  border-color: color-mix(in srgb, var(--acento) 65%, white 10%);
+  background: color-mix(in srgb, var(--acento) 28%, var(--superficie-2));
+  color: #fff;
+}
+
+.toolbox-item-icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toolbox-item-icon svg .filled {
+  fill: currentColor;
+}
+
+.toolbox-item-icon svg .marker:not(.filled) {
+  fill: var(--superficie-2);
+}
+
+.toolbox-item-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.toolbox-item-copy strong {
+  overflow: hidden;
+  font-size: var(--t-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.toolbox-item-copy small {
+  margin-top: 0.16rem;
+  overflow: hidden;
+  color: var(--texto-tenue);
+  font-size: 0.625rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbox-item kbd,
+.modo-lienzo kbd {
+  min-width: 1.25rem;
+  padding: 0.08rem 0.25rem;
+  border: 1px solid var(--borde-fuerte);
+  border-bottom-color: rgb(255 255 255 / 25%);
+  border-radius: 3px;
+  background: var(--fondo);
+  color: var(--texto-tenue);
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.toolbox-empty {
+  margin: var(--e-4);
+  color: var(--texto-tenue);
+  font-size: var(--t-sm);
+}
+
+.toolbox-status {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: var(--e-2);
+  align-items: start;
+  min-height: 3.5rem;
+  padding: var(--e-3);
+  border-top: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto-suave);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.toolbox-status-icon {
+  width: 1.45rem;
+  height: 1.45rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--acento) 50%, var(--borde));
+  border-radius: var(--r-sm);
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+/* La insignia sobre el lienzo deja visible el modo incluso cuando la mirada
+   esta lejos de la paleta. */
+.modo-lienzo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  margin: var(--e-4) !important;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid color-mix(in srgb, var(--acento) 55%, #64748b);
+  border-radius: var(--r-md);
+  background: rgb(15 23 42 / 92%);
+  color: #eef6ff;
+  box-shadow: var(--sombra-2);
+  font-size: var(--t-sm);
+  backdrop-filter: blur(8px);
+}
+
+.modo-lienzo > span:not(.modo-lienzo-punto) {
+  color: #aebbc9;
+}
+
+.modo-lienzo .cancelar-modo {
+  min-height: 1.6rem;
+  padding-inline: var(--e-2);
+  border-color: rgb(255 255 255 / 16%);
+  background: rgb(255 255 255 / 7%);
+  color: #eef6ff;
+  font-size: var(--t-xs);
+}
+
+.modo-lienzo .cancelar-modo:hover:not(:disabled) {
+  background: rgb(255 255 255 / 14%);
+}
+
+.modo-lienzo .cancelar-modo kbd {
+  margin-left: var(--e-1);
+  background: rgb(0 0 0 / 18%);
+  color: #d7e5f2;
+}
+
+.estado-lienzo-vacio {
+  width: min(24rem, calc(100% - 2rem));
+  margin-top: clamp(3rem, 16vh, 8rem) !important;
+  padding: var(--e-6);
+  display: grid;
+  justify-items: center;
+  gap: var(--e-3);
+  border: 1px solid #c8c0b1;
+  border-radius: var(--r-lg);
+  background: rgb(253 247 233 / 92%);
+  color: var(--clase-texto);
+  box-shadow: 0 8px 24px rgb(74 71 64 / 12%);
+  text-align: center;
+  backdrop-filter: blur(4px);
+}
+
+.estado-lienzo-vacio h2,
+.estado-lienzo-vacio p {
+  margin: 0;
+}
+
+.estado-lienzo-vacio h2 {
+  font-size: var(--t-lg);
+}
+
+.estado-lienzo-vacio p {
+  max-width: 20rem;
+  color: #5f594f;
+  font-size: var(--t-md);
+}
+
+.estado-lienzo-icono {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid #a99d86;
+  border-radius: var(--r-md);
+  background: var(--clase-cabecera);
+  color: #4b4336;
+  font-size: var(--t-xl);
+}
+
+.modo-lienzo-punto {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #5fb0ff;
+  box-shadow: 0 0 0 3px rgb(95 176 255 / 16%);
+}
+
+.herramienta-class .react-flow__pane,
+.herramienta-association .react-flow__node,
+.herramienta-generalization .react-flow__node,
+.herramienta-composition .react-flow__node,
+.herramienta-aggregation .react-flow__node {
+  cursor: crosshair;
+}
+
+/* Primera clase de una relacion creada desde la paleta. El borde discontinuo
+   comunica que la operacion aun no termino y no depende solo del color. */
+.nodo-clase.origen-relacion {
+  border: 2px dashed var(--clase-seleccion);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--clase-seleccion) 18%, transparent);
+}
+
+/* Accion contextual al estilo de Architect: al seleccionar una clase aparece
+   una flecha grande a su derecha. Se arrastra al conector de otra clase y crea
+   una asociacion sin tener que volver al toolbox. */
+.react-flow__node.selected .react-flow__handle-right.conector-rapido {
+  right: -2.4rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid #f8fafc;
+  border-radius: var(--r-md);
+  background: #1f67ad;
+  color: #fff;
+  opacity: 1;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 35%);
+}
+
+.react-flow__node.selected .react-flow__handle-right.conector-rapido::after {
+  content: '\2192';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Marcadores UML. El lienzo queda visible bajo las figuras huecas; la
+   composicion se rellena para distinguirla tambien en escala de grises. */
+.marcador-relacion {
+  fill: var(--diagrama-fondo);
+  stroke: var(--diagrama-linea);
+  stroke-width: 1.35;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.marcador-relacion.relleno {
+  fill: var(--diagrama-linea);
+}
+
+.asociacion.seleccionada .marcador-relacion {
+  stroke: var(--clase-seleccion);
+  stroke-width: 2;
+}
+
+.asociacion.seleccionada .marcador-relacion.relleno {
+  fill: var(--clase-seleccion);
+}
+
+.pista-relacion {
+  margin: calc(var(--e-2) * -1) 0 0;
+  padding: var(--e-2) var(--e-3);
+  border-left: 2px solid var(--acento);
+  background: var(--acento-suave);
+  color: var(--texto-suave);
+  font-size: var(--t-sm);
+}
+
+@media (max-width: 1500px) {
+  .lienzo {
+    --ancho-toolbox: 13.5rem;
+    --ancho-panel: 23rem;
+  }
+}
+
+@media (max-width: 1180px) {
+  .lienzo {
+    --ancho-toolbox: 4.25rem;
+    --ancho-panel: 21rem;
+  }
+
+  .toolbox-header {
+    justify-content: center;
+    padding-inline: var(--e-2);
+  }
+
+  .toolbox-header > div,
+  .toolbox-badge,
+  .toolbox-search,
+  .toolbox-section h3,
+  .toolbox-item-copy,
+  .toolbox-item kbd,
+  .toolbox-status > span:last-child {
+    display: none;
+  }
+
+  .toolbox-scroll {
+    padding-top: var(--e-3);
+  }
+
+  .toolbox-section + .toolbox-section {
+    margin-top: var(--e-3);
+    padding-top: var(--e-3);
+  }
+
+  .toolbox-items {
+    align-items: center;
+    padding-inline: var(--e-2);
+  }
+
+  button.toolbox-item {
+    width: 2.75rem;
+    min-height: 2.75rem;
+    grid-template-columns: 1fr;
+    place-items: center;
+    padding: var(--e-2);
+  }
+
+  .toolbox-status {
+    grid-template-columns: 1fr;
+    place-items: center;
+    min-height: 3.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .lienzo {
+    --ancho-toolbox: 4.25rem;
+
+    grid-template-columns: var(--ancho-toolbox) minmax(0, 1fr);
+    grid-template-rows: minmax(18rem, 1fr) auto;
+  }
+
+  .contenedor-toolbox {
+    grid-row: 1 / 3;
+  }
+
+  .tablero {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .paneles {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .barra-editor {
+    gap: var(--e-2);
+    /* Entre el teléfono y el escritorio la barra seguia siendo una sola fila
+       sin ceder: con la pizarra guardada para abrir sin conexión, los avisos
+       de estado piden casi 400 px y en una tableta de 768 empujaban Salir
+       fuera de la pantalla —la página entera se ensanchaba a 858—. Aquí baja
+       a una segunda fila, que es lo que ya hace el telefono. */
+    flex-wrap: wrap;
+  }
+
+  .barra-editor .estado-barra {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .barra-editor button.boton-panel {
+    width: var(--alto-control-sm);
+    padding: 0;
+    font-size: 0;
+  }
+
+  .barra-editor .boton-panel .icono-panel {
+    font-size: initial;
+  }
+
+  .extremos-relacion {
+    grid-template-columns: 1fr;
+  }
+
+  .react-flow__minimap {
+    display: none;
+  }
+}
+
+/* En telefonos, cada grupo tiene espacio propio: la presencia no puede
+   superponerse a Salir ni empujar los controles fuera de la pantalla. */
+@media (max-width: 640px) {
+  .contenedor-toolbox {
+    grid-row: 1;
+  }
+
+  .paneles {
+    grid-column: 1 / -1;
+  }
+
+  .barra-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .barra-editor .identidad {
+    grid-column: 1 / -1;
+  }
+
+  .barra-editor .identidad .miga {
+    flex-shrink: 0;
+  }
+
+  .barra-editor .separa {
+    display: none;
+  }
+
+  .barra-editor .salir {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .barra-editor .estado-barra {
+    grid-column: 1 / 3;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .barra-editor .presencia {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    max-width: 4.5rem;
+  }
+
+  .barra-editor .presencia li {
+    flex-shrink: 0;
+  }
+
+  .barra-editor button.boton-panel,
+  .barra-editor .salir {
+    min-height: 2.75rem;
+  }
+
+  .barra-editor button.boton-panel {
+    width: 2.75rem;
+  }
+}
+
+/* Lo que una clase recibe por herencia (RM-07).
+
+   Se distingue de sus propios atributos a proposito: son de solo lectura y se
+   editan en la clase que los declara. El borde a la izquierda es el mismo
+   recurso que usa `.pista-relacion` para lo mismo — informacion que acompana,
+   no un control. */
+.herencia {
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border-left: 2px solid var(--acento);
+  background: var(--acento-suave);
+  font-size: var(--t-sm);
+  color: var(--texto-suave);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+}
+
+.herencia p {
+  margin: 0;
+}
+
+.atributos-heredados {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-1) var(--e-2);
+  font-family: var(--mono);
+  color: var(--texto-tenue);
+}
+
+.atributos-heredados .tipo {
+  color: var(--texto-suave);
+}
+
+.atributos-heredados .marca-clave {
+  color: var(--acento);
+}
+
+/* Un enlace, no un boton: lleva a otro elemento del mismo diagrama. Se dibuja
+   como texto para que no compita con los controles que si modifican. */
+.enlace-clase {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--acento);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.enlace-clase:hover {
+  color: var(--texto);
+}
+
+/* Captura por cámara dentro del panel de importación.
+
+   Ocupa el ancho del panel en lugar de abrir un diálogo: el panel ya está a la
+   derecha del lienzo y un modal encima taparía el diagrama que se está por
+   comparar con la foto. */
+.camara {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+  background: var(--superficie);
+}
+
+.camara-vista {
+  width: 100%;
+  max-height: 15rem;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: #000;
+}
+
+.camara-acciones {
+  display: flex;
+  gap: var(--e-2);
+}
+
+.camara-acciones button {
+  flex: 1;
+}
+
+/* En un teléfono el formulario y el diagrama necesitan todo el ancho.
+   Se desplaza la página, sin comprimir tres regiones en un panel de 45vh. */
+@media (max-width: 640px), (max-width: 900px) and (max-height: 500px) {
+  :root {
+    --alto-control: 2.75rem;
+    --alto-control-sm: 2.75rem;
+  }
+
+  .acceso-formulario {
+    min-width: 0;
+    padding: var(--e-5) var(--e-4);
+  }
+
+  .tarjeta,
+  .panel-perfil {
+    min-width: 0;
+    padding: var(--e-5);
+  }
+
+  .encabezado-pagina > div,
+  .formulario-perfil,
+  .tarjeta > *,
+  .paneles > * {
+    min-width: 0;
+  }
+
+  .encabezado-pagina h1,
+  .derivados,
+  .herencia,
+  .manifiesto {
+    overflow-wrap: anywhere;
+  }
+
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea,
+  .lista-atributos input:not([type='checkbox']),
+  .lista-atributos select {
+    min-width: 0;
+    font-size: 1rem;
+  }
+
+  .editor {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .barra-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--e-2);
+    padding: var(--e-3);
+  }
+
+  .barra-editor .identidad {
+    grid-column: 1 / -1;
+  }
+
+  .barra-editor .miga {
+    flex-shrink: 0;
+  }
+
+  .barra-editor .separa {
+    display: none;
+  }
+
+  .barra-editor .estado-barra {
+    grid-column: 1 / 3;
+    grid-row: 3;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .barra-editor .presencia {
+    grid-column: 3;
+    grid-row: 3;
+    max-width: 5rem;
+    overflow-x: auto;
+    justify-self: end;
+  }
+
+  .barra-editor .salir {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .lienzo {
+    flex: none;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto clamp(16rem, 45dvh, 28rem) auto;
+    min-width: 0;
+  }
+
+  .contenedor-toolbox {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .toolbox {
+    border-right: 0;
+    border-bottom: 1px solid var(--borde);
+  }
+
+  .toolbox-header,
+  .toolbox-status {
+    display: none;
+  }
+
+  .toolbox-scroll {
+    display: flex;
+    overflow-x: auto;
+    padding: var(--e-2);
+  }
+
+  .toolbox-section,
+  .toolbox-section + .toolbox-section {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .toolbox-items {
+    flex-direction: row;
+    gap: var(--e-1);
+    padding: 0 var(--e-1) 0 0;
+  }
+
+  .tablero {
+    grid-column: 1;
+    grid-row: 2;
+    height: 100%;
+  }
+
+  .paneles {
+    grid-column: 1;
+    grid-row: 3;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .herramienta,
+  .herramienta:has(.candidato),
+  .inspector,
+  .validacion {
+    flex: none;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .lista-atributos li {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .marcadores {
+    flex-wrap: wrap;
+    gap: var(--e-2) var(--e-3);
+  }
+
+  .marcadores label {
+    min-height: var(--alto-control);
+  }
+
+  .validacion li button {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .modo-lienzo {
+    max-width: calc(100% - 1.5rem);
+    flex-wrap: wrap;
+  }
+
+  .importacion .modo {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .entrada {
+    flex-wrap: wrap;
+  }
+
+  .entrada textarea {
+    flex-basis: 100%;
+  }
+
+  .entrada button:last-child {
+    flex: 1;
+  }
+
+  .editor:has(.lienzo.sin-panel) {
+    height: 100dvh;
+  }
+
+  .lienzo.sin-panel {
+    flex: 1;
+    grid-template-rows: auto minmax(16rem, 1fr);
+  }
+
+  .lienzo.sin-panel .tablero {
+    height: 100%;
+  }
+}
+
+/* Nombre del archivo antes de exportar.
+
+   Va dentro del panel, como la cámara: el diálogo del navegador no se puede
+   probar de extremo a extremo y en un Chromium sin interfaz se cuelga. */
+.nombre-export {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+  background: var(--superficie);
+}
+
+.nombre-export label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+}
+
+.nombre-export code {
+  font-family: var(--mono);
+  color: var(--acento);
+}

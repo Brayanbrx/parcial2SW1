@@ -1,0 +1,12 @@
+package {{project.packageName}}.dto;
+
+{{#each dtoImports}}
+import {{this}};
+{{/each}}
+
+public record {{entity.dtoName}}(
+{{#each dtoFields}}
+        {{#each annotations}}{{{this}}} {{/each}}{{javaType}} {{fieldName}}{{#unless last}},{{/unless}}
+{{/each}}
+) {
+}

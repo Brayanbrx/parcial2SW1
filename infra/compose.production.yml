@@ -1,0 +1,137 @@
+# Docker Compose >= 2.24.4. Always combine with compose.yml.
+name: plataforma-uml-production
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+x-node: &node
+  init: true
+  read_only: true
+  tmpfs: ['/tmp:size=128m,mode=1777']
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  stop_grace_period: 45s
+  logging: *logging
+
+services:
+  db:
+    ports: !reset []
+    mem_limit: ${DB_MEMORY:-1g}
+    cpus: ${DB_CPUS:-1.0}
+    logging: *logging
+    security_opt: ['no-new-privileges:true']
+    stop_grace_period: 60s
+
+  migrate:
+    image: uml-migrate:${APP_VERSION:?Define APP_VERSION con el commit de la version}
+    logging: *logging
+    mem_limit: 512m
+
+  api:
+    <<: *node
+    image: uml-api:${APP_VERSION:?Define APP_VERSION}
+    ports: !reset []
+    mem_limit: ${API_MEMORY:-768m}
+    cpus: ${API_CPUS:-1.0}
+    environment:
+      NODE_ENV: production
+      WEB_ORIGIN: ${WEB_ORIGIN:?Define el origen HTTPS publico}
+      COOKIE_SECURE: 'true'
+      TRUST_PROXY_HOPS: 1
+      MAIL_PROVIDER: brevo
+      MAIL_FROM: ${MAIL_FROM:?Define un remitente verificado}
+      BREVO_API_KEY: ${BREVO_API_KEY:?Configura el correo de recuperacion}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-20}
+      WORK_RATE_LIMIT_MAX: ${WORK_RATE_LIMIT_MAX:-20}
+
+  collab:
+    <<: *node
+    image: uml-collab:${APP_VERSION:?Define APP_VERSION}
+    ports: !reset []
+    mem_limit: ${COLLAB_MEMORY:-512m}
+    cpus: ${COLLAB_CPUS:-1.0}
+    environment:
+      NODE_ENV: production
+
+  web:
+    image: uml-web:${APP_VERSION:?Define APP_VERSION}
+    ports: !reset []
+    read_only: true
+    tmpfs: ['/var/cache/nginx', '/var/run', '/tmp']
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 128m
+    cpus: 0.5
+    logging: *logging
+
+  proxy:
+    profiles: !reset []
+    ports: !override ['80:80', '443:443']
+    volumes: !override
+      - ./caddy/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: ${DOMAIN:?Define el dominio publico sin https ni rutas}
+      ACME_EMAIL: ${ACME_EMAIL:?Define correo para certificados}
+    mem_limit: 256m
+    cpus: 0.5
+    read_only: true
+    tmpfs: ['/tmp']
+    security_opt: ['no-new-privileges:true']
+    logging: *logging
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:2019/config/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  adminer:
+    ports: !reset []
+
+  backup:
+    image: uml-backup:${APP_VERSION:?Define APP_VERSION}
+    build:
+      context: ..
+      dockerfile: infra/backup/Dockerfile
+    restart: unless-stopped
+    init: true
+    user: postgres
+    read_only: true
+    tmpfs: ['/tmp:size=64m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_S3_URI: ${BACKUP_S3_URI:?Define s3://bucket/prefijo para copias externas, o local-only para dejarlas en la VM}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_PAGER: ''
+    volumes:
+      - backups:/backups
+    healthcheck:
+      test: ['CMD', 'sh', '/opt/backup.sh', 'health']
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 5m
+
+volumes:
+  backups:

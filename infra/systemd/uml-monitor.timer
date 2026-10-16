@@ -1,0 +1,10 @@
+[Unit]
+Description=Comprobar plataforma UML cada cinco minutos
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

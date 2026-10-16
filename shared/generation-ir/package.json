@@ -1,0 +1,26 @@
+{
+  "name": "@uml/generation-ir",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Representacion intermedia entre el modelo canonico y las plantillas (RA-13). Aqui viven las decisiones de persistencia: lado propietario, claves foraneas, rutas REST.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@uml/contracts": "*",
+    "@uml/domain-core": "*"
+  }
+}

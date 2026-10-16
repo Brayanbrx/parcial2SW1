@@ -1,0 +1,74 @@
+# Lo que no entra en ninguna imagen.
+#
+# Cada exclusion es tamano de contexto que no se manda al demonio y capa que no
+# se invalida: tocar un ADR no deberia reconstruir la API.
+
+# Dependencias y compilacion: se instalan y se compilan dentro de la imagen.
+node_modules
+**/node_modules
+**/dist
+**/dist-types
+**/*.tsbuildinfo
+**/*.timestamp-*.mjs
+**/.vite
+
+# Secretos: la configuracion entra por variables de entorno, nunca en una capa.
+**/.env
+**/.env.*
+**/*.env
+**/*.dump
+**/*.dump.partial
+!**/.env.example
+**/*.pem
+**/*.keystore
+**/*.jks
+
+# Herramientas de desarrollo, no del producto.
+.agents
+.claude
+skills-lock.json
+.vscode
+.idea
+**/.eslintcache
+**/.prettiercache
+**/.cache
+
+# Salidas de herramientas y registros.
+reports
+coverage
+test-results
+playwright-report
+blob-report
+**/*.log
+
+# Artefactos generados y trabajo local: apps compiladas (Flutter, Maven),
+# modelos de Enterprise Architect y documentos exportados. Son cientos de MB que
+# ninguna imagen usa.
+generated-output
+tmp
+temp
+output
+**/*.zip
+**/*.eap
+**/*.eapx
+**/*.qea
+**/*.qeax
+**/*.ldb
+**/target
+**/build
+**/.dart_tool
+**/.gradle
+
+# Pruebas de extremo a extremo: corren contra el entorno levantado, desde fuera.
+e2e
+
+# Documentacion. `fixtures` no se excluye: `npm ci` necesita el package.json de
+# cada workspace declarado en el lockfile, y sin el la construccion falla.
+docs
+*.md
+
+# Historia, automatizacion y sistema.
+.git
+.github
+**/.DS_Store
+**/Thumbs.db

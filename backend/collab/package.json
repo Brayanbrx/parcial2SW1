@@ -1,0 +1,26 @@
+{
+  "name": "@uml/collab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Proceso WebSocket: salas por pizarra, presencia, persistencia del documento y autorizacion de la conexion.",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "4.6.0",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "7.10.0",
+    "@uml/contracts": "*",
+    "@uml/domain-core": "*",
+    "@uml/yjs-adapter": "*",
+    "jose": "^6.2.10",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.0",
+    "zod": "^3.23.0"
+  }
+}

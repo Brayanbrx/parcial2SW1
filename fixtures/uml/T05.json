@@ -1,0 +1,178 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T05",
+  "title": "Cuentas y movimientos",
+  "coverage": "Cadena de tres niveles de dependencia",
+  "semantic": {
+    "classes": [
+      {
+        "id": "5f3abb2a-4768-5ff3-b461-17c224221fea",
+        "displayName": "Cliente",
+        "codeName": "Cliente",
+        "databaseName": "cliente",
+        "attributes": [
+          {
+            "id": "b325efaa-7f31-5585-92da-02487af44279",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "504f9fa5-2a44-58c2-8441-f181e439f391",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "04a67a87-f9b4-53a4-af44-f39f142dad19",
+            "displayName": "documento",
+            "codeName": "documento",
+            "databaseName": "documento",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          }
+        ]
+      },
+      {
+        "id": "3ebc4d4f-3b0b-5ae1-ad52-4abda6a5e615",
+        "displayName": "Cuenta",
+        "codeName": "Cuenta",
+        "databaseName": "cuenta",
+        "attributes": [
+          {
+            "id": "69674cb3-994f-5acb-85fa-5ccd6b129211",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "312fd2cc-cb3e-5daf-9905-ef0493a9de6e",
+            "displayName": "numero",
+            "codeName": "numero",
+            "databaseName": "numero",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          },
+          {
+            "id": "c44af2dd-b192-5a01-87f7-3f26e00720c1",
+            "displayName": "saldo",
+            "codeName": "saldo",
+            "databaseName": "saldo",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "0aa261cc-5a5d-53fc-9684-92641a9513b7",
+            "displayName": "activa",
+            "codeName": "activa",
+            "databaseName": "activa",
+            "type": "Boolean",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "f9593929-ba67-5942-8504-fca9dba7ea06",
+        "displayName": "Movimiento",
+        "codeName": "Movimiento",
+        "databaseName": "movimiento",
+        "attributes": [
+          {
+            "id": "94891911-a129-5825-bf2a-ff2fc74ba59c",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "8d824f4c-c2ec-513f-a611-7c4bca044ee2",
+            "displayName": "fecha",
+            "codeName": "fecha",
+            "databaseName": "fecha",
+            "type": "DateTime",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "3c09aeae-f861-5e9e-b85f-a802f739b422",
+            "displayName": "monto",
+            "codeName": "monto",
+            "databaseName": "monto",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "057ee3f7-94d0-519c-9575-236ef57fbb10",
+            "displayName": "concepto",
+            "codeName": "concepto",
+            "databaseName": "concepto",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "133f8e29-852c-5923-9978-48c9344d3c0d",
+        "sourceClassId": "5f3abb2a-4768-5ff3-b461-17c224221fea",
+        "targetClassId": "3ebc4d4f-3b0b-5ae1-ad52-4abda6a5e615",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "b062bca1-e5fc-5490-9934-33e8a533b259",
+        "sourceClassId": "3ebc4d4f-3b0b-5ae1-ad52-4abda6a5e615",
+        "targetClassId": "f9593929-ba67-5942-8504-fca9dba7ea06",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "5f3abb2a-4768-5ff3-b461-17c224221fea": {
+        "x": 0,
+        "y": 0
+      },
+      "3ebc4d4f-3b0b-5ae1-ad52-4abda6a5e615": {
+        "x": 320,
+        "y": 0
+      },
+      "f9593929-ba67-5942-8504-fca9dba7ea06": {
+        "x": 640,
+        "y": 0
+      }
+    },
+    "sizes": {}
+  }
+}

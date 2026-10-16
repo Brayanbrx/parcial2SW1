@@ -1,0 +1,28 @@
+{
+  "extends": "../../config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../../shared/ai"
+    },
+    {
+      "path": "../../shared/contracts"
+    },
+    {
+      "path": "../../shared/domain-core"
+    },
+    {
+      "path": "../../shared/generation-ir"
+    },
+    {
+      "path": "../../shared/generator-backend"
+    },
+    {
+      "path": "../../shared/xmi"
+    }
+  ]
+}

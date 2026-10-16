@@ -1,0 +1,19 @@
+{
+  "extends": "../../config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../../shared/contracts"
+    },
+    {
+      "path": "../../shared/domain-core"
+    },
+    {
+      "path": "../../shared/yjs-adapter"
+    }
+  ]
+}

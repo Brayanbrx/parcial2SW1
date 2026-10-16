@@ -1,0 +1,207 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T02",
+  "title": "Compras",
+  "coverage": "Mismo patron que T01 con otra terminologia",
+  "semantic": {
+    "classes": [
+      {
+        "id": "b99889fb-3642-55db-97cd-7413386f13d1",
+        "displayName": "Proveedor",
+        "codeName": "Proveedor",
+        "databaseName": "proveedor",
+        "attributes": [
+          {
+            "id": "549d74c9-5b37-5801-a2c0-99f920e439f1",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "80ed2752-2bf3-505d-89e7-b32328ed1fb7",
+            "displayName": "razon social",
+            "codeName": "razonSocial",
+            "databaseName": "razon_social",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "d283cacf-4a0d-5169-8e40-054984f08ac3",
+            "displayName": "nit",
+            "codeName": "nit",
+            "databaseName": "nit",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          }
+        ]
+      },
+      {
+        "id": "b4d90835-cb9b-57e9-8c27-504b549a81b9",
+        "displayName": "Producto",
+        "codeName": "Producto",
+        "databaseName": "producto",
+        "attributes": [
+          {
+            "id": "6ca19aa6-d75e-5ca4-948b-53df04cc0a6a",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "cff659b5-ef32-5afb-840c-26073f146b10",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "f70bbdae-d66e-5ef7-a4cf-f2768b45d5cc",
+            "displayName": "costo",
+            "codeName": "costo",
+            "databaseName": "costo",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "c919211d-65fe-5cfd-ad8e-dd38092f05a8",
+        "displayName": "Compra",
+        "codeName": "Compra",
+        "databaseName": "compra",
+        "attributes": [
+          {
+            "id": "5a71d3c6-e6c1-54b7-82d6-cad623d8580c",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "f70c9332-516b-5532-be93-3f649612535c",
+            "displayName": "fecha",
+            "codeName": "fecha",
+            "databaseName": "fecha",
+            "type": "Date",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "ee0ecade-c5ad-577d-aa74-b6835b5541e9",
+            "displayName": "total",
+            "codeName": "total",
+            "databaseName": "total",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "e07ece6c-49c2-57c1-8626-c11ac6d93efe",
+        "displayName": "Detalle de Compra",
+        "codeName": "DetalleCompra",
+        "databaseName": "detalle_compra",
+        "attributes": [
+          {
+            "id": "e1818098-5f52-509f-aae5-1438ba089f30",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "4fd0e9f1-5fe2-5ab7-af86-8f9f0e680887",
+            "displayName": "cantidad",
+            "codeName": "cantidad",
+            "databaseName": "cantidad",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "3418b1ef-8f33-585a-b34f-06db6ff7fc4d",
+            "displayName": "costo unitario",
+            "codeName": "costoUnitario",
+            "databaseName": "costo_unitario",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "caea1f92-4930-5587-a710-1c128fb50792",
+        "sourceClassId": "b99889fb-3642-55db-97cd-7413386f13d1",
+        "targetClassId": "c919211d-65fe-5cfd-ad8e-dd38092f05a8",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "879eeff5-98ce-50c1-b9f1-77d8b99158ee",
+        "sourceClassId": "c919211d-65fe-5cfd-ad8e-dd38092f05a8",
+        "targetClassId": "e07ece6c-49c2-57c1-8626-c11ac6d93efe",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "a166fd50-152e-5e79-93de-562579ea0c2c",
+        "sourceClassId": "b4d90835-cb9b-57e9-8c27-504b549a81b9",
+        "targetClassId": "e07ece6c-49c2-57c1-8626-c11ac6d93efe",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "b99889fb-3642-55db-97cd-7413386f13d1": {
+        "x": 0,
+        "y": 0
+      },
+      "b4d90835-cb9b-57e9-8c27-504b549a81b9": {
+        "x": 320,
+        "y": 0
+      },
+      "c919211d-65fe-5cfd-ad8e-dd38092f05a8": {
+        "x": 640,
+        "y": 0
+      },
+      "e07ece6c-49c2-57c1-8626-c11ac6d93efe": {
+        "x": 960,
+        "y": 0
+      }
+    },
+    "sizes": {}
+  }
+}

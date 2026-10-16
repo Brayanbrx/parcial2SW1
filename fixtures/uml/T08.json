@@ -1,0 +1,304 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T08",
+  "title": "Institucion con jerarquia",
+  "coverage": "Generalizacion en cadena de tres niveles, dos hermanas, clave foranea heredada y clave foranea que apunta a una subclase",
+  "semantic": {
+    "classes": [
+      {
+        "id": "9221a017-3b63-5f61-87f9-b03a2f729197",
+        "displayName": "Persona",
+        "codeName": "Persona",
+        "databaseName": "persona",
+        "attributes": [
+          {
+            "id": "bf14482f-50a8-5396-84e1-128679877b9d",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "f016b9d8-a313-5ab6-9c32-3f6b2668ea23",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "7a60db07-90a7-5611-826d-3c71cc3a166f",
+            "displayName": "correo",
+            "codeName": "correo",
+            "databaseName": "correo",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "7244ede2-2309-5706-b24c-40033d3a1f51",
+        "displayName": "Empleado",
+        "codeName": "Empleado",
+        "databaseName": "empleado",
+        "attributes": [
+          {
+            "id": "6258ac5b-7276-5ec4-825b-6646a1edcd2d",
+            "displayName": "fecha de ingreso",
+            "codeName": "fechaIngreso",
+            "databaseName": "fecha_ingreso",
+            "type": "Date",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "b22638c2-65bd-5e1b-a41f-cd5c38e70518",
+            "displayName": "salario",
+            "codeName": "salario",
+            "databaseName": "salario",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "1b5ce23d-4be2-51ba-afe8-10470d90a11a",
+        "displayName": "Docente",
+        "codeName": "Docente",
+        "databaseName": "docente",
+        "attributes": [
+          {
+            "id": "7f7448ba-9c0d-5e2c-9a90-325c42370bc8",
+            "displayName": "escalafon",
+            "codeName": "escalafon",
+            "databaseName": "escalafon",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "68dcf519-d427-59ed-bda0-ebfb23af7470",
+        "displayName": "Estudiante",
+        "codeName": "Estudiante",
+        "databaseName": "estudiante",
+        "attributes": [
+          {
+            "id": "9dde924e-9df3-5fbd-b330-92209d0410b5",
+            "displayName": "matricula",
+            "codeName": "matricula",
+            "databaseName": "matricula",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          }
+        ]
+      },
+      {
+        "id": "7b063dc3-c2a7-581d-a28f-5c21be78aaa7",
+        "displayName": "Departamento",
+        "codeName": "Departamento",
+        "databaseName": "departamento",
+        "attributes": [
+          {
+            "id": "8412ff56-b3d2-5621-9329-199b0adf5178",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "1dcf3cbf-32f2-50fd-a9b2-ae8dd4558c24",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "be22ac2f-235f-5dd4-b712-4992f4e4f2b0",
+        "displayName": "Materia",
+        "codeName": "Materia",
+        "databaseName": "materia",
+        "attributes": [
+          {
+            "id": "dd738ed5-c71a-5e65-8c90-c364097e89cf",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "88effc0c-ce46-59b0-be95-799471cc1e7d",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "147507ee-865d-5b14-b3e8-df8a3fc8ef8c",
+            "displayName": "creditos",
+            "codeName": "creditos",
+            "databaseName": "creditos",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "7a4be9ee-997f-5b37-a50b-b64f086d8755",
+        "displayName": "Inscripcion",
+        "codeName": "Inscripcion",
+        "databaseName": "inscripcion",
+        "attributes": [
+          {
+            "id": "0c79e231-cd0b-5ba6-accd-9b3fdbb9e383",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "eae9449a-96e0-5ce8-994d-9dff4e97e693",
+            "displayName": "fecha",
+            "codeName": "fecha",
+            "databaseName": "fecha",
+            "type": "Date",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "8b8fa1cc-43b5-5257-b663-b03c39d8092b",
+            "displayName": "nota",
+            "codeName": "nota",
+            "databaseName": "nota",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "c88d890e-50d8-52d9-84b1-3bc7e5416e91",
+        "kind": "GENERALIZATION",
+        "sourceClassId": "7244ede2-2309-5706-b24c-40033d3a1f51",
+        "targetClassId": "9221a017-3b63-5f61-87f9-b03a2f729197",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "1"
+      },
+      {
+        "id": "73ea2b6c-e1da-553d-858d-be574aafd345",
+        "kind": "GENERALIZATION",
+        "sourceClassId": "1b5ce23d-4be2-51ba-afe8-10470d90a11a",
+        "targetClassId": "7244ede2-2309-5706-b24c-40033d3a1f51",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "1"
+      },
+      {
+        "id": "6e05eaf4-ed76-543c-b974-58ff5aaf22c9",
+        "kind": "GENERALIZATION",
+        "sourceClassId": "68dcf519-d427-59ed-bda0-ebfb23af7470",
+        "targetClassId": "9221a017-3b63-5f61-87f9-b03a2f729197",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "1"
+      },
+      {
+        "id": "1859aed9-9e5b-5743-b439-cda2e1c39cb8",
+        "sourceClassId": "7b063dc3-c2a7-581d-a28f-5c21be78aaa7",
+        "targetClassId": "7244ede2-2309-5706-b24c-40033d3a1f51",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "a65e5143-64f6-5078-9ae6-74b925244992",
+        "sourceClassId": "1b5ce23d-4be2-51ba-afe8-10470d90a11a",
+        "targetClassId": "be22ac2f-235f-5dd4-b712-4992f4e4f2b0",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "55d0ead8-8515-56de-aece-8196c860c746",
+        "sourceClassId": "68dcf519-d427-59ed-bda0-ebfb23af7470",
+        "targetClassId": "7a4be9ee-997f-5b37-a50b-b64f086d8755",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "2c917583-0439-511b-bc40-45b2357f0b50",
+        "sourceClassId": "be22ac2f-235f-5dd4-b712-4992f4e4f2b0",
+        "targetClassId": "7a4be9ee-997f-5b37-a50b-b64f086d8755",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "9221a017-3b63-5f61-87f9-b03a2f729197": {
+        "x": 0,
+        "y": 0
+      },
+      "7244ede2-2309-5706-b24c-40033d3a1f51": {
+        "x": 320,
+        "y": 0
+      },
+      "1b5ce23d-4be2-51ba-afe8-10470d90a11a": {
+        "x": 640,
+        "y": 0
+      },
+      "68dcf519-d427-59ed-bda0-ebfb23af7470": {
+        "x": 960,
+        "y": 0
+      },
+      "7b063dc3-c2a7-581d-a28f-5c21be78aaa7": {
+        "x": 0,
+        "y": 260
+      },
+      "be22ac2f-235f-5dd4-b712-4992f4e4f2b0": {
+        "x": 320,
+        "y": 260
+      },
+      "7a4be9ee-997f-5b37-a50b-b64f086d8755": {
+        "x": 640,
+        "y": 260
+      }
+    },
+    "sizes": {}
+  }
+}

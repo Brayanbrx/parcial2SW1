@@ -1,0 +1,237 @@
+{
+  "$schema": "https://plataforma-uml.local/schemas/board-state.json",
+  "schemaVersion": "1.0.0",
+  "id": "T01",
+  "title": "Ventas",
+  "coverage": "1:N, N:1, decimales, fechas y entidad intermedia",
+  "semantic": {
+    "classes": [
+      {
+        "id": "cfea03b5-a2b2-57c3-a3e8-3e9d3aa76746",
+        "displayName": "Cliente",
+        "codeName": "Cliente",
+        "databaseName": "cliente",
+        "attributes": [
+          {
+            "id": "dd3f37fe-5bf4-5e20-918d-682474499c8c",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "e12a4723-6c54-5605-b1c1-8d306c18cf9f",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "903d0c77-2ffc-56e7-960a-9326b6c7fcbf",
+            "displayName": "correo",
+            "codeName": "correo",
+            "databaseName": "correo",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": true
+          },
+          {
+            "id": "9819d080-4955-58ff-b9f4-0051f69561bc",
+            "displayName": "telefono",
+            "codeName": "telefono",
+            "databaseName": "telefono",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": true,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "d1dedaa1-f1f9-50ba-a6e7-ff00c36d607d",
+        "displayName": "Producto",
+        "codeName": "Producto",
+        "databaseName": "producto",
+        "attributes": [
+          {
+            "id": "0877c54c-5ac5-54a6-bdd1-fcff9c20abdd",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "2c3ea260-7f1e-52cb-b1f0-ea83e36e7361",
+            "displayName": "nombre",
+            "codeName": "nombre",
+            "databaseName": "nombre",
+            "type": "String",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "e2d1bd85-624a-50cf-9c4a-71192d837834",
+            "displayName": "precio",
+            "codeName": "precio",
+            "databaseName": "precio",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "12fa5f64-1c04-53f8-8cc9-399c087a0b04",
+            "displayName": "stock",
+            "codeName": "stock",
+            "databaseName": "stock",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "e88413a1-cf69-53e0-ba20-33202006bcc2",
+        "displayName": "Venta",
+        "codeName": "Venta",
+        "databaseName": "venta",
+        "attributes": [
+          {
+            "id": "8de1854d-b713-53c7-b583-f10db693608d",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "a4e72a5b-2bed-52fc-b063-4c9749a37f7d",
+            "displayName": "fecha",
+            "codeName": "fecha",
+            "databaseName": "fecha",
+            "type": "DateTime",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "c34e2902-5b5c-5655-951d-f355d1787dff",
+            "displayName": "total",
+            "codeName": "total",
+            "databaseName": "total",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      },
+      {
+        "id": "b5285758-b514-5b15-a367-5c8a9f8bb8d1",
+        "displayName": "Detalle de Venta",
+        "codeName": "DetalleVenta",
+        "databaseName": "detalle_venta",
+        "attributes": [
+          {
+            "id": "11eb30bd-38fc-51aa-9b69-5025eaa80024",
+            "displayName": "id",
+            "codeName": "id",
+            "databaseName": "id",
+            "type": "UUID",
+            "primaryKey": true,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "d84cf393-6c0c-5eb7-bd54-95aa3c635c00",
+            "displayName": "cantidad",
+            "codeName": "cantidad",
+            "databaseName": "cantidad",
+            "type": "Integer",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "75d1b170-7ad3-5519-979c-42c0178bc6eb",
+            "displayName": "precio unitario",
+            "codeName": "precioUnitario",
+            "databaseName": "precio_unitario",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          },
+          {
+            "id": "2a5faf3a-6f86-54f8-ab13-e3712c2f4162",
+            "displayName": "subtotal",
+            "codeName": "subtotal",
+            "databaseName": "subtotal",
+            "type": "Decimal",
+            "primaryKey": false,
+            "nullable": false,
+            "unique": false
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "8ab80e2a-a546-5f5e-b80a-4c71152475f3",
+        "sourceClassId": "cfea03b5-a2b2-57c3-a3e8-3e9d3aa76746",
+        "targetClassId": "e88413a1-cf69-53e0-ba20-33202006bcc2",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "5970001a-dc11-5095-9194-207c84e3fabb",
+        "sourceClassId": "e88413a1-cf69-53e0-ba20-33202006bcc2",
+        "targetClassId": "b5285758-b514-5b15-a367-5c8a9f8bb8d1",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      },
+      {
+        "id": "81d584b7-7b80-588b-a818-52efeb9fae24",
+        "sourceClassId": "d1dedaa1-f1f9-50ba-a6e7-ff00c36d607d",
+        "targetClassId": "b5285758-b514-5b15-a367-5c8a9f8bb8d1",
+        "sourceMultiplicity": "1",
+        "targetMultiplicity": "0..*"
+      }
+    ]
+  },
+  "layout": {
+    "positions": {
+      "cfea03b5-a2b2-57c3-a3e8-3e9d3aa76746": {
+        "x": 0,
+        "y": 0
+      },
+      "d1dedaa1-f1f9-50ba-a6e7-ff00c36d607d": {
+        "x": 320,
+        "y": 0
+      },
+      "e88413a1-cf69-53e0-ba20-33202006bcc2": {
+        "x": 640,
+        "y": 0
+      },
+      "b5285758-b514-5b15-a367-5c8a9f8bb8d1": {
+        "x": 960,
+        "y": 0
+      }
+    },
+    "sizes": {}
+  }
+}

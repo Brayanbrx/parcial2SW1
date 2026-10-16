@@ -1,0 +1,253 @@
+// Esquema de la plataforma. Corresponde a la seccion 5.2 del plan maestro.
+//
+// RA-11: el documento colaborativo se persiste en su representacion binaria
+// nativa (BoardDocument.state). El JSON canonico (BoardSnapshot) es proyeccion
+// derivada y nunca reconstruye el documento.
+//
+// Fase 0: el esquema queda declarado. Las migraciones y el acceso desde los
+// procesos llegan en la fase 3.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProjectRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum BatchOrigin {
+  GUI
+  AI_TEXT
+  AI_VOICE
+  IMAGE
+  XMI
+}
+
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  email          String   @unique
+  displayName    String
+  // RNF-08: derivacion lenta. Nunca cifrado reversible, nunca hash simple.
+  passwordHash   String
+  sessionVersion Int      @default(0)
+  createdAt      DateTime @default(now())
+  emailVerifiedAt DateTime?
+  emailVerificationTokenHash String? @unique
+  emailVerificationExpiresAt DateTime?
+  emailVerificationSentAt DateTime?
+
+  // Foto de perfil. Se guarda en la base y no en disco ni en almacenamiento de
+  // objetos: la plataforma no tiene ninguno de los dos, y una imagen recortada
+  // a 256x256 ocupa unas decenas de kilobytes. El limite lo impone la ruta.
+  avatar         Bytes?
+  avatarMimeType String?
+
+  refreshTokens  RefreshToken[]
+  passwordResets PasswordReset[]
+  memberships    ProjectMember[]
+  ownedProjects  Project[]       @relation("ProjectOwner")
+  createdInvites ProjectInvite[]
+  generations    Generation[]
+
+  @@map("users")
+}
+
+// Recuperacion de contrasena (RF-A10).
+//
+// Se guarda el hash del testigo, nunca el testigo: quien lea la base no puede
+// usarlo para entrar, igual que con los tokens de refresco. Es de un solo uso y
+// caduca, porque un enlace de recuperacion vivo en una bandeja de correo es una
+// llave olvidada encima de la mesa.
+model PasswordReset {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  /// El token que lo sustituyo al rotar. Permite distinguir una respuesta de
+  /// renovacion que no llego al navegador —su reemplazo sigue sin usarse— de la
+  /// reutilizacion de un token viejo, que si es motivo para cerrar la sesion.
+  replacedById String? @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Project {
+  id            String   @id @default(uuid()) @db.Uuid
+  displayName   String
+  ownerId       String   @db.Uuid
+  schemaVersion String
+  createdAt     DateTime @default(now())
+
+  owner   User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members ProjectMember[]
+  invites ProjectInvite[]
+  boards  Board[]
+
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String      @db.Uuid
+  userId    String      @db.Uuid
+  role      ProjectRole
+  joinedAt  DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model ProjectInvite {
+  id        String      @id @default(uuid()) @db.Uuid
+  projectId String      @db.Uuid
+  code      String      @unique
+  role      ProjectRole
+  expiresAt DateTime
+  createdBy String      @db.Uuid
+  createdAt DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdBy], references: [id])
+
+  @@index([projectId])
+  @@map("project_invites")
+}
+
+model Board {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @db.Uuid
+  displayName String
+  type        String   @default("CLASS_DIAGRAM")
+  createdAt   DateTime @default(now())
+
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document    BoardDocument?
+  snapshots   BoardSnapshot[]
+  generations Generation[]
+  operations  AuditOperation[]
+
+  @@index([projectId])
+  @@map("boards")
+}
+
+model BoardDocument {
+  boardId   String   @id @db.Uuid
+  // Estado binario nativo del documento colaborativo (RA-11).
+  state     Bytes
+  updatedAt DateTime @updatedAt
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@map("board_documents")
+}
+
+model BoardSnapshot {
+  boardId       String   @db.Uuid
+  version       Int
+  canonicalJson Json
+  updatedAt     DateTime @updatedAt
+
+  board       Board        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  generations Generation[]
+
+  @@id([boardId, version])
+  @@map("board_snapshots")
+}
+
+// Manifiesto de una generacion (ADR-018).
+//
+// El artefacto no se almacena: se regenera desde el snapshot congelado. Eso
+// solo es cierto si se congela tambien todo lo demas que entra en la emision.
+// Antes se guardaba el snapshot y nada mas, asi que el paquete Java elegido se
+// perdia y el nombre del proyecto se releia de la pizarra: renombrarla cambiaba
+// el artefacto de una generacion anterior.
+model Generation {
+  id              String   @id @default(uuid()) @db.Uuid
+  boardId         String   @db.Uuid
+  snapshotVersion Int
+  createdBy       String   @db.Uuid
+  createdAt       DateTime @default(now())
+
+  // --- Manifiesto: las entradas de la emision, congeladas ---
+  // Nombre con el que se genero. No se relee de la pizarra, que puede cambiar.
+  projectName   String
+  artifactId    String
+  basePackage   String
+  schemaVersion String
+  // Huella de las plantillas. Si cambia, los bytes de esta generacion cambian.
+  templatesHash String
+
+  status GenerationStatus @default(CREATING)
+  // Motivo saneado del fallo. Solo cuando status es FAILED.
+  error  String?
+
+  // SHA-256 de cada objetivo, para comprobar que dos descargas coinciden.
+  springSha256 String?
+  mobileSha256 String?
+
+  board    Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  snapshot BoardSnapshot @relation(fields: [boardId, snapshotVersion], references: [boardId, version])
+  author   User          @relation(fields: [createdBy], references: [id])
+
+  @@index([boardId])
+  @@map("generations")
+}
+
+enum GenerationStatus {
+  // La fila existe, el artefacto todavia no se ha emitido.
+  CREATING
+  // Los dos objetivos se emitieron y su huella quedo registrada.
+  READY
+  // La emision fallo. Se conserva para poder explicar por que.
+  FAILED
+}
+
+// CA-023.1: los comandos se registran para auditoria, no para sincronizar.
+model AuditOperation {
+  id        String      @id @default(uuid()) @db.Uuid
+  boardId   String      @db.Uuid
+  // Unico: un lote es una entrada, y reintentar el registro tras un corte de red
+  // no puede duplicarla. El lote ya es la unidad transaccional del dominio
+  // (RA-03); aqui es tambien la unidad de identidad.
+  batchId   String      @db.Uuid
+  origin    BatchOrigin
+  actorId   String      @db.Uuid
+  payload   Json
+  createdAt DateTime    @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, batchId])
+  @@index([boardId, createdAt])
+  @@map("audit_operations")
+}
