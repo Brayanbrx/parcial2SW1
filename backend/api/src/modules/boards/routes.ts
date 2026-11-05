@@ -52,6 +52,7 @@ export async function boardRoutes(app: FastifyInstance): Promise<void> {
         displayName: body.displayName,
         type: body.type,
         snapshots: { create: { version: 1, canonicalJson: inicial.semantic } },
+        aiReviewState: { create: { lastReviewAt: new Date(), lastIssueKeys: [] } },
       },
       select: { id: true, projectId: true, displayName: true, type: true, createdAt: true },
     });

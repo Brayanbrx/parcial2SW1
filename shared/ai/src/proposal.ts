@@ -117,7 +117,7 @@ export const assistantOperationSchema = z.discriminatedUnion('op', [
 
 export type AssistantOperation = z.infer<typeof assistantOperationSchema>;
 
-export const MAX_PROPOSAL_OPERATIONS = 200;  // Cuantas operaciones cabe proponer de una vez.
+export const MAX_PROPOSAL_OPERATIONS = 200; // Cuantas operaciones cabe proponer de una vez.
 
 // Una modificacion que no modifica nada
 export function esOperacionVacia(operation: AssistantOperation): boolean {

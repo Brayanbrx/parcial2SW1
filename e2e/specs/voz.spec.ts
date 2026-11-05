@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { activarCuentaEIniciarSesion, nuevoCorreo } from '../support/actors.js';
 import type { SpeechRecognitionLike } from '../../frontend/src/features/assistant/speech-session.js';
+import { createTeamAiMock, type MockTurn, type MockOutcome } from '../support/team-ai.js';
 
 interface SpeechControl {
   starts: number;
@@ -11,7 +12,7 @@ interface SpeechControl {
   error(code: string): void;
 }
 
-async function abrirAsistente(page: Page) {
+async function abrirAsistente(page: Page, handler?: (turn: MockTurn) => Promise<MockOutcome>) {
   // Se sustituye solo el servicio de reconocimiento. La interfaz, cuentas,
   // pizarra y colaboracion siguen usando los contenedores reales.
   await page.addInitScript(() => {
@@ -52,17 +53,15 @@ async function abrirAsistente(page: Page) {
     Object.assign(window, { SpeechRecognition: Recognition, __speechTest: control });
   });
 
-  const calls: { instruction?: string; question?: string }[] = [];
-  // Ninguna de estas pruebas consume cuotas de proveedores de IA.
-  await page.route(/\/api\/(?:boards\/[^/]+\/)?assistant\//, async (route) => {
-    expect(route.request().url()).not.toContain('/transcribe');
-    calls.push(route.request().postDataJSON() as (typeof calls)[number]);
-    await route.fulfill({
-      json: route.request().url().endsWith('/question')
-        ? { answer: 'La pizarra está vacía.' }
-        : { kind: 'QUESTION', question: '¿Qué atributo quieres añadir?', rationale: null },
-    });
-  });
+  const mock = createTeamAiMock(
+    handler ??
+      ((turn) =>
+        turn.mode === 'ASK'
+          ? { answer: 'La pizarra está vacía.' }
+          : { kind: 'QUESTION', question: '¿Qué atributo quieres añadir?' }),
+  );
+  await mock.install(page);
+  const calls = mock.requests;
   await page.goto('/entrar');
   await page.getByRole('button', { name: 'Crear cuenta', exact: true }).click();
   const email = nuevoCorreo('dictado');
@@ -147,7 +146,9 @@ test('las pausas no envían; Parar prepara el texto y Enviar hace una sola solic
   await page.getByTestId('enviar-asistente').dblclick();
   await expect(page.getByTestId('conversacion')).toContainText('¿Qué atributo quieres añadir?');
   expect(calls).toHaveLength(1);
-  expect(calls[0]?.instruction).toBe('agregues correo a Cliente no borres Venta');
+  expect(calls[0]?.text).toBe('agregues correo a Cliente no borres Venta');
+  expect(calls[0]?.inputMode).toBe('DICTATION');
+  expect(new Set(calls.map((call) => call.clientRequestId)).size).toBe(1);
 });
 
 test('cancelar conserva el texto previo y recuperar original restaura todo el dictado', async ({
@@ -205,26 +206,27 @@ test('denegar el micrófono no envía ni pierde el borrador y Consultar usa su r
   expect(calls).toHaveLength(0);
   await page.getByTestId('enviar-asistente').click();
   await expect(page.getByTestId('conversacion')).toContainText('La pizarra está vacía.');
-  expect(calls).toEqual([
-    { question: '¿Cuántas clases hay?', model: { classes: [], relationships: [] } },
-  ]);
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({
+    mode: 'ASK',
+    inputMode: 'DICTATION',
+    text: '¿Cuántas clases hay?',
+    model: { classes: [], relationships: [] },
+  });
 });
 
 test('cancelar la solicitud recupera el texto y evita mostrar respuestas tardías', async ({
   page,
 }) => {
-  await abrirAsistente(page);
   let release!: () => void;
   const waiting = new Promise<void>((resolve) => {
     release = resolve;
   });
   let started = false;
-  await page.route('**/assistant/question', async (route) => {
+  await abrirAsistente(page, async () => {
     started = true;
     await waiting;
-    await route
-      .fulfill({ json: { answer: 'Respuesta tardía que debe ignorarse.' } })
-      .catch(() => undefined);
+    return { answer: 'Respuesta tardía que debe ignorarse.' };
   });
   try {
     await page.getByTestId('modo-preguntar').click();

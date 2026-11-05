@@ -1,4 +1,14 @@
-import { commandBatchSchema, type CommandBatch } from '@uml/contracts';
+import {
+  commandBatchSchema,
+  projectAiSettingsSchema,
+  teamFeedPageSchema,
+  teamMessageSchema,
+  aiProposalSchema,
+  type TeamRequestBody,
+  type AiRejectReason,
+  type AiSettingsValues,
+  type CommandBatch,
+} from '@uml/contracts';
 import { forgetUser, markLogout } from './offline.js';
 
 /**
@@ -94,6 +104,61 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return requestWithSession(path, options, leer<T>);
 }
 
+/** Recuperación del feed con la misma sesión Bearer y renovación que el editor. */
+export const teamAiApi = {
+  async send(boardId: string, body: TeamRequestBody, signal: AbortSignal) {
+    return teamMessageSchema.parse(
+      await apiRequest(`/boards/${boardId}/team-ai/messages`, { method: 'POST', body, signal }),
+    );
+  },
+  async message(boardId: string, id: string, signal?: AbortSignal) {
+    const result = await apiRequest<{ message: unknown; proposal: unknown }>(
+      `/boards/${boardId}/team-ai/messages/${id}`,
+      signal ? { signal } : {},
+    );
+    return {
+      message: teamMessageSchema.parse(result.message),
+      proposal: result.proposal === null ? null : aiProposalSchema.parse(result.proposal),
+    };
+  },
+  async cancel(boardId: string, id: string) {
+    return teamMessageSchema.parse(
+      await apiRequest(`/boards/${boardId}/team-ai/messages/${id}/cancel`, { method: 'POST' }),
+    );
+  },
+  async confirm(boardId: string, id: string) {
+    return aiProposalSchema.parse(
+      await apiRequest(`/boards/${boardId}/team-ai/proposals/${id}/confirm`, { method: 'POST' }),
+    );
+  },
+  async reject(boardId: string, id: string, reason: AiRejectReason) {
+    return aiProposalSchema.parse(
+      await apiRequest(`/boards/${boardId}/team-ai/proposals/${id}/reject`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    );
+  },
+  async saveSettings(projectId: string, body: AiSettingsValues) {
+    return projectAiSettingsSchema.parse(
+      await apiRequest(`/projects/${projectId}/ai-settings`, { method: 'PUT', body }),
+    );
+  },
+  async changes(boardId: string, cursor: string, signal: AbortSignal) {
+    const query = new URLSearchParams({ changedSince: cursor, limit: '100' });
+    return teamFeedPageSchema.parse(
+      await apiRequest(`/boards/${encodeURIComponent(boardId)}/team-ai/messages?${query}`, {
+        signal,
+      }),
+    );
+  },
+  async settings(projectId: string, signal: AbortSignal) {
+    return projectAiSettingsSchema.parse(
+      await apiRequest(`/projects/${encodeURIComponent(projectId)}/ai-settings`, { signal }),
+    );
+  },
+};
+
 async function requestWithSession<T>(
   path: string,
   options: RequestOptions,
@@ -114,7 +179,7 @@ async function requestWithSession<T>(
   // Una sola renovacion por peticion: si el token acaba de expirar se renueva y
   // se repite, y si eso tampoco vale, la sesion se acabo de verdad.
   if (respuesta.status === 401 && options.skipRefresh !== true) {
-    const renovado = await refreshSession();
+    const renovado = await waitForSessionRefresh(options.signal);
     comprobarSesion();
     if (renovado) {
       respuesta = await enviar(path, options);
@@ -130,6 +195,27 @@ async function requestWithSession<T>(
   // Tambien puede cambiar la cuenta mientras se descarga el cuerpo del ZIP/JSON.
   comprobarSesion();
   return result;
+}
+
+/** Cancelar un consumidor no cancela la renovación que comparten los demás. */
+function waitForSessionRefresh(signal?: AbortSignal): Promise<boolean> {
+  signal?.throwIfAborted();
+  const refresh = refreshSession();
+  if (!signal) return refresh;
+  return new Promise<boolean>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    refresh.then(
+      (value) => {
+        signal.removeEventListener('abort', abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', abort);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function enviar(path: string, options: RequestOptions): Promise<Response> {
@@ -164,21 +250,27 @@ async function enviar(path: string, options: RequestOptions): Promise<Response> 
 
 async function leer<T>(respuesta: Response): Promise<T> {
   if (respuesta.status === 204) return undefined as T;
+  if (!respuesta.ok) await throwApiError(respuesta);
+  return (await readResponseBody(() => respuesta.json())) as T;
+}
 
-  const cuerpo: unknown = await respuesta.json().catch(() => null);
-
-  if (!respuesta.ok) {
-    const error = (cuerpo as { error?: { code?: string; message?: string; details?: unknown } })
-      ?.error;
-    throw new ApiError(
-      respuesta.status,
-      error?.code ?? 'unknown',
-      error?.message ?? `Error ${respuesta.status}`,
-      error?.details,
-    );
+/** Recibir cabeceras no confirma que el cuerpo haya llegado completo. */
+async function readResponseBody<T>(read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    if (error instanceof TypeError) throw new NetworkError(error);
+    if (error instanceof SyntaxError) {
+      // Un 2xx con JSON roto tampoco confirma una escritura ni invalida la
+      // sesión. Se trata como respuesta inválida del servidor para reintentar.
+      throw new ApiError(
+        502,
+        'invalid_response',
+        'El servidor devolvió una respuesta incompleta o inválida. Inténtalo de nuevo.',
+      );
+    }
+    throw error;
   }
-
-  return cuerpo as T;
 }
 
 interface SessionResponse {
@@ -550,14 +642,31 @@ async function recordBatchReliable(
       (item) => item.boardId === boardId && item.batch.batchId === batch.batchId,
     )
   ) {
-    return apiRequest<{ batchId: string }>(`/boards/${boardId}/audit`, {
-      method: 'POST',
-      body: batch,
-      expectedUserId: batch.actorId,
-    });
+    return sendBatchAudit(boardId, batch);
   }
 
   await flushAuditQueue();
+  return { batchId: batch.batchId };
+}
+
+async function sendBatchAudit(boardId: string, batch: CommandBatch): Promise<{ batchId: string }> {
+  const result = await apiRequest<unknown>(`/boards/${boardId}/audit`, {
+    method: 'POST',
+    body: batch,
+    expectedUserId: batch.actorId,
+  });
+  if (
+    typeof result !== 'object' ||
+    result === null ||
+    !('batchId' in result) ||
+    result.batchId !== batch.batchId
+  ) {
+    throw new ApiError(
+      502,
+      'invalid_response',
+      'El servidor no confirmó el lote enviado. Inténtalo de nuevo.',
+    );
+  }
   return { batchId: batch.batchId };
 }
 
@@ -570,6 +679,14 @@ export function flushAuditQueue(): Promise<void> {
 
 export function pendingAuditCount(userId: string | null = sessionUserId): number {
   return readAuditQueue().filter((item) => item.batch.actorId === userId).length;
+}
+
+/** Evidencia local de dispatch completado, incluso tras recargar mientras falla el ACK. */
+export function hasPendingBatchAudit(userId: string, boardId: string, batchId: string): boolean {
+  return readAuditQueue().some(
+    (item) =>
+      item.batch.actorId === userId && item.boardId === boardId && item.batch.batchId === batchId,
+  );
 }
 
 export function subscribeAuditQueue(listener: (count: number) => void): () => void {
@@ -590,11 +707,7 @@ async function performAuditFlush(): Promise<void> {
     if (item === undefined) return;
     attempted.add(`${item.boardId}:${item.batch.batchId}`);
     try {
-      await apiRequest<{ batchId: string }>(`/boards/${item.boardId}/audit`, {
-        method: 'POST',
-        body: item.batch,
-        expectedUserId: item.batch.actorId,
-      });
+      await sendBatchAudit(item.boardId, item.batch);
     } catch (error) {
       if (error instanceof ApiError && [400, 403, 404, 409, 422].includes(error.status)) continue;
       throw error;
@@ -678,7 +791,7 @@ async function readDownload(
 ): Promise<{ blob: Blob; fileName: string }> {
   if (!respuesta.ok) await throwApiError(respuesta);
   return {
-    blob: await respuesta.blob(),
+    blob: await readResponseBody(() => respuesta.blob()),
     fileName: filenameFrom(respuesta, fallback),
   };
 }

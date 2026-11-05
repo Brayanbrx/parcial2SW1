@@ -19,8 +19,8 @@ export const prismaPlugin = fp(
   async (app: FastifyInstance, options: { config: Config }) => {
     const adapter = new PrismaPg({
       connectionString: options.config.DATABASE_URL,
-      connectionTimeoutMillis: 3000,  // tiempo de conexion
-      statement_timeout: 5000,        // tiempo de duracion
+      connectionTimeoutMillis: 3000, // tiempo de conexion
+      statement_timeout: 5000, // tiempo de duracion
     });
     const prisma = new PrismaClient({ adapter });
 

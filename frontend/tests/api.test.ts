@@ -10,12 +10,177 @@ import {
   refreshSession,
   flushAuditQueue,
   pendingAuditCount,
+  sessionRefreshUnavailable,
   downloadGeneration,
   downloadXmi,
 } from '../src/lib/api.js';
 import type { CommandBatch } from '@uml/contracts';
 
 describe('cliente HTTP', () => {
+  it.each([null, {}, { batchId: 'otro-lote' }])(
+    'conserva la auditoría si la confirmación no corresponde al lote: %j',
+    async (ack) => {
+      const userId = crypto.randomUUID();
+      const batch = auditBatch(userId);
+      const storage = new Map<string, string>();
+      vi.stubGlobal('localStorage', {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string) =>
+          jsonResponse(200, input.endsWith('/login') ? session(userId) : ack),
+        ),
+      );
+      await login('ana@example.com', 'password');
+      await expect(api.recordBatch('pizarra', batch)).rejects.toMatchObject({
+        code: 'invalid_response',
+      });
+      expect(pendingAuditCount()).toBe(1);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => jsonResponse(202, { batchId: batch.batchId })),
+      );
+      await flushAuditQueue();
+      expect(pendingAuditCount()).toBe(0);
+    },
+  );
+
+  it('valida también la confirmación de auditoría sin almacenamiento local', async () => {
+    const userId = crypto.randomUUID();
+    vi.stubGlobal('localStorage', undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        jsonResponse(200, input.endsWith('/login') ? session(userId) : {}),
+      ),
+    );
+    await login('ana@example.com', 'password');
+    await expect(api.recordBatch('pizarra', auditBatch(userId))).rejects.toMatchObject({
+      code: 'invalid_response',
+    });
+  });
+
+  it('cancela sin esperar la renovación compartida ni interrumpir otras peticiones', async () => {
+    setAccessToken('expirado');
+    let finishRefresh!: (response: Response) => void;
+    let refreshed = false;
+    const fetchMock = vi.fn((input: string) => {
+      if (input.endsWith('/refresh'))
+        return new Promise<Response>((resolve) => {
+          finishRefresh = (response) => {
+            refreshed = true;
+            resolve(response);
+          };
+        });
+      return Promise.resolve(
+        jsonResponse(refreshed ? 200 : 401, refreshed ? [] : { error: { code: 'unauthorized' } }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+    const cancelled = apiRequest('/cancelada', { signal: controller.signal });
+    const other = apiRequest('/projects');
+    let failure: unknown;
+    const observed = cancelled.catch((error: unknown) => {
+      failure = error;
+    });
+    await vi.waitFor(() => expect(finishRefresh).toBeTypeOf('function'));
+    controller.abort();
+    try {
+      await vi.waitFor(() => expect(failure).toBe(controller.signal.reason), { timeout: 200 });
+      expect(refreshed).toBe(false);
+    } finally {
+      finishRefresh(jsonResponse(200, session('ana')));
+      await observed;
+      await expect(other).resolves.toEqual([]);
+    }
+    expect(fetchMock.mock.calls.filter(([path]) => path.endsWith('/refresh'))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([path]) => path.endsWith('/cancelada'))).toHaveLength(1);
+  });
+
+  it('conserva la auditoría pendiente cuando el servidor devuelve JSON truncado', async () => {
+    const userId = crypto.randomUUID();
+    const batch = auditBatch(userId);
+    const storage = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        input.endsWith('/login')
+          ? jsonResponse(200, session(userId))
+          : new Response('{"batchId":', { status: 202 }),
+      ),
+    );
+    await login('ana@example.com', 'password');
+    await expect(api.recordBatch('pizarra', batch)).rejects.toMatchObject({
+      code: 'invalid_response',
+    });
+    expect(pendingAuditCount()).toBe(1);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(202, { batchId: batch.batchId })),
+    );
+    await flushAuditQueue();
+    expect(pendingAuditCount()).toBe(0);
+  });
+
+  it.each(['JSON', 'ZIP'] as const)(
+    'clasifica como caída de red el corte del cuerpo %s después de las cabeceras',
+    async (type) => {
+      const response = new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError('terminated'));
+          },
+        }),
+      );
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response),
+      );
+      const request =
+        type === 'JSON' ? apiRequest('/projects') : downloadGeneration('generation', 'spring');
+      await expect(request).rejects.toBeInstanceOf(NetworkError);
+    },
+  );
+
+  it('una renovación truncada permite recuperar la copia offline en lugar de cerrar sesión', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"accessToken":', { status: 200 })),
+    );
+    await expect(refreshSession()).resolves.toBe(false);
+    expect(sessionRefreshUnavailable()).toBe(true);
+  });
+
+  it('conserva un aborto mientras se lee el JSON y el estado HTTP de errores sin JSON', async () => {
+    const error = new DOMException('Cancelado', 'AbortError');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(error);
+              },
+            }),
+          ),
+      ),
+    );
+    await expect(apiRequest('/projects')).rejects.toBe(error);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>Error</html>', { status: 503 })),
+    );
+    await expect(apiRequest('/projects')).rejects.toMatchObject({ status: 503 });
+  });
+
   it.each(['red', 'servidor', 'plazo'] as const)(
     'conserva el fallo de %s al renovar una petición con acceso vencido',
     async (failure) => {

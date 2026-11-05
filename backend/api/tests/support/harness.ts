@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
-import { loadConfig } from '../../src/config.js';
+import { loadConfig, type Config } from '../../src/config.js';
 import type { Correo, MailPort } from '../../src/lib/mail.js';
 import { startEphemeralDatabase, type EphemeralDatabase } from './database.js';
 
@@ -39,6 +39,7 @@ export interface ApiClient {
 }
 
 export interface Harness extends ApiClient {
+  readonly config: Config;
   readonly mails: Correo[];
   readonly mail: MailPort;
   activate(email: string): Promise<void>;
@@ -50,7 +51,13 @@ export interface Harness extends ApiClient {
   ): Promise<{ userId: string; token: string; cookie: string }>;
 }
 
-export async function startHarness(): Promise<Harness> {
+export async function startHarness(
+  options: {
+    teamAi?: NonNullable<Parameters<typeof buildApp>[1]>['teamAi'];
+    moderator?: NonNullable<Parameters<typeof buildApp>[1]>['moderator'];
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): Promise<Harness> {
   let database: EphemeralDatabase | undefined;
   let app: FastifyInstance | undefined;
   let collab: Server | undefined;
@@ -66,15 +73,18 @@ export async function startHarness(): Promise<Harness> {
     database = await startEphemeralDatabase();
     collab = await startCollabStub();
 
-    app = await buildApp(
-      loadConfig({
-        NODE_ENV: 'test',
-        DATABASE_URL: database.url,
-        JWT_SECRET: 'secreto-de-pruebas-con-mas-de-treinta-y-dos-caracteres',
-        COLLAB_INTERNAL_URL: `http://127.0.0.1:${(collab.address() as AddressInfo).port}`,
-      }),
-      { mail },
-    );
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: database.url,
+      JWT_SECRET: 'secreto-de-pruebas-con-mas-de-treinta-y-dos-caracteres',
+      COLLAB_INTERNAL_URL: `http://127.0.0.1:${(collab.address() as AddressInfo).port}`,
+      ...options.env,
+    });
+    app = await buildApp(config, {
+      mail,
+      ...(options.teamAi === undefined ? {} : { teamAi: options.teamAi }),
+      ...(options.moderator === undefined ? {} : { moderator: options.moderator }),
+    });
 
     const client = makeClient(app);
     const activate = async (email: string): Promise<void> => {
@@ -91,6 +101,7 @@ export async function startHarness(): Promise<Harness> {
 
     return {
       ...client,
+      config,
       mails,
       mail,
       activate,

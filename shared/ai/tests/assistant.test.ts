@@ -264,6 +264,17 @@ describe('una operacion ve lo que hicieron las anteriores del mismo lote', () =>
 });
 
 describe('confirmacion de lo destructivo (RF-035)', () => {
+  it('mock distingue eliminar un atributo de una clase con "de" en el nombre', async () => {
+    const attribute = await instruir('Elimina el atributo correo de Cliente', t01);
+    expect(attribute.proposal.operations).toEqual([
+      { op: 'DELETE_ATTRIBUTE', className: 'Cliente', attributeName: 'correo' },
+    ]);
+    const entity = await instruir('Elimina Detalle de Venta', vacio);
+    expect(entity.proposal.operations).toEqual([
+      { op: 'DELETE_CLASS', className: 'Detalle de Venta' },
+    ]);
+  });
+
   it('borrar una clase con dependencias pide confirmacion', async () => {
     const { outcome } = await instruir('elimina Cliente', t01);
 

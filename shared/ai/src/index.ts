@@ -9,6 +9,9 @@ export * from './ports.js';
 export * from './proposal.js';
 export * from './resolver.js';
 export * from './registry.js';
+export * from './team-context.js';
+export * from './task-router.js';
+export * from './model-capabilities.js';
 export {
   SUPPORTED_AUDIO_TYPES,
   SUPPORTED_IMAGE_TYPES,

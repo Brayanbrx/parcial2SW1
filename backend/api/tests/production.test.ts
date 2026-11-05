@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../src/app.js';
+import { buildApp as buildApplication } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import type { FastifyInstance } from 'fastify';
+
+const buildApp = (config: Parameters<typeof buildApplication>[0]) =>
+  buildApplication(config, { teamAi: false });
 
 const base = {
   NODE_ENV: 'test',
@@ -140,7 +143,7 @@ describe('production safeguards', () => {
       });
     expect((await send('/boards/a/assistant/test', token, '192.0.2.1')).statusCode).toBe(200);
     expect((await send('/boards/b/import/test', token, '192.0.2.2')).statusCode).toBe(200);
-    expect((await send('/boards/c/assistant/test', token, '192.0.2.3')).statusCode).toBe(429);
+    expect((await send('/boards/c/team-ai/messages', token, '192.0.2.3')).statusCode).toBe(429);
     const other = await app.tokens.signAccessToken({ userId: 'user-b', email: 'b@example.org' });
     expect((await send('/boards/a/import/test', other, '192.0.2.1')).statusCode).toBe(200);
   });

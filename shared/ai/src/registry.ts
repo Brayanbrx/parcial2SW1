@@ -9,6 +9,7 @@ import { MockLlmPort, MockSpeechPort, MockVisionPort } from './adapters/mock.js'
 import { OpenRouterLlmPort, OpenRouterVisionPort } from './adapters/openrouter.js';
 import { type LlmPort, type PortUsage, type SpeechPort, type VisionPort } from './ports.js';
 import { FallbackChain, type ChainEntry } from './fallback-chain.js';
+import { createModelCapabilities, DEFAULT_MODEL_CONTEXT_WINDOW } from './model-capabilities.js';
 /** Configuracion independiente por capacidad, con principal y hasta siete respaldos. */
 export const PROVIDERS = [
   'mock',
@@ -350,12 +351,21 @@ function definitions(config: AiConfig, port: (typeof PUERTOS)[number]) {
   ];
 }
 
-export function createAiPorts(config: AiConfig = loadAiConfig()): AiPorts {
+export function createAiPorts(
+  config: AiConfig = loadAiConfig(),
+  limits: { readonly contextWindow: number } = { contextWindow: DEFAULT_MODEL_CONTEXT_WINDOW },
+): AiPorts {
   const usageLog: PortUsage[] = [];
   const chain = new FallbackChain(usageLog, config.AI_LOG_USAGE, config.AI_QUOTA_COOLDOWN_MS);
   const visionTimeout =
     config.AI_VISION_TIMEOUT_MS ?? Math.max(config.AI_TIMEOUT_MS * 3, PISO_VISION);
-  const llm: ChainEntry<LlmPort>[] = definitions(config, PUERTOS[0]).map((e) => ({
+  const llmDefinitions = definitions(config, PUERTOS[0]);
+  const capabilities = createModelCapabilities({
+    contextWindow: limits.contextWindow,
+    timeoutMs: config.AI_CHAIN_TIMEOUT_MS,
+    jsonMode: llmDefinitions.every((entry) => usesJsonMode(entry.provider)),
+  });
+  const llm: ChainEntry<LlmPort>[] = llmDefinitions.map((e) => ({
     key: etiqueta(e.provider, e.model),
     port: construirLlm(config, e.provider as AiConfig['AI_LLM_PROVIDER'], e.model),
   }));
@@ -375,21 +385,26 @@ export function createAiPorts(config: AiConfig = loadAiConfig()): AiPorts {
   return {
     llm: {
       name: llm.map((e) => e.port.name).join('→'),
+      capabilities,
       proposeCommands: (options) =>
         chain.run(
           llm,
           (port, signal) => port.proposeCommands({ ...options, signal }),
-          config.AI_CHAIN_TIMEOUT_MS,
+          capabilities.timeoutMs,
           options.signal,
         ),
       answer: (options) => {
         options.signal?.throwIfAborted();
-        const local = answerFromModel(options.question, options.snapshot);
+        // Las reglas locales no conocen autores/hilos: no deben consumir una consulta colectiva.
+        const local =
+          options.team || options.teaching
+            ? undefined
+            : answerFromModel(options.question, options.snapshot);
         if (local !== undefined) return Promise.resolve({ text: local });
         return chain.run(
           llm,
           (port, signal) => port.answer({ ...options, signal }),
-          config.AI_CHAIN_TIMEOUT_MS,
+          capabilities.timeoutMs,
           options.signal,
         );
       },
@@ -664,7 +679,7 @@ function compatibleOptions(
     // El prompt sigue exigiendo JSON y el resultado siempre se valida. NVIDIA
     // no garantiza `response_format` en todos sus modelos: alli se confia en
     // el esquema del prompt y en la validacion de la respuesta.
-    jsonMode: provider !== 'nvidia',
+    jsonMode: usesJsonMode(provider),
     // El razonamiento extendido de Gemma supera el plazo del respaldo interactivo.
     ...(provider === 'nvidia' && model === 'google/gemma-4-31b-it'
       ? { chatTemplateThinking: false }
@@ -675,4 +690,9 @@ function compatibleOptions(
         ? { thinking: false }
         : {}),
   };
+}
+
+/** Política de los adaptadores actuales; también alimenta el descriptor de la cadena. */
+function usesJsonMode(provider: ProviderName): boolean {
+  return provider !== 'nvidia';
 }

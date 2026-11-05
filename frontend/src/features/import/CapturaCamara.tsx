@@ -23,6 +23,9 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lista, setLista] = useState(false);
+  const [capturando, setCapturando] = useState(false);
+  const capturaPendiente = useRef(false);
+  const vigente = useRef(false);
 
   const detener = useCallback(() => {
     for (const pista of streamRef.current?.getTracks() ?? []) pista.stop();
@@ -31,6 +34,7 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
 
   useEffect(() => {
     let cancelado = false;
+    vigente.current = true;
 
     async function abrir(): Promise<void> {
       if (navigator.mediaDevices?.getUserMedia === undefined) {
@@ -60,7 +64,10 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
           videoRef.current.onloadedmetadata = () => setLista(true);
         }
       } catch (causa) {
-        setError(motivo(causa));
+        if (!cancelado) {
+          detener();
+          setError(motivo(causa));
+        }
       }
     }
 
@@ -68,15 +75,17 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
 
     return () => {
       cancelado = true;
+      vigente.current = false;
       detener();
     };
   }, [detener]);
 
   function tomar(): void {
     const video = videoRef.current;
-    if (video === null || !lista) return;
+    if (video === null || !lista || capturaPendiente.current || !vigente.current) return;
 
     if (video.videoWidth === 0 || video.videoHeight === 0) {
+      detener();
       setError('La cámara todavía no entrega imagen. Espera un momento e inténtalo otra vez.');
       return;
     }
@@ -84,13 +93,26 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
     const lienzo = document.createElement('canvas');
     lienzo.width = video.videoWidth;
     lienzo.height = video.videoHeight;
-    lienzo.getContext('2d')?.drawImage(video, 0, 0);
+    const contexto = lienzo.getContext('2d');
+    if (contexto === null) {
+      detener();
+      setError('No se pudo preparar la imagen de la cámara.');
+      return;
+    }
+    contexto.drawImage(video, 0, 0);
+    capturaPendiente.current = true;
+    setCapturando(true);
 
     // JPEG y no PNG: la foto de un pizarrón en PNG son varios megabytes y viaja
     // en base64 dentro de la petición. La calidad de 0,92 no pierde trazo.
     lienzo.toBlob(
       (blob) => {
+        // toBlob no se puede abortar: cancelar o salir invalida su resultado.
+        if (!vigente.current) return;
+        capturaPendiente.current = false;
+        setCapturando(false);
         if (blob === null) {
+          detener();
           setError('No se pudo capturar la imagen.');
           return;
         }
@@ -115,8 +137,13 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
             aria-label="Vista de la cámara"
           />
           <div className="camara-acciones">
-            <button type="button" onClick={tomar} disabled={!lista} data-testid="tomar-foto">
-              {lista ? 'Tomar foto' : 'Abriendo cámara…'}
+            <button
+              type="button"
+              onClick={tomar}
+              disabled={!lista || capturando}
+              data-testid="tomar-foto"
+            >
+              {capturando ? 'Preparando foto…' : lista ? 'Tomar foto' : 'Abriendo cámara…'}
             </button>
             <button type="button" className="secundario" onClick={onCerrar}>
               Cancelar

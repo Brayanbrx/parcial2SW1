@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
+import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
@@ -26,7 +27,11 @@ export interface EphemeralDatabase {
   stop(): Promise<void>;
 }
 
-export async function startEphemeralDatabase(): Promise<EphemeralDatabase> {
+export async function startEphemeralDatabase(
+  options: {
+    prismaConfig?: string;
+  } = {},
+): Promise<EphemeralDatabase> {
   const name = `uml-api-test-${randomUUID()}`;
   const port = await freePort();
   const password = randomUUID();
@@ -55,7 +60,7 @@ export async function startEphemeralDatabase(): Promise<EphemeralDatabase> {
     // `migrate deploy` aplica las migraciones versionadas tal cual, sin
     // proponer cambios: es exactamente lo que corre en produccion, asi que la
     // prueba comprueba las mismas migraciones que se van a desplegar.
-    await migrateWithRetry(url);
+    await migrateWithRetry(url, options.prismaConfig);
   } catch (error) {
     await run('docker', ['rm', '--force', name]).catch(() => undefined);
     throw error;
@@ -74,13 +79,14 @@ export async function startEphemeralDatabase(): Promise<EphemeralDatabase> {
  * que el motor de esquema de Prisma todavía recibe un cierre de conexión. Es
  * transitorio y ocurría aproximadamente una vez al ejecutar todas las suites.
  */
-async function migrateWithRetry(url: string): Promise<void> {
+async function migrateWithRetry(url: string, prismaConfig?: string): Promise<void> {
   let ultimoError: unknown;
   for (let intento = 1; intento <= 3; intento += 1) {
     try {
-      await run('npx', ['prisma', 'migrate', 'deploy'], {
+      const args = [resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy'];
+      if (prismaConfig !== undefined) args.push('--config', prismaConfig);
+      await run(process.execPath, args, {
         env: { ...process.env, DATABASE_URL: url },
-        shell: process.platform === 'win32',
       });
       return;
     } catch (error) {

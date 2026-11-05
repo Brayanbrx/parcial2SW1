@@ -18,3 +18,4 @@ export * from './inheritance.js';
 export * from './validate.js';
 export * from './apply.js';
 export * from './proposal-preconditions.js';
+export * from './ai-proposal-policy.js';

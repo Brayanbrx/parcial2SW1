@@ -10,6 +10,11 @@
 :80 {
 	encode gzip
 
+	# Más específico que handle_path /collab*: bloquear antes de reescribir.
+	handle /collab/internal* {
+		respond 404
+	}
+
 	handle_path /api/* {
 		reverse_proxy api:3001
 	}

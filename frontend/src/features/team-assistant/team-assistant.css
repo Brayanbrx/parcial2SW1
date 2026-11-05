@@ -1,0 +1,113 @@
+.team-assistant {
+  min-width: 0;
+}
+.team-voice-command {
+  padding: var(--e-2) var(--e-3);
+  border-top: 1px solid var(--borde);
+  overflow-wrap: anywhere;
+}
+.team-voice-command p {
+  margin: var(--e-1) 0;
+}
+.team-voice-command [data-testid='comando-voz'] {
+  touch-action: none;
+  user-select: none;
+  min-height: 2.75rem;
+}
+.team-heading,
+.team-message-meta,
+.team-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  flex-wrap: wrap;
+}
+.team-heading {
+  padding: var(--e-3);
+  border-bottom: 1px solid var(--borde);
+}
+.team-heading h3 {
+  margin: 0;
+  font-size: var(--t-md);
+}
+.team-heading small,
+.team-message-meta time,
+.team-status {
+  color: var(--texto-suave);
+  font-size: 0.75rem;
+}
+.team-filter {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-2) var(--e-3);
+  font-size: 0.8rem;
+}
+.team-filter input,
+.team-settings input[type='checkbox'] {
+  width: auto;
+}
+.team-assistant > .team-status {
+  margin: 0;
+  padding: 0 var(--e-3) var(--e-2);
+}
+.team-assistant .conversacion > li {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: var(--e-1);
+  overflow-wrap: anywhere;
+}
+.team-assistant .team-message-meta {
+  font-size: 0.75rem;
+}
+.team-assistant .team-reply-link {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  padding: var(--e-1);
+}
+.team-actions {
+  justify-content: flex-start;
+}
+.team-modes {
+  padding: var(--e-2) var(--e-3);
+}
+.team-settings {
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  background: var(--fondo-panel);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: var(--e-2);
+}
+.team-settings form,
+.team-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+.team-settings form {
+  gap: var(--e-3);
+}
+.team-settings label:has(input[type='checkbox']) {
+  flex-direction: row;
+  align-items: center;
+}
+.team-settings select {
+  min-width: 0;
+  max-width: 100%;
+}
+.team-settings::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.team-assistant .contexto-asistente {
+  flex-wrap: wrap;
+}
+.team-assistant .propuesta .team-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--fondo-panel);
+}

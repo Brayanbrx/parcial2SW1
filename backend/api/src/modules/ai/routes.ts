@@ -59,7 +59,7 @@ export async function aiRoutes(
 
   app.addHook('preHandler', app.authenticate);
 
-   // Instruccion por texto (o dictada) a lote validado
+  // Instruccion por texto (o dictada) a lote validado
   app.post('/boards/:boardId/assistant/instruction', async (request, reply) => {
     const { boardId } = boardParams.parse(request.params);
     const body = instructionBody.parse(request.body);
@@ -181,7 +181,6 @@ async function conProveedor<T>(llamar: () => Promise<T>): Promise<T> {
       );
     }
     if (error instanceof ProviderContractError) {
-
       throw new HttpError(502, 'ai_provider_contract', `${error.provider}: ${error.message}`);
     }
     throw error;

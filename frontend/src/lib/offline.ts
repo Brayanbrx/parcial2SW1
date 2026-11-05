@@ -122,8 +122,12 @@ export function cachedBoards(userId: string): OfflineBoard[] {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key?.startsWith(prefix)) continue;
-      const board = cachedBoard(userId, decodeURIComponent(key.slice(prefix.length)));
-      if (board !== null) result.push(board);
+      try {
+        const board = cachedBoard(userId, decodeURIComponent(key.slice(prefix.length)));
+        if (board !== null) result.push(board);
+      } catch {
+        // Una clave corrupta no debe ocultar las demás copias locales.
+      }
     }
   } catch {
     /* Return only readable entries. */

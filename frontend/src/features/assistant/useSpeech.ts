@@ -6,7 +6,7 @@ import {
 } from './speech-session.js';
 
 type Constructor = new () => SpeechRecognitionLike;
-function recognitionConstructor(): Constructor | undefined {
+export function recognitionConstructor(): Constructor | undefined {
   const browser = window as unknown as {
     SpeechRecognition?: Constructor;
     webkitSpeechRecognition?: Constructor;

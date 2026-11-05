@@ -12,3 +12,4 @@ export * from './severity.js';
 export * from './model.js';
 export * from './commands.js';
 export * from './validation.js';
+export * from './team-ai.js';

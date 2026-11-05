@@ -10,6 +10,12 @@ import { createMailPort, type MailPort } from './lib/mail.js';
 import { verificationRoutes } from './modules/auth/verification.js';
 import { aiRoutes } from './modules/ai/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
+import { teamAiRoutes } from './modules/team-ai/routes.js';
+import { createTeamEventPublisher } from './modules/team-ai/events.js';
+import { createTeamWorker } from './modules/team-ai/worker.js';
+import { createTeamModerator } from './modules/team-ai/moderator.js';
+import type { ReviewTiming } from './modules/team-ai/review-scheduler.js';
+import { createTeamProcessor, type TeamProcessor } from './modules/team-ai/orchestrator.js';
 import { profileRoutes } from './modules/auth/profile.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { InvalidTokenError } from './modules/auth/tokens.js';
@@ -29,7 +35,11 @@ export const SERVICE_NAME = 'api';
  */
 export async function buildApp(
   config: Config = loadConfig(),
-  options: { mail?: MailPort } = {},
+  options: {
+    mail?: MailPort;
+    teamAi?: false | { process?: TeamProcessor };
+    moderator?: false | Partial<ReviewTiming>;
+  } = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({
     // Registro estructurado. Los campos de proyecto, pizarra, sesion, lote, comando,
@@ -85,8 +95,11 @@ export async function buildApp(
   });
 
   // Una sola pasarela de IA para todo el proceso.
-  const aiConfig = loadAiConfig();
-  const aiPorts = createAiPorts(aiConfig);
+  const aiConfig = loadAiConfig({
+    ...process.env,
+    AI_CHAIN_TIMEOUT_MS: String(config.AI_CHAIN_TIMEOUT_MS),
+  });
+  const aiPorts = createAiPorts(aiConfig, { contextWindow: config.TEAM_AI_MAX_INPUT_TOKENS });
   app.log.info({ cadenas: describeAiChains(aiConfig) }, 'capa de IA');
 
   const mail =
@@ -108,7 +121,46 @@ export async function buildApp(
   await app.register(aiRoutes, { ports: aiPorts });
   await app.register(importRoutes, { ports: aiPorts });
   await app.register(generationRoutes, { config });
-  await app.register(auditRoutes);
+  const events = createTeamEventPublisher(config, app.log);
+  app.addHook('onClose', () => events.close());
+  const worker =
+    options.teamAi === false
+      ? undefined
+      : createTeamWorker({
+          prisma: app.prisma,
+          publish: events.publish,
+          process:
+            options.teamAi?.process ??
+            createTeamProcessor(aiPorts, {
+              prisma: app.prisma,
+              limits: {
+                groupLimit: config.TEAM_AI_GROUP_TURNS,
+                personalLimit: config.TEAM_AI_PERSONAL_TURNS,
+              },
+              maxInputTokens: config.TEAM_AI_MAX_INPUT_TOKENS,
+            }),
+          timeoutMs: config.TEAM_AI_TIMEOUT_MS,
+          log: app.log,
+        });
+  if (worker) {
+    // Recuperar antes de aceptar trabajo, sin hacer depender /health de PostgreSQL.
+    app.addHook('onReady', async () => {
+      void worker.start().catch(() => app.log.warn('team-ai pendiente de recuperación de BD'));
+    });
+    app.addHook('onClose', () => worker.close());
+  }
+  const moderator =
+    options.moderator === false
+      ? undefined
+      : createTeamModerator({
+          prisma: app.prisma,
+          publish: events.publish,
+          log: app.log,
+          ...(options.moderator ? { timing: options.moderator } : {}),
+        });
+  if (moderator) app.addHook('onClose', () => moderator.close());
+  await app.register(auditRoutes, { publish: events.publish, moderator });
+  await app.register(teamAiRoutes, { config, publish: events.publish, worker });
 
   return app;
 }

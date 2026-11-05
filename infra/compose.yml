@@ -73,6 +73,13 @@ services:
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-604800}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       COLLAB_INTERNAL_URL: http://collab:3002
+      COLLAB_INTERNAL_SECRET: ${COLLAB_INTERNAL_SECRET:-}
+      TEAM_AI_BOARD_QUEUE_LIMIT: ${TEAM_AI_BOARD_QUEUE_LIMIT:-20}
+      TEAM_AI_USER_QUEUE_LIMIT: ${TEAM_AI_USER_QUEUE_LIMIT:-3}
+      TEAM_AI_TIMEOUT_MS: ${TEAM_AI_TIMEOUT_MS:-}
+      TEAM_AI_GROUP_TURNS: ${TEAM_AI_GROUP_TURNS:-20}
+      TEAM_AI_PERSONAL_TURNS: ${TEAM_AI_PERSONAL_TURNS:-10}
+      TEAM_AI_MAX_INPUT_TOKENS: ${TEAM_AI_MAX_INPUT_TOKENS:-32768}
       # Correo para la recuperacion de contrasena. `log` por defecto: la
       # plataforma arranca y el flujo funciona sin ninguna cuenta configurada.
       MAIL_PROVIDER: ${MAIL_PROVIDER:-log}
@@ -162,6 +169,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
+      COLLAB_INTERNAL_SECRET: ${COLLAB_INTERNAL_SECRET:-}
       NODE_ENV: ${NODE_ENV:-development}
       COLLAB_PORT: 3002
       LOG_LEVEL: ${LOG_LEVEL:-info}

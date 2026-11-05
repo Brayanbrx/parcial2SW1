@@ -16,6 +16,7 @@ import {
   type CollaborationContext,
 } from './auth/authorize.js';
 import { loadBoardDocument, storeBoardDocument } from './persistence/board-store.js';
+import { handleTeamAiEvent } from './team-ai-events.js';
 
 export const SERVICE_NAME = 'collab';
 
@@ -277,6 +278,21 @@ export function buildCollabServer(config: Config): CollabServer {
 
       if (data.request.method === 'POST' && data.request.url === '/flush') {
         await atenderVolcado({ server, prisma, jwtSecret, request: data.request, responder });
+        return Promise.reject();
+      }
+
+      if (data.request.url === '/internal/team-ai/events') {
+        try {
+          await handleTeamAiEvent({
+            request: data.request,
+            secret: config.COLLAB_INTERNAL_SECRET,
+            server,
+            prisma,
+            respond: responder,
+          });
+        } catch {
+          if (!data.response.headersSent) responder(503, { error: 'unavailable' });
+        }
         return Promise.reject();
       }
 

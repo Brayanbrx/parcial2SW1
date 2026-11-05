@@ -3,6 +3,7 @@ import { resolveProposal } from '@uml/ai';
 import { serializeToXmi } from '@uml/xmi';
 import { abrirHerramienta, crearClase } from '../support/actors.js';
 import { montarEscenario, type EscenarioCompartido } from '../support/escenario.js';
+import { createTeamAiMock } from '../support/team-ai.js';
 
 async function permisos(escenario: EscenarioCompartido, role: 'VIEWER' | 'EDITOR'): Promise<void> {
   const client = escenario.ana.page.request;
@@ -81,16 +82,17 @@ test('una propuesta antigua no borra el atributo añadido por otro colaborador',
   try {
     await crearClase(escenario.ana, 'Cliente');
     await expect(escenario.beto.page.getByTestId('clase-Cliente')).toBeVisible();
-    await escenario.ana.page.route('**/api/boards/*/assistant/instruction', async (route) => {
-      const { model } = route.request().postDataJSON();
+    const mock = createTeamAiMock((turn) => {
+      const { model } = turn;
       const outcome = resolveProposal({
         model,
-        actorId: '11111111-1111-4111-8111-111111111111',
+        actorId: turn.authorId,
         origin: 'AI_TEXT',
         proposal: { operations: [{ op: 'DELETE_CLASS', className: 'Cliente' }] },
       });
-      await route.fulfill({ json: { ...outcome, rationale: null } });
+      return outcome;
     });
+    await mock.install(escenario.ana.page);
     await abrirHerramienta(escenario.ana, 'asistente');
     await escenario.ana.page.getByTestId('entrada-asistente').fill('elimina Cliente');
     await escenario.ana.page.getByTestId('enviar-asistente').click();

@@ -17,6 +17,10 @@ export default defineConfig({
       'fixtures/tests/**/*.test.ts',
     ],
     exclude: ['**/node_modules/**', '**/dist/**', '**/tests/integration/**', 'e2e/**'],
+    // Con muchos núcleos, un proceso por archivo satura disco/CPU y la generación
+    // de ZIP agota 5 s aunque aislada tarda menos de uno. Limitar concurrencia
+    // conserva las aserciones y sus plazos (línea base H0, 2026-10-27).
+    maxWorkers: 4,
     // Levantar la aplicacion Fastify en un `beforeAll` cuesta unos cinco
     // segundos de carga de modulos —Prisma, los adaptadores de IA, las
     // plantillas— y el limite por defecto son diez. Ese margen se agota en

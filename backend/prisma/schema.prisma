@@ -104,10 +104,11 @@ model Project {
   schemaVersion String
   createdAt     DateTime @default(now())
 
-  owner   User            @relation("ProjectOwner", fields: [ownerId], references: [id])
-  members ProjectMember[]
-  invites ProjectInvite[]
-  boards  Board[]
+  owner      User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members    ProjectMember[]
+  invites    ProjectInvite[]
+  boards     Board[]
+  aiSettings ProjectAiSettings?
 
   @@index([ownerId])
   @@map("projects")
@@ -150,11 +151,14 @@ model Board {
   type        String   @default("CLASS_DIAGRAM")
   createdAt   DateTime @default(now())
 
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  document    BoardDocument?
-  snapshots   BoardSnapshot[]
-  generations Generation[]
-  operations  AuditOperation[]
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document      BoardDocument?
+  snapshots     BoardSnapshot[]
+  generations   Generation[]
+  operations    AuditOperation[]
+  teamMessages  TeamMessage[]
+  aiProposals   AiProposal[]
+  aiReviewState AiReviewState?
 
   @@index([projectId])
   @@map("boards")
@@ -250,4 +254,166 @@ model AuditOperation {
   @@unique([boardId, batchId])
   @@index([boardId, createdAt])
   @@map("audit_operations")
+}
+
+// Segundo parcial: vocabulario compartido con @uml/contracts/team-ai.
+enum TeamAuthorKind {
+  USER
+  AI
+  SYSTEM
+}
+
+enum TeamMode {
+  ASK
+  INSTRUCT
+  REVIEW
+}
+
+enum TeamInputMode {
+  TEXT
+  DICTATION
+  VOICE_COMMAND
+}
+
+enum TeamMessageKind {
+  QUESTION
+  INSTRUCTION
+  REVIEW_REQUEST
+  ANSWER
+  CLARIFICATION
+  PROPOSAL
+  REVIEW
+  SYSTEM
+}
+
+enum TeamRequestStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+  CANCELLED
+  INTERRUPTED
+}
+
+enum AiProposalStatus {
+  READY
+  PENDING_CONFIRMATION
+  APPLIED
+  STALE
+  REJECTED
+  EXPIRED
+}
+
+enum AiRejectReason {
+  USER
+  STALE
+  APPLY_FAILED
+}
+
+enum AiSolutionMode {
+  HINTS_ONLY
+  ON_REQUEST
+}
+
+enum AiExecutionMode {
+  PROPOSE_ONLY
+  AUTO_SAFE_VOICE
+  AUTO_SAFE_ALL
+}
+
+enum AiReviewMode {
+  OFF
+  ON_DEMAND
+  ON_ISSUES
+}
+
+model ProjectAiSettings {
+  projectId     String          @id @db.Uuid
+  enabled       Boolean         @default(true)
+  solutionMode  AiSolutionMode  @default(ON_REQUEST)
+  executionMode AiExecutionMode @default(AUTO_SAFE_VOICE)
+  reviewMode    AiReviewMode    @default(ON_ISSUES)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_ai_settings")
+}
+
+// Una intervención USER es la solicitud: no se agrega otra tabla de trabajos.
+// Los UUID de personas son referencias históricas, como AuditOperation.actorId.
+// Los CHECK de forma de mensaje viven en la migración SQL.
+model TeamMessage {
+  id              String             @id @default(uuid()) @db.Uuid
+  boardId         String             @db.Uuid
+  authorKind      TeamAuthorKind
+  authorId        String?            @db.Uuid
+  addressedToId   String?            @db.Uuid
+  replyToId       String?            @db.Uuid
+  clientRequestId String?            @unique @db.Uuid
+  mode            TeamMode?
+  inputMode       TeamInputMode?
+  kind            TeamMessageKind
+  text            String
+  status          TeamRequestStatus?
+  errorCode       String?
+  // Entrada privada para idempotencia y procesamiento posterior. No forma parte del DTO.
+  requestModel    Json?
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
+
+  board    Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  // El FK compuesto impide hilos cruzados entre pizarras. NoAction evita que
+  // borrar un mensaje suelto arrastre el hilo; borrar la pizarra sí elimina todo.
+  replyTo  TeamMessage?  @relation("TeamReplies", fields: [boardId, replyToId], references: [boardId, id], onDelete: NoAction, onUpdate: NoAction)
+  replies  TeamMessage[] @relation("TeamReplies")
+  proposal AiProposal?
+
+  @@unique([boardId, id])
+  @@index([boardId, createdAt, id])
+  @@index([boardId, updatedAt, id])
+  @@index([boardId, authorId, createdAt])
+  @@index([boardId, addressedToId, createdAt])
+  @@index([boardId, replyToId])
+  @@index([boardId, status, authorId])
+  @@map("team_messages")
+}
+
+// El batch y la base semántica son los mismos contratos del motor existente.
+// La migración comprueba expiración a 15 minutos y coherencia estado/motivo.
+model AiProposal {
+  id               String           @id @default(uuid()) @db.Uuid
+  boardId          String           @db.Uuid
+  requestMessageId String           @unique @db.Uuid
+  requesterId      String           @db.Uuid
+  batchId          String           @db.Uuid
+  batch            Json
+  expectedSemantic Json
+  status           AiProposalStatus
+  expiresAt        DateTime         @db.Timestamptz(3)
+  rejectReason     AiRejectReason?
+  decidedAt        DateTime?        @db.Timestamptz(3)
+  decidedById      String?          @db.Uuid
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
+
+  board   Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  request TeamMessage @relation(fields: [boardId, requestMessageId], references: [boardId, id], onDelete: Cascade)
+
+  @@unique([boardId, requestMessageId])
+  @@unique([boardId, batchId])
+  @@index([boardId, updatedAt, id])
+  @@map("ai_proposals")
+}
+
+model AiReviewState {
+  boardId            String    @id @db.Uuid
+  lastReviewedBatchId String?   @db.Uuid
+  lastIssueKeys       Json      @default("[]")
+  lastReviewAt        DateTime? @db.Timestamptz(3)
+  lastInterventionAt  DateTime? @db.Timestamptz(3)
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@map("ai_review_states")
 }

@@ -15,7 +15,7 @@ import type { BatchProposal } from '../proposal.js';
 import {
   INSTRUCCION_ESQUEMA,
   SISTEMA_ASISTENTE,
-  SISTEMA_CONSULTA,
+  sistemaDeConsulta,
   SISTEMA_VISION,
   comprobarImagen,
   interpretarPropuesta,
@@ -70,7 +70,12 @@ export class CompatibleLlmPort implements LlmPort {
   public async proposeCommands(options: ProposeOptions): Promise<ProposeResult> {
     const respuesta = await this.cliente.completar({
       sistema: `${SISTEMA_ASISTENTE}\n\n${INSTRUCCION_ESQUEMA}`,
-      usuario: mensajeDePropuesta(options.instruction, options.snapshot, options.context),
+      usuario: mensajeDePropuesta(
+        options.instruction,
+        options.snapshot,
+        options.context,
+        options.team,
+      ),
       json: true,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
@@ -80,8 +85,13 @@ export class CompatibleLlmPort implements LlmPort {
 
   public async answer(options: AnswerOptions): Promise<AnswerResult> {
     const respuesta = await this.cliente.completar({
-      sistema: SISTEMA_CONSULTA,
-      usuario: mensajeDeConsulta(options.question, options.snapshot, options.issues ?? []),
+      sistema: sistemaDeConsulta(options.teaching),
+      usuario: mensajeDeConsulta(
+        options.question,
+        options.snapshot,
+        options.issues ?? [],
+        options.team,
+      ),
       json: false,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });

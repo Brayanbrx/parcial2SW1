@@ -3,7 +3,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { notFound } from '../../lib/http-error.js';
 import { currentUser } from '../../plugins/auth.js';
-import { requireMembership, requireWriteAccess } from '../projects/membership.js';
+import { requireMembership } from '../projects/membership.js';
+import { recordAudit } from '../team-ai/audit-ack.js';
+import type { PublishTeamEvent } from '../team-ai/events.js';
+import type { TeamModerator } from '../team-ai/moderator.js';
+import { isSemanticBatch } from '../team-ai/review-evidence.js';
 
 const boardParams = z.object({ boardId: z.string().uuid() });
 const historyQuery = z.object({
@@ -17,7 +21,10 @@ const historyQuery = z.object({
  * Los comandos se registran para auditoria, no para sincronizar y por eso el registro va aparte
  * por HTTP, donde ya hay una sesion autenticada.
  */
-export async function auditRoutes(app: FastifyInstance): Promise<void> {
+export async function auditRoutes(
+  app: FastifyInstance,
+  { publish, moderator }: { publish: PublishTeamEvent; moderator?: TeamModerator | undefined },
+): Promise<void> {
   app.addHook('preHandler', app.authenticate);
 
   app.post('/boards/:boardId/audit', async (request, reply) => {
@@ -25,25 +32,14 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     const batch = commandBatchSchema.parse(request.body);
     const { userId } = currentUser(request);
 
-    const board = await findBoard(app, boardId);
-    await requireWriteAccess(app.prisma, board.projectId, userId);
-
-    // Idempotente por batchId: reintentar envio tras corte de red no duplica entrada del registro
-    // El lote es la unidad transaccional y tambien es la unidad de identidad
-    await app.prisma.auditOperation.upsert({
-      where: { boardId_batchId: { boardId, batchId: batch.batchId } },
-      update: {},
-      create: {
-        boardId,
-        batchId: batch.batchId,
-        origin: batch.origin,
-        actorId: userId,
-        payload: { commands: batch.commands, issuedAt: batch.issuedAt },
-      },
-    });
-
+    const {
+      created,
+      proposalChanged: _changed,
+      ...result
+    } = await recordAudit(app.prisma, boardId, userId, batch, request.body, publish);
+    if (created && isSemanticBatch(batch.commands)) moderator?.notify(boardId);
     reply.code(202);
-    return { batchId: batch.batchId };
+    return result;
   });
 
   app.get('/boards/:boardId/audit', async (request) => {

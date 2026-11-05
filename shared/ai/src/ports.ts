@@ -1,5 +1,7 @@
 import type { SemanticModel } from '@uml/contracts';
 import type { BatchProposal } from './proposal.js';
+import type { TeamContext } from './team-context.js';
+import type { ModelCapabilities } from './model-capabilities.js';
 
 /** Un turno previo que completa una instruccion todavia no resuelta */
 export interface ConversationTurn {
@@ -22,15 +24,32 @@ export interface ProposeOptions {
    * se vacia cuando ya existe una propuesta o cuando la persona lo descarta
    */
   readonly context?: readonly ConversationTurn[];
+  readonly team?: TeamContext;
   readonly signal?: AbortSignal;
 }
 
 export interface AnswerOptions {
+  /** Política confiable del proyecto, separada del historial y del texto del usuario. */
+  readonly teaching?: TeachingPolicy;
+  readonly team?: TeamContext;
   readonly question: string;
   readonly snapshot: SemanticModel;
   /** Hallazgos del validador, para que pueda señalar problemas */
-  readonly issues?: readonly { code: string; severity: string; message: string }[];
+  readonly issues?: readonly AnswerIssue[];
   readonly signal?: AbortSignal;
+}
+
+export interface TeachingPolicy {
+  readonly solutionMode: 'HINTS_ONLY' | 'ON_REQUEST';
+  readonly task: 'ASK' | 'REVIEW';
+}
+
+export interface AnswerIssue {
+  readonly code: string;
+  readonly severity: string;
+  readonly message: string;
+  readonly elementIds?: readonly string[];
+  readonly suggestion?: string | undefined;
 }
 
 export interface AnswerResult {
@@ -54,6 +73,8 @@ export interface PortUsage {
 
 export interface LlmPort {
   readonly name: string;
+  /** Opcional para conservar adaptadores existentes; la pasarela siempre lo declara. */
+  readonly capabilities?: ModelCapabilities;
   /**
    * Traduce una instruccion a una propuesta de operaciones
    * Devuelve nombres, no identificadores. Un identificador inventado

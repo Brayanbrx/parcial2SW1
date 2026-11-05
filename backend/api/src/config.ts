@@ -15,6 +15,13 @@ const schema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   WORK_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  TEAM_AI_BOARD_QUEUE_LIMIT: z.coerce.number().int().positive().max(1000).default(20),
+  TEAM_AI_USER_QUEUE_LIMIT: z.coerce.number().int().positive().max(1000).default(3),
+  TEAM_AI_GROUP_TURNS: z.coerce.number().int().min(1).max(100).default(20),
+  TEAM_AI_PERSONAL_TURNS: z.coerce.number().int().min(1).max(100).default(10),
+  TEAM_AI_MAX_INPUT_TOKENS: z.coerce.number().int().min(4096).max(131072).default(32768),
+  AI_CHAIN_TIMEOUT_MS: z.coerce.number().int().positive().max(2_147_483_647).default(120_000),
+  TEAM_AI_TIMEOUT_MS: z.coerce.number().int().positive().max(2_147_483_647),
   RATE_LIMIT_ENABLED: z.enum(['true', 'false']).transform((value) => value === 'true'),
 
   DATABASE_URL: z.string().min(1),
@@ -42,6 +49,10 @@ const schema = z.object({
   // documento antes de congelar el snapshot de generacion.
   // Es una llamada entre procesos dentro de la misma red: nunca la hace el navegador
   COLLAB_INTERNAL_URL: z.string().default('http://collab:3002'),
+  COLLAB_INTERNAL_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(32).optional(),
+  ),
 
   /**
    * Ventana del enlace de recuperacion de contrasena.
@@ -75,6 +86,8 @@ export type Config = z.infer<typeof schema>;
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = schema.safeParse({
     ...env,
+    AI_CHAIN_TIMEOUT_MS: env['AI_CHAIN_TIMEOUT_MS'] || '120000',
+    TEAM_AI_TIMEOUT_MS: env['TEAM_AI_TIMEOUT_MS'] || env['AI_CHAIN_TIMEOUT_MS'] || '120000',
     RATE_LIMIT_ENABLED:
       env['RATE_LIMIT_ENABLED'] ?? (env['NODE_ENV'] === 'production' ? 'true' : 'false'),
   });
@@ -85,6 +98,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Configuracion invalida del proceso api:\n${detalle}`);
   }
   const config = parsed.data;
+  if (config.TEAM_AI_TIMEOUT_MS < config.AI_CHAIN_TIMEOUT_MS)
+    throw new Error('TEAM_AI_TIMEOUT_MS debe ser mayor o igual a AI_CHAIN_TIMEOUT_MS');
+  if (config.COLLAB_INTERNAL_SECRET === config.JWT_SECRET)
+    throw new Error('COLLAB_INTERNAL_SECRET debe ser distinto de JWT_SECRET');
   if (config.NODE_ENV === 'production') {
     const problems: string[] = [];
     let origin: URL | undefined;

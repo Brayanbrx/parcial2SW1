@@ -40,6 +40,8 @@
     "fixtures:emit": "npm run emit --workspace @uml/fixtures",
     "bank:report": "npm run report --workspace @uml/fixtures",
     "test:api": "vitest run --config config/vitest.integration.config.ts",
+    "spike:team-ai": "tsc --build backend/collab && tsx backend/collab/tests/spikes/team-ai-stateless.spike.ts",
+    "spike:team-ai-proxy": "tsx backend/collab/tests/spikes/proxy-isolation.spike.ts",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:offline": "npm run build --workspace @uml/web && playwright test --config e2e/offline/playwright.config.ts",
     "test:production": "node scripts/verify-production.mjs",

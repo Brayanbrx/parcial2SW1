@@ -112,4 +112,26 @@ skills-lock.json
 # inicial tambien ignoraba `templates/flutter/docs/`, que es codigo del generador.
 contexto/
 docs/
+# Evidencia y decisiones del segundo parcial; conservar el resto de docs local.
+!/docs/
+/docs/*
+!/docs/h0-segundo-parcial-2026-10-27.md
+!/docs/paso-1-contratos-team-ai.md
+!/docs/paso-2-persistencia-team-ai.md
+!/docs/paso-3-api-team-ai.md
+!/docs/paso-4-transporte-team-ai.md
+!/docs/paso-5-panel-team-ai.md
+!/docs/paso-6-worker-team-ai.md
+!/docs/paso-7-contexto-team-ai.md
+!/docs/paso-8-mentor-configurable-team-ai.md
+!/docs/paso-9-moderador-team-ai.md
+!/docs/paso-10-ejecucion-team-ai.md
+!/docs/paso-11-comando-voz-team-ai.md
+!/docs/paso-12-proveedores-futuros-team-ai.md
+!/docs/paso-13-estabilizacion-team-ai.md
+!/docs/adr/
+/docs/adr/*
+!/docs/adr/ADR-02[1-6]-*.md
+Plan_2do_Parcial.md
+docs
 

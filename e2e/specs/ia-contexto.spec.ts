@@ -3,6 +3,7 @@ import type { SemanticModel } from '@uml/contracts';
 import { resolveProposal } from '@uml/ai';
 import { montarEscenario } from '../support/escenario.js';
 import { crearClase } from '../support/actors.js';
+import { createTeamAiMock } from '../support/team-ai.js';
 
 test('conserva opciones de aclaración y recupera el pedido completo cuando cambia la pizarra', async ({
   browser,
@@ -17,19 +18,15 @@ test('conserva opciones de aclaración y recupera el pedido completo cuando camb
       context: { role: string; text: string }[];
       model: SemanticModel;
     }[] = [];
-    await page.route('**/assistant/instruction', async (route) => {
-      const body = route.request().postDataJSON() as (typeof requests)[number];
+    const mock = createTeamAiMock((turn) => {
+      const body = { instruction: turn.text, model: turn.model, context: [...turn.context] };
       requests.push(body);
       if (requests.length === 1) {
-        await route.fulfill({
-          json: {
-            kind: 'QUESTION',
-            question: '¿En qué clase?',
-            options: ['Cliente', 'Proveedor'],
-            rationale: null,
-          },
-        });
-        return;
+        return {
+          kind: 'QUESTION',
+          question: '¿En qué clase?',
+          options: ['Cliente', 'Proveedor'],
+        };
       }
       const outcome = resolveProposal({
         proposal: {
@@ -38,11 +35,12 @@ test('conserva opciones de aclaración y recupera el pedido completo cuando camb
           ],
         },
         model: body.model,
-        actorId: '22222222-2222-4222-8222-222222222222',
+        actorId: turn.authorId,
         origin: 'AI_TEXT',
       });
-      await route.fulfill({ json: { ...outcome, rationale: null } });
+      return outcome;
     });
+    await mock.install(page);
     await page.getByTestId('pestana-asistente').click();
     const input = page.getByTestId('entrada-asistente');
     await input.fill('Agrega correo String; no borres ninguna clase.');

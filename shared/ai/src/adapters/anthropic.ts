@@ -11,7 +11,7 @@ import {
 } from '../ports.js';
 import {
   SISTEMA_ASISTENTE,
-  SISTEMA_CONSULTA,
+  sistemaDeConsulta,
   interpretarPropuesta,
   mensajeDeConsulta,
   mensajeDePropuesta,
@@ -62,7 +62,12 @@ export class AnthropicLlmPort implements LlmPort {
       [
         {
           role: 'user',
-          content: mensajeDePropuesta(options.instruction, options.snapshot, options.context),
+          content: mensajeDePropuesta(
+            options.instruction,
+            options.snapshot,
+            options.context,
+            options.team,
+          ),
         },
       ],
       {
@@ -93,11 +98,16 @@ export class AnthropicLlmPort implements LlmPort {
       [
         {
           role: 'user',
-          content: mensajeDeConsulta(options.question, options.snapshot, options.issues ?? []),
+          content: mensajeDeConsulta(
+            options.question,
+            options.snapshot,
+            options.issues ?? [],
+            options.team,
+          ),
         },
       ],
       {
-        system: SISTEMA_CONSULTA,
+        system: sistemaDeConsulta(options.teaching),
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       },
     );

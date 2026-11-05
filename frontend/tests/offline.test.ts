@@ -34,6 +34,20 @@ function storage(): Storage {
 describe('identidad y catálogo offline', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('una clave dañada no oculta las pizarras válidas que vienen después', () => {
+    vi.stubGlobal('localStorage', storage());
+    localStorage.setItem('uml_offline_board_v1:ana:%ZZ', '{}');
+    const board = {
+      id: 'board',
+      projectId: 'project',
+      displayName: 'Ventas',
+      room: 'room',
+      role: 'EDITOR' as const,
+    };
+    rememberBoard('ana', board);
+    expect(cachedBoards('ana')).toEqual([board]);
+  });
+
   it('separa pizarras por usuario y conserva borradores al revocar el catálogo', () => {
     vi.stubGlobal('localStorage', storage());
     const board = {

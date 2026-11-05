@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/app.js';
+import { buildApp as buildApplication } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
+const buildApp = (config: Parameters<typeof buildApplication>[0]) =>
+  buildApplication(config, { teamAi: false });
 
 /**
  * Estas pruebas no tocan la base de datos: el cliente de Prisma no conecta hasta

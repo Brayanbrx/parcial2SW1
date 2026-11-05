@@ -24,10 +24,12 @@ export function isExpensiveRequest(request: FastifyRequest): boolean {
   const path = request.url.split('?')[0] ?? '';
   return (
     request.method === 'POST' &&
-    (/\/assistant\//.test(path) || /\/import\//.test(path) || /\/generations$/.test(path))
+    (/\/assistant\//.test(path) ||
+      /\/import\//.test(path) ||
+      /\/generations$/.test(path) ||
+      /\/team-ai\/messages\/?$/.test(path))
   );
 }
-
 
 export const securityPlugin = fp(
   async (app: FastifyInstance, { config }: { config: Config }) => {

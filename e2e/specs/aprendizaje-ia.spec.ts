@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { createTeamAiMock } from '../support/team-ai.js';
 import {
   abrirHerramienta,
   abrirPizarra,
@@ -21,7 +22,11 @@ test('guía accesible, adaptable y offline: practicar no llama a IA ni modifica 
   const actor = await registrarActor(browser, 'aprendizaje');
   const { page } = actor;
   let calls = 0;
-  await page.route('**/api/boards/*/assistant/**', async (route) => {
+  await page.route('**/api/boards/*/team-ai/messages', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
     calls++;
     await route.abort();
   });
@@ -82,12 +87,11 @@ test('ejemplos contextuales conservan borradores y aclaraciones y requieren env�
   const actor = await registrarActor(browser, 'ejemplo-ia');
   const { page } = actor;
   const calls: unknown[] = [];
-  await page.route('**/api/boards/*/assistant/**', async (route) => {
-    calls.push(route.request().postDataJSON());
-    await route.fulfill({
-      json: { kind: 'QUESTION', question: '¿Qué longitud quieres?', rationale: null },
-    });
+  const mock = createTeamAiMock((turn) => {
+    calls.push(turn);
+    return { kind: 'QUESTION', question: '¿Qué longitud quieres?' };
   });
+  await mock.install(page);
   try {
     await crearProyecto(actor, 'Ejemplos');
     await crearPizarra(actor, 'Contexto');

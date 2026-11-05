@@ -11,6 +11,10 @@ const schema = z.object({
   // El mismo secreto que firma los tokens en el proceso HTTP.
   //  Los dos procesos comparten la clave porque uno emite y el otro verifica.
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
+  COLLAB_INTERNAL_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(32).optional(),
+  ),
 
   STORE_DEBOUNCE_MS: z.coerce.number().int().nonnegative().default(2000),
   STORE_MAX_DEBOUNCE_MS: z.coerce.number().int().positive().default(10_000),
@@ -26,5 +30,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .join('\n');
     throw new Error(`Configuracion invalida del proceso collab:\n${detalle}`);
   }
+  if (parsed.data.COLLAB_INTERNAL_SECRET === parsed.data.JWT_SECRET)
+    throw new Error('COLLAB_INTERNAL_SECRET debe ser distinto de JWT_SECRET');
   return parsed.data;
 }

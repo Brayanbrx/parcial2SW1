@@ -17,8 +17,8 @@ import { jwtVerify, type JWTPayload } from 'jose';
  * con el identificador de la sala editaria la pizarra.
  */
 
-const ISSUER = 'plataforma-uml';            // Quien emitio el token?
-const AUDIENCE = 'plataforma-uml-clients';  // Para quien fue emitido?
+const ISSUER = 'plataforma-uml'; // Quien emitio el token?
+const AUDIENCE = 'plataforma-uml-clients'; // Para quien fue emitido?
 
 /**
  * Motivos de Rechazo
@@ -34,11 +34,11 @@ export const CONNECTION_REJECTIONS = {
 export type ConnectionRejection =
   (typeof CONNECTION_REJECTIONS)[keyof typeof CONNECTION_REJECTIONS];
 
-  /**
-   *  Error controlado para rechazar una conexion Websockets
-   *  reason es seguro para edvolver al cliente
-   *  message conserva el detalle para el log interno
-   */
+/**
+ *  Error controlado para rechazar una conexion Websockets
+ *  reason es seguro para edvolver al cliente
+ *  message conserva el detalle para el log interno
+ */
 export class UnauthorizedConnection extends Error {
   /** Hocuspocus lo envia al cliente como motivo del rechazo. */
   public readonly reason: ConnectionRejection;
@@ -182,7 +182,7 @@ export async function authorizeConnection(
       expiresAt: payload.exp * 1000,
       sessionVersion,
     },
-    
+
     // El rol de lectura se conecta, ve y no escribe.
     readOnly: !roleCanWrite(membership.role),
   };

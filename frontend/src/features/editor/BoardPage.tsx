@@ -11,7 +11,7 @@ import {
   subscribeAuditQueue,
 } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
-import { AssistantPanel } from '../assistant/AssistantPanel.js';
+import { TeamAssistantPanel } from '../team-assistant/TeamAssistantPanel.js';
 import { GenerationPanel } from '../generation/GenerationPanel.js';
 import { ImportPanel } from '../import/ImportPanel.js';
 import { BoardCanvas } from './BoardCanvas.js';
@@ -641,12 +641,20 @@ function BoardSession({
               aria-labelledby="pestana-asistente"
               hidden={herramienta !== 'asistente'}
             >
-              <AssistantPanel
-                boardId={board.id}
-                state={documento.state}
-                canWrite={canWrite}
-                apply={documento.dispatch}
-              />
+              {user && (
+                <TeamAssistantPanel
+                  boardId={board.id}
+                  projectId={board.projectId}
+                  user={user}
+                  isOwner={board.role === 'OWNER'}
+                  provider={documento.provider}
+                  visible={panelVisible && herramienta === 'asistente'}
+                  online={!offline}
+                  state={documento.state}
+                  canWrite={canWrite}
+                  apply={documento.dispatch}
+                />
+              )}
             </div>
             <div
               id="panel-importar"
@@ -657,6 +665,7 @@ function BoardSession({
               <ImportPanel
                 boardId={board.id}
                 boardName={board.displayName}
+                visible={panelVisible && herramienta === 'importar'}
                 state={documento.state}
                 canWrite={canWrite}
                 apply={documento.dispatch}

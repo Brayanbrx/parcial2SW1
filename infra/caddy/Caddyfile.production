@@ -4,6 +4,10 @@
 
 {$DOMAIN} {
 	encode zstd gzip
+	# Más específico que handle_path /collab*: bloquear antes de reescribir.
+	handle /collab/internal* {
+		respond 404
+	}
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff

@@ -46,6 +46,7 @@ export interface Participant {
 }
 
 export interface BoardDocument {
+  readonly provider: HocuspocusProvider | null;
   readonly state: BoardState;
   readonly issues: readonly ValidationIssue[];
   readonly status: ConnectionStatus;
@@ -108,6 +109,7 @@ export function useBoardDocument(
   const [rejection, setRejection] = useState<string | null>(null);
   const [participants, setParticipants] = useState<readonly Participant[]>([]);
   const providerRef = useRef<HocuspocusProvider | null>(null);
+  const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
   const draftsRef = useRef<BoardDrafts | null>(null);
   const userId = me?.id;
   // Una ranura por editor, no por reintento de conexión: volver a consultar la
@@ -201,6 +203,7 @@ export function useBoardDocument(
       document: doc,
     });
     providerRef.current = provider;
+    setProvider(provider);
 
     let disposed = false;
     let draftsRestored = false;
@@ -476,6 +479,7 @@ export function useBoardDocument(
       flushSnapshot();
       provider.destroy();
       providerRef.current = null;
+      setProvider(null);
       draftsRef.current = null;
     };
   }, [doc, room, me, offline, board, boardId, activateOfflineCopy, drafts]);
@@ -562,6 +566,7 @@ export function useBoardDocument(
   // una actualizacion de presencia por render — un bucle sin fondo.
   return useMemo(
     () => ({
+      provider,
       state,
       issues,
       status,
@@ -574,6 +579,7 @@ export function useBoardDocument(
       announceEditing,
     }),
     [
+      provider,
       state,
       issues,
       status,

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { createTeamAiMock } from '../support/team-ai.js';
 import {
   abrirHerramienta,
   abrirPizarra,
@@ -375,6 +376,7 @@ test.describe('validacion en pantalla', () => {
 test.describe('asistente por texto (RF-030 a RF-036)', () => {
   test('una instruccion se propone, se aplica y llega al otro navegador', async ({ browser }) => {
     const escenario = await montarEscenario(browser, 'Con asistente');
+    await createTeamAiMock().install(escenario.ana.page);
     try {
       await crearClase(escenario.ana, 'Cliente');
       await expect(escenario.beto.page.getByTestId('clase-Cliente')).toBeVisible();
@@ -407,6 +409,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
     // aplicar— aparecia fuera de la vista: la persona escribe, parece que no
     // pasa nada, y vuelve a escribir.
     const escenario = await montarEscenario(browser, 'Conversacion larga');
+    await createTeamAiMock().install(escenario.ana.page);
     try {
       await crearClase(escenario.ana, 'Cliente');
 
@@ -431,6 +434,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
 
   test('RF-034 — pregunta cuando el objetivo no existe', async ({ browser }) => {
     const escenario = await montarEscenario(browser, 'Asistente que pregunta');
+    await createTeamAiMock().install(escenario.ana.page);
     try {
       await crearClase(escenario.ana, 'Cliente');
 
@@ -457,6 +461,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
 
   test('RF-035 — lo destructivo pide confirmacion', async ({ browser }) => {
     const escenario = await montarEscenario(browser, 'Asistente destructivo');
+    await createTeamAiMock().install(escenario.ana.page);
     try {
       await crearClase(escenario.ana, 'Cliente');
       await escenario.ana.page.getByTestId('nuevo-atributo').fill('nombre');
@@ -480,6 +485,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
 
   test('RF-036 — consultar no modifica la pizarra', async ({ browser }) => {
     const escenario = await montarEscenario(browser, 'Asistente consultivo');
+    await createTeamAiMock().install(escenario.ana.page);
     try {
       await crearClase(escenario.ana, 'Cliente');
 

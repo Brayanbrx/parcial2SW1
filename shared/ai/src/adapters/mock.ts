@@ -1,5 +1,6 @@
 import { CONCEPTUAL_TYPES, type ConceptualType, type SemanticModel } from '@uml/contracts';
 import { toWords } from '@uml/domain-core';
+import { mockTeamAnswer, mockTeachingReview } from '../mock-team-answer.js';
 import type { AssistantOperation, BatchProposal } from '../proposal.js';
 import type {
   AnswerOptions,
@@ -26,10 +27,41 @@ import type {
 
 const PROVIDER = 'mock';
 
+function resolveMockClarification(options: ProposeOptions): string | undefined {
+  const initial = options.context?.find((t) => t.role === 'user')?.text;
+  const attribute =
+    initial &&
+    /^(?:agrega|anade|add)\s+(.+?)\s+(?:tipo|de tipo|type)\s+(\w+)(?:\s+a\s+.+)?$/i.exec(initial);
+  if (!attribute) return undefined;
+  let target = options.instruction.trim();
+  const ordinal = /^(?:la |el )?(primera?|segunda?|tercera?|[123])$/i
+    .exec(target)?.[1]
+    ?.toLowerCase();
+  if (ordinal) {
+    const number = /^primer|^1$/.test(ordinal) ? 1 : /^segund|^2$/.test(ordinal) ? 2 : 3;
+    const question = options.context?.findLast((t) => t.role === 'assistant')?.text;
+    const encoded = question
+      ?.split('\n')
+      .find((line) => line.startsWith(`${number}. `))
+      ?.slice(3);
+    if (encoded) {
+      try {
+        const value: unknown = JSON.parse(encoded);
+        if (typeof value === 'string') target = value;
+      } catch {
+        /* Preguntar otra vez. */
+      }
+    }
+  }
+  if (!options.snapshot.classes.some((c) => c.displayName === target)) return undefined;
+  return `agrega ${attribute[1]} tipo ${attribute[2]} a ${target}`;
+}
+
 export class MockLlmPort implements LlmPort {
   public readonly name = PROVIDER;
 
   public async proposeCommands(options: ProposeOptions): Promise<ProposeResult> {
+    options.signal?.throwIfAborted();
     const inicio = Date.now();
     const instruccionAcumulada = [
       ...(options.context ?? [])
@@ -39,7 +71,10 @@ export class MockLlmPort implements LlmPort {
     ].join(' ');
 
     return {
-      proposal: interpretar(instruccionAcumulada, options.snapshot),
+      proposal: interpretar(
+        resolveMockClarification(options) ?? instruccionAcumulada,
+        options.snapshot,
+      ),
       usage: {
         provider: PROVIDER,
         model: 'mock-determinista',
@@ -49,7 +84,13 @@ export class MockLlmPort implements LlmPort {
   }
 
   public async answer(options: AnswerOptions): Promise<AnswerResult> {
+    options.signal?.throwIfAborted();
     const { snapshot, issues = [] } = options;
+    if (options.teaching?.task === 'REVIEW')
+      return {
+        text: `${options.team?.requesterName ?? 'Equipo'}, ${mockTeachingReview(options)}`,
+        usage: { provider: PROVIDER, model: 'mock-determinista', latencyMs: 0 },
+      };
     const errores = issues.filter((item) => item.severity === 'ERROR');
 
     const partes = [
@@ -63,7 +104,9 @@ export class MockLlmPort implements LlmPort {
     ];
 
     return {
-      text: partes.join(' '),
+      text: [options.team ? mockTeamAnswer(options.question, options.team, options) : '', ...partes]
+        .filter(Boolean)
+        .join(' '),
       usage: { provider: PROVIDER, model: 'mock-determinista', latencyMs: 0 },
     };
   }
@@ -135,6 +178,10 @@ function interpretar(instruccion: string, snapshot: SemanticModel): BatchProposa
     };
   }
 
+  if (/^(?:agrega|anade|add)\s+.+?\s+(?:tipo|de tipo|type)\s+\w+$/i.test(texto)) {
+    return { operations: [], needsClarification: '¿En qué clase quieres añadir el atributo?' };
+  }
+
   // "crea <Clase> con <a>, <b> y <c>"
   const claseConAtributos = /^(?:crea|crear|create)\s+(.+?)\s+con\s+(.+)$/i.exec(texto);
   if (claseConAtributos !== null) {
@@ -167,7 +214,19 @@ function interpretar(instruccion: string, snapshot: SemanticModel): BatchProposa
     };
   }
 
-  // "elimina <Clase>"
+  // El prefijo explícito evita confundir clases como "Detalle de Venta".
+  const eliminarAtributo = /^(?:elimina|borra)\s+el atributo\s+(.+?)\s+de\s+(.+)$/i.exec(texto);
+  if (eliminarAtributo !== null)
+    return {
+      operations: [
+        {
+          op: 'DELETE_ATTRIBUTE',
+          className: nombreDeClase(eliminarAtributo[2]!),
+          attributeName: eliminarAtributo[1]!.trim(),
+        },
+      ],
+      rationale: 'Eliminar un atributo.',
+    };
   const eliminar = /^(?:elimina|borra|delete)\s+(.+)$/i.exec(texto);
   if (eliminar !== null) {
     return {

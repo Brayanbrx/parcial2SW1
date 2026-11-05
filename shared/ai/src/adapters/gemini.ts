@@ -14,7 +14,7 @@ import type { BatchProposal } from '../proposal.js';
 import {
   INSTRUCCION_ESQUEMA,
   SISTEMA_ASISTENTE,
-  SISTEMA_CONSULTA,
+  sistemaDeConsulta,
   SISTEMA_VISION,
   comprobarImagen,
   interpretarPropuesta,
@@ -81,7 +81,14 @@ export class GeminiLlmPort implements LlmPort {
     const respuesta = await this.cliente.generar({
       sistema: `${SISTEMA_ASISTENTE}\n\n${INSTRUCCION_ESQUEMA}`,
       partes: [
-        { text: mensajeDePropuesta(options.instruction, options.snapshot, options.context) },
+        {
+          text: mensajeDePropuesta(
+            options.instruction,
+            options.snapshot,
+            options.context,
+            options.team,
+          ),
+        },
       ],
       json: true,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -96,9 +103,16 @@ export class GeminiLlmPort implements LlmPort {
 
   public async answer(options: AnswerOptions): Promise<AnswerResult> {
     const respuesta = await this.cliente.generar({
-      sistema: SISTEMA_CONSULTA,
+      sistema: sistemaDeConsulta(options.teaching),
       partes: [
-        { text: mensajeDeConsulta(options.question, options.snapshot, options.issues ?? []) },
+        {
+          text: mensajeDeConsulta(
+            options.question,
+            options.snapshot,
+            options.issues ?? [],
+            options.team,
+          ),
+        },
       ],
       json: false,
       ...(options.signal === undefined ? {} : { signal: options.signal }),

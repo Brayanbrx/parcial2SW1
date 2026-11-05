@@ -5,7 +5,7 @@ import {
   type SemanticModel,
   type ValidationIssue,
 } from '@uml/contracts';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { planBatch, validateModel } from '@uml/domain-core';
 import { CandidateEditor, etiquetaComando } from './CandidateEditor.js';
 import { removeCandidateCommand } from './candidate.js';
@@ -48,6 +48,7 @@ export interface ImportPanelProps {
   readonly boardName: string;
   readonly state: BoardState;
   readonly canWrite: boolean;
+  readonly visible: boolean;
   apply(
     batch: CommandBatch,
     expected?: SemanticModel,
@@ -65,6 +66,7 @@ export function ImportPanel({
   boardName,
   state,
   canWrite,
+  visible,
   apply,
 }: ImportPanelProps): React.JSX.Element {
   const [candidato, setCandidato] = useState<Respuesta | null>(null);
@@ -78,12 +80,25 @@ export function ImportPanel({
   const [modo, setModo] = useState<Modo>('ADD');
   const [fuente, setFuente] = useState<Fuente | null>(null);
   const [camaraAbierta, setCamaraAbierta] = useState(false);
+  useEffect(() => {
+    if (!visible || !canWrite) setCamaraAbierta(false);
+  }, [visible, canWrite]);
   const [nombreExport, setNombreExport] = useState<string | null>(null);
   const [formatoExport, setFormatoExport] = useState<'EA_21' | 'UML_251'>('EA_21');
   const imagenRef = useRef<HTMLInputElement>(null);
   const xmiRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLFormElement>(null);
   const candidateRef = useRef<HTMLDivElement>(null);
+  const solicitud = useRef<AbortController | null>(null);
+  const permisoActual = useRef(canWrite);
+  permisoActual.current = canWrite;
+  useEffect(
+    () => () => {
+      solicitud.current?.abort();
+      solicitud.current = null;
+    },
+    [],
+  );
   const exportOpen = nombreExport !== null;
   const candidateOpen = candidato !== null;
 
@@ -119,58 +134,74 @@ export function ImportPanel({
       ? candidato.batch.commands.map((c) => etiquetaComando(c, nombres))
       : [];
 
-  async function enviar(hacer: () => Promise<Respuesta>): Promise<void> {
+  async function importarFuente(
+    leer: Fuente | (() => Promise<Fuente>),
+    nuevoModo: Modo,
+  ): Promise<void> {
+    if (!permisoActual.current || solicitud.current !== null) return;
+    const controller = new AbortController();
+    solicitud.current = controller;
     setPendiente(true);
     setError(null);
     setAplicado(null);
     setCandidato(null);
     setObsoleto(false);
+    setFuente(null);
 
     try {
-      setCandidato(await hacer());
-    } catch (causa) {
-      setError(causa instanceof Error ? causa.message : 'La importación falló.');
-    } finally {
-      setPendiente(false);
-    }
-  }
-
-  async function importarImagen(archivo: File): Promise<void> {
-    const base64 = await leerBase64(archivo);
-    const nuevaFuente: Fuente = {
-      kind: 'IMAGE',
-      name: archivo.name,
-      image: base64,
-      mediaType: archivo.type,
-    };
-    setFuente(nuevaFuente);
-    await importarFuente(nuevaFuente, modo);
-  }
-
-  async function importarXmi(archivo: File): Promise<void> {
-    const xml = await archivo.text();
-    const nuevaFuente: Fuente = { kind: 'XMI', name: archivo.name, xml };
-    setFuente(nuevaFuente);
-    await importarFuente(nuevaFuente, modo);
-  }
-
-  async function importarFuente(origen: Fuente, nuevoModo: Modo): Promise<void> {
-    setBaseCandidato({ model: state.semantic, modo: nuevoModo });
-    await enviar(() =>
-      origen.kind === 'XMI'
+      // Leer el archivo también puede fallar o seguir pendiente al salir de la
+      // pizarra. Forma parte de la misma operación que la petición HTTP.
+      const origen = typeof leer === 'function' ? await leer() : leer;
+      controller.signal.throwIfAborted();
+      if (!permisoActual.current)
+        throw new Error('Ya no tienes permiso para importar en esta pizarra.');
+      setFuente(origen);
+      setBaseCandidato({ model: state.semantic, modo: nuevoModo });
+      const respuesta = await (origen.kind === 'XMI'
         ? apiRequest<Respuesta>(`/boards/${boardId}/import/xmi`, {
             method: 'POST',
+            signal: controller.signal,
             body: { xml: origen.xml, mode: nuevoModo, model: state.semantic },
           })
         : apiRequest<Respuesta>(`/boards/${boardId}/import/image`, {
             method: 'POST',
+            signal: controller.signal,
             body: {
               image: origen.image,
               mediaType: origen.mediaType,
               mode: nuevoModo,
               model: state.semantic,
             },
-          }),
+          }));
+      controller.signal.throwIfAborted();
+      setCandidato(respuesta);
+    } catch (causa) {
+      if (!controller.signal.aborted)
+        setError(causa instanceof Error ? causa.message : 'La importación falló.');
+    } finally {
+      if (solicitud.current === controller) {
+        solicitud.current = null;
+        setPendiente(false);
+      }
+    }
+  }
+
+  async function importarImagen(archivo: File): Promise<void> {
+    await importarFuente(
+      async () => ({
+        kind: 'IMAGE',
+        name: archivo.name,
+        image: await leerBase64(archivo),
+        mediaType: archivo.type,
+      }),
+      modo,
+    );
+  }
+
+  async function importarXmi(archivo: File): Promise<void> {
+    await importarFuente(
+      async () => ({ kind: 'XMI', name: archivo.name, xml: await archivo.text() }),
+      modo,
     );
   }
 
@@ -293,6 +324,7 @@ export function ImportPanel({
       <input
         ref={imagenRef}
         type="file"
+        disabled={!canWrite || pendiente}
         accept="image/png,image/jpeg,image/webp,image/gif"
         hidden
         data-testid="archivo-imagen"
@@ -306,6 +338,7 @@ export function ImportPanel({
       <input
         ref={xmiRef}
         type="file"
+        disabled={!canWrite || pendiente}
         accept=".xmi,.xml,text/xml,application/xml"
         hidden
         data-testid="archivo-xmi"
@@ -361,7 +394,7 @@ export function ImportPanel({
         </form>
       )}
 
-      {camaraAbierta && (
+      {camaraAbierta && visible && canWrite && (
         <CapturaCamara
           onCerrar={() => setCamaraAbierta(false)}
           onCaptura={(archivo) => {
