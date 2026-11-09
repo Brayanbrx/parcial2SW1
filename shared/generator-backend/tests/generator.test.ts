@@ -56,6 +56,73 @@ describe('generador del backend Spring', () => {
     expect(repository).toContain('findByJefe_Id(UUID jefeId)');
   });
 
+  it('conserva los nombres del modelo cuando chocan con anotaciones JPA', async () => {
+    const entityId = '11111111-1111-4111-8111-111111111111';
+    const tableId = '22222222-2222-4222-8222-222222222222';
+    const model: SemanticModel = {
+      classes: [
+        {
+          id: entityId,
+          displayName: 'Entity',
+          codeName: 'Entity',
+          databaseName: 'entity',
+          attributes: [],
+        },
+        {
+          id: tableId,
+          displayName: 'Table',
+          codeName: 'Table',
+          databaseName: 'app_table',
+          attributes: [],
+        },
+      ],
+      relationships: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          sourceClassId: tableId,
+          targetClassId: entityId,
+          sourceMultiplicity: '0..*',
+          targetMultiplicity: '1',
+        },
+      ],
+    };
+    const ir = buildGenerationIr({ model, projectName: 'Prueba', snapshotVersion: 1 });
+    const files = await generateSpringProjectFiles(ir);
+    const entity = content(files, '/model/Entity.java');
+    expect(entity).not.toContain('import jakarta.persistence.Entity;');
+    expect(entity).toContain('@jakarta.persistence.Entity');
+    expect(entity).toContain('public class Entity {');
+    const table = content(files, '/model/Table.java');
+    expect(table).not.toContain('import jakarta.persistence.Entity;');
+    expect(table).not.toContain('import jakarta.persistence.Table;');
+    expect(table).toContain('@jakarta.persistence.Table(name = "app_table")');
+    expect(table).toContain('private Entity entity;');
+  });
+
+  it('distingue clases UML de los tipos escalares Java en las entidades', async () => {
+    const model = modelWithCollidingJavaNames();
+    const ir = buildGenerationIr({ model, projectName: 'Prueba', snapshotVersion: 1 });
+    const files = await generateSpringProjectFiles(ir);
+    expect(content(files, '/model/Cliente.java')).toContain('private java.lang.String nombre;');
+    const decimal = content(files, '/model/BigDecimal.java');
+    expect(decimal).not.toContain('import java.math.BigDecimal;');
+    expect(decimal).toContain('private java.math.BigDecimal monto;');
+  });
+
+  it('distingue las entidades de los tipos que usa el repositorio y el servicio', async () => {
+    const model = modelWithCollidingJavaNames();
+    const ir = buildGenerationIr({ model, projectName: 'Prueba', snapshotVersion: 1 });
+    const files = await generateSpringProjectFiles(ir);
+    const modelPackage = `${ir.project.packageName}.model`;
+    const service = content(files, '/service/ServiceService.java');
+    expect(service).not.toContain(`import ${modelPackage}.Service;`);
+    expect(service).toContain('import org.springframework.stereotype.Service;');
+    expect(service).toContain(`new ${modelPackage}.Service()`);
+    const list = content(files, '/repository/ListRepository.java');
+    expect(list).toContain(`extends JpaRepository<${modelPackage}.List, UUID>`);
+    expect(list).toContain(`List<${modelPackage}.List> findByPadre_Id`);
+  });
+
   it('incluye CRUD idempotente y traduccion uniforme de errores', async () => {
     const files = await generateSpringProjectFiles(t01Ir());
     const service = content(files, '/service/VentaService.java');
@@ -172,6 +239,64 @@ function t01Ir() {
     snapshotVersion: 1,
     model: fixture('T01').model,
   });
+}
+
+function modelWithCollidingJavaNames(): SemanticModel {
+  const classes = ['String', 'Cliente', 'BigDecimal', 'List', 'Service'].map((name, i) => ({
+    id: `10000000-0000-4000-8000-00000000000${i}`,
+    displayName: name,
+    codeName: name,
+    databaseName: name === 'BigDecimal' ? 'big_decimal' : name.toLowerCase(),
+    attributes: [],
+  }));
+  const [string, cliente, decimal, list, service] = classes;
+  return {
+    classes: [
+      string!,
+      {
+        ...cliente!,
+        attributes: [
+          {
+            id: '20000000-0000-4000-8000-000000000001',
+            displayName: 'Nombre',
+            codeName: 'nombre',
+            databaseName: 'nombre',
+            type: 'String',
+            primaryKey: false,
+            nullable: true,
+            unique: false,
+          },
+        ],
+      },
+      {
+        ...decimal!,
+        attributes: [
+          {
+            id: '20000000-0000-4000-8000-000000000002',
+            displayName: 'Monto',
+            codeName: 'monto',
+            databaseName: 'monto',
+            type: 'Decimal',
+            primaryKey: false,
+            nullable: true,
+            unique: false,
+          },
+        ],
+      },
+      list!,
+      service!,
+    ],
+    relationships: [
+      {
+        id: '30000000-0000-4000-8000-000000000001',
+        sourceClassId: list!.id,
+        targetClassId: list!.id,
+        sourceMultiplicity: '1',
+        targetMultiplicity: '0..*',
+        sourceRoleName: 'padre',
+      },
+    ],
+  };
 }
 
 function t08Ir() {

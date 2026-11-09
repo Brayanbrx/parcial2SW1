@@ -4,8 +4,8 @@ package {{project.packageName}}.model;
 import {{this}};
 {{/each}}
 
-@Entity
-@Table(name = "{{entity.tableName}}")
+@{{jpa.entity}}
+@{{jpa.table}}(name = "{{entity.tableName}}")
 {{#if inheritanceAnnotation}}
 {{{inheritanceAnnotation}}}
 {{/if}}
@@ -15,13 +15,13 @@ import {{this}};
 public class {{entity.className}}{{#if entity.superClassName}} extends {{entity.superClassName}}{{/if}} {
 {{#if mobileRuntime}}{{#unless entity.superClassName}}
     @jakarta.persistence.Version
-    @Column(name = "_uml_sync_version", nullable = false)
+    @{{jpa.column}}(name = "_uml_sync_version", nullable = false)
     private long umlSyncVersion;
 {{/unless}}{{/if}}
 
 {{#each declaredAttributes}}
 {{#if primaryKey}}
-    @Id
+    @{{../jpa.id}}
 {{/if}}
     {{{columnAnnotation}}}
     private {{javaType}} {{fieldName}};

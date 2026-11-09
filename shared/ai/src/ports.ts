@@ -136,3 +136,11 @@ export class ProviderContractError extends Error {
     this.name = 'ProviderContractError';
   }
 }
+
+/** El audio no contenia palabras. No es un fallo del proveedor: otro diria lo mismo. */
+export class NoSpeechError extends ProviderContractError {
+  public constructor(provider: string) {
+    super(provider, 'No se reconocio ninguna palabra en el audio.');
+    this.name = 'NoSpeechError';
+  }
+}

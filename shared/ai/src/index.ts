@@ -28,5 +28,5 @@ export {
   OpenRouterVisionPort,
   type OpenRouterAdapterOptions,
 } from './adapters/openrouter.js';
-export { GroqSpeechPort, type GroqSpeechOptions } from './adapters/groq.js';
+export { GroqSpeechPort, contextoDeAudio, type GroqSpeechOptions } from './adapters/groq.js';
 export { CloudflareSpeechPort, type CloudflareSpeechOptions } from './adapters/cloudflare.js';

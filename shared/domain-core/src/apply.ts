@@ -261,7 +261,11 @@ function addAttribute(draft: BoardState, command: CommandOf<'ADD_ATTRIBUTE'>): V
     unique: command.payload.unique ?? false,
   };
 
-  umlClass.attributes.push(attribute);
+  const before =
+    command.payload.beforeAttributeId === undefined
+      ? -1
+      : umlClass.attributes.findIndex((a) => a.id === command.payload.beforeAttributeId);
+  umlClass.attributes.splice(before < 0 ? umlClass.attributes.length : before, 0, attribute);
   return [];
 }
 
@@ -269,12 +273,19 @@ function updateAttribute(
   draft: BoardState,
   command: CommandOf<'UPDATE_ATTRIBUTE'>,
 ): ValidationIssue[] {
-  const { classId, attributeId } = command.payload;
+  const { classId, attributeId, beforeAttributeId } = command.payload;
   const umlClass = findClass(draft, classId);
   if (umlClass === undefined) return [unknownClass(classId)];
 
-  const attribute = umlClass.attributes.find((a) => a.id === attributeId);
+  const attributes = umlClass.attributes;
+  const index = attributes.findIndex((a) => a.id === attributeId);
+  const attribute = attributes[index];
   if (attribute === undefined) return [unknownAttribute(classId, attributeId)];
+  let before = attributes.length;
+  if (typeof beforeAttributeId === 'string') {
+    before = attributes.findIndex((a) => a.id === beforeAttributeId);
+    if (before < 0) return [unknownAttribute(classId, beforeAttributeId)];
+  }
 
   if (command.payload.displayName !== undefined) {
     const names = deriveNames(command.payload.displayName, 'ATTRIBUTE');
@@ -289,6 +300,11 @@ function updateAttribute(
   if (command.payload.primaryKey !== undefined) attribute.primaryKey = command.payload.primaryKey;
   if (command.payload.nullable !== undefined) attribute.nullable = command.payload.nullable;
   if (command.payload.unique !== undefined) attribute.unique = command.payload.unique;
+
+  if (beforeAttributeId !== undefined && beforeAttributeId !== attributeId) {
+    attributes.splice(index, 1);
+    attributes.splice(before > index ? before - 1 : before, 0, attribute);
+  }
 
   return [];
 }

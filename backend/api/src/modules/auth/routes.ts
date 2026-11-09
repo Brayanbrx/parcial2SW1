@@ -206,9 +206,31 @@ export async function authRoutes(
     const presented = request.cookies[REFRESH_COOKIE];
 
     if (presented !== undefined) {
-      await app.prisma.refreshToken.updateMany({
-        where: { tokenHash: hashRefreshToken(presented), revokedAt: null },
-        data: { revokedAt: new Date() },
+      const tokenHash = hashRefreshToken(presented);
+      await app.prisma.$transaction(async (tx) => {
+        // Las renovaciones también bloquean el usuario antes de rotar un token.
+        const [user] = await tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM users
+          WHERE id = (SELECT "userId" FROM refresh_tokens WHERE "tokenHash" = ${tokenHash})
+          FOR NO KEY UPDATE
+        `;
+        if (user === undefined) return;
+
+        const now = new Date();
+        const recentRotation = new Date(now.getTime() - MARGEN_ROTACION_MS);
+        await tx.$executeRaw`
+          WITH RECURSIVE session_tokens AS (
+            SELECT id, "replacedById" FROM refresh_tokens
+            WHERE "tokenHash" = ${tokenHash} AND "userId" = ${user.id}::uuid
+              AND ("revokedAt" IS NULL OR "revokedAt" >= ${recentRotation})
+            UNION
+            SELECT successor.id, successor."replacedById" FROM refresh_tokens AS successor
+            JOIN session_tokens AS previous ON successor.id = previous."replacedById"
+            WHERE successor."userId" = ${user.id}::uuid
+          )
+          UPDATE refresh_tokens SET "revokedAt" = ${now}
+          WHERE id IN (SELECT id FROM session_tokens) AND "revokedAt" IS NULL
+        `;
       });
     }
 

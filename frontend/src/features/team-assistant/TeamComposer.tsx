@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   contextToDraft,
   exceedsContext,
@@ -11,7 +11,9 @@ import { AssistantLearningGuide } from '../assistant/AssistantLearningGuide.js';
 import { useSpeech } from '../assistant/useSpeech.js';
 import { prepareDictation } from '../assistant/prepare-dictation.js';
 import { useVoiceCommand } from '../assistant/useVoiceCommand.js';
-import { VoiceCommandControl } from './VoiceCommandControl.js';
+import { VoiceCommandButton, VoiceCommandStatus } from './VoiceCommandControl.js';
+import { IconoDetener, IconoEnviar, IconoLibro, IconoMicrofono } from '../../components/icons.js';
+import type { VoiceEngine } from '../assistant/recorder-recognition.js';
 
 export interface ComposerDraft {
   readonly text: string;
@@ -34,25 +36,35 @@ export function TeamComposer(props: {
   send(draft: ComposerDraft): Promise<boolean>;
   cancel(): void;
   clearContext(): void;
+  /** Voz transcrita en el servidor (Whisper local); sin él, reconocimiento del navegador. */
+  voiceEngine?: VoiceEngine | undefined;
 }) {
   const [text, setText] = useState('');
   const currentText = useRef(text);
   currentText.current = text;
   const [mode, setMode] = useState<TeamMode>('INSTRUCT');
+  const helpId = useId();
   const [original, setOriginal] = useState<string | null>(null);
   const beforeDictation = useRef('');
   const input = useRef<HTMLTextAreaElement>(null);
   const sending = useRef(false);
-  const voice = useSpeech((transcript) => {
-    if (!transcript.trim()) {
-      setText(beforeDictation.current);
-      setOriginal(null);
-      return;
-    }
-    const value = [beforeDictation.current, transcript].filter(Boolean).join(' ');
-    setOriginal(value);
-    setText(prepareDictation(value));
-  });
+  const blocked =
+    props.pending || !props.enabled || (mode === 'REVIEW' && props.reviewEnabled === false);
+  const dictationAllowed = !blocked && props.visible && (mode !== 'INSTRUCT' || props.canWrite);
+  const voice = useSpeech(
+    (transcript) => {
+      if (!transcript.trim()) {
+        setText(beforeDictation.current);
+        setOriginal(null);
+        return;
+      }
+      const value = [beforeDictation.current, transcript].filter(Boolean).join(' ');
+      setOriginal(value);
+      setText(prepareDictation(value));
+    },
+    props.voiceEngine,
+    dictationAllowed,
+  );
   const dictating = voice.listening || voice.stopping;
   const visible = dictating
     ? [beforeDictation.current, voice.transcript].filter(Boolean).join(' ')
@@ -71,19 +83,21 @@ export function TeamComposer(props: {
   useEffect(() => {
     if (dictating && input.current) input.current.scrollTop = input.current.scrollHeight;
   }, [dictating, visible]);
-  const blocked =
-    props.pending || !props.enabled || (mode === 'REVIEW' && props.reviewEnabled === false);
   const commandAllowed =
     !blocked && props.visible && props.canWrite && mode === 'INSTRUCT' && !dictating && !full;
-  const command = useVoiceCommand(commandAllowed, (transcript) => {
-    if (sending.current || !commandAllowed) return;
-    sending.current = true;
-    void props
-      .send({ text: transcript, mode: 'INSTRUCT', inputMode: 'VOICE_COMMAND' })
-      .finally(() => {
-        sending.current = false;
-      });
-  });
+  const command = useVoiceCommand(
+    commandAllowed,
+    (transcript) => {
+      if (sending.current || !commandAllowed) return;
+      sending.current = true;
+      void props
+        .send({ text: transcript, mode: 'INSTRUCT', inputMode: 'VOICE_COMMAND' })
+        .finally(() => {
+          sending.current = false;
+        });
+    },
+    props.voiceEngine,
+  );
   const commanding = command.phase !== 'idle';
   useEffect(() => {
     // Cambiar de hilo/borrador invalida cualquier captura iniciada con el contexto anterior.
@@ -116,39 +130,44 @@ export function TeamComposer(props: {
       sending.current = false;
     }
   }
+  const length = visible.trim().length;
   return (
-    <>
-      <div className="pestanas team-modes" aria-label="Modo del asistente">
-        {(
-          [
-            ['INSTRUCT', 'Instruir', 'modo-instruir'],
-            ['ASK', 'Preguntar', 'modo-preguntar'],
-            ['REVIEW', 'Revisar', 'modo-revisar'],
-          ] as const
-        ).map(([value, label, testId]) => (
-          <button
-            key={value}
-            type="button"
-            className={mode === value ? 'activa' : ''}
-            aria-pressed={mode === value}
-            data-testid={testId}
-            disabled={
-              props.pending ||
-              dictating ||
-              commanding ||
-              (value === 'INSTRUCT' && !props.canWrite) ||
-              (value === 'REVIEW' && props.reviewEnabled === false)
-            }
-            onClick={() => setMode(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="asistente-aprendizaje">
+    <div className="team-composer">
+      <div className="team-composer-cabecera">
+        <div className="segmentado team-modes" role="group" aria-label="Modo del asistente">
+          {(
+            [
+              ['INSTRUCT', 'Instruir', 'modo-instruir', 'Pide cambios en el diagrama'],
+              ['ASK', 'Preguntar', 'modo-preguntar', 'Resuelve dudas de diseño o conceptos'],
+              ['REVIEW', 'Revisar', 'modo-revisar', 'Pide una revisión del modelo'],
+            ] as const
+          ).map(([value, label, testId, hint]) => (
+            <button
+              key={value}
+              type="button"
+              className={mode === value ? 'activa' : ''}
+              aria-pressed={mode === value}
+              data-testid={testId}
+              title={hint}
+              disabled={
+                props.pending ||
+                dictating ||
+                commanding ||
+                (value === 'INSTRUCT' && !props.canWrite) ||
+                (value === 'REVIEW' && props.reviewEnabled === false)
+              }
+              onClick={() => setMode(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <AssistantLearningGuide
           model={props.model}
           canWrite={props.canWrite}
+          triggerClassName="team-guia"
+          triggerIcon={<IconoLibro size={17} />}
+          iconOnly
           canUseExample={
             !props.pending &&
             !dictating &&
@@ -218,7 +237,7 @@ export function TeamComposer(props: {
         </div>
       )}
       <form
-        className="entrada"
+        className={`entrada team-entrada${dictating || commanding ? ' escuchando' : ''}`}
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
@@ -226,7 +245,7 @@ export function TeamComposer(props: {
       >
         <textarea
           ref={input}
-          rows={3}
+          rows={2}
           value={visible}
           disabled={props.pending}
           readOnly={dictating}
@@ -239,78 +258,107 @@ export function TeamComposer(props: {
           }
           placeholder={
             mode === 'INSTRUCT'
-              ? 'Instrucción…'
+              ? 'Pide un cambio: «Agrega la clase Cliente con nombre y correo»'
               : mode === 'ASK'
-                ? 'Pregunta…'
-                : '¿Qué quieres revisar?'
+                ? 'Pregunta: «¿Qué es una clase asociativa?»'
+                : '¿Qué quieres que revise del modelo?'
           }
           data-testid="entrada-asistente"
           onChange={(event) => setText(event.target.value)}
-        />
-        {voice.supported && (
-          <button
-            type="button"
-            className={voice.listening ? 'escuchando' : ''}
-            title={voice.listening ? 'Parar dictado' : 'Dictar'}
-            disabled={
-              props.pending ||
-              commanding ||
-              voice.stopping ||
-              (mode === 'INSTRUCT' && !props.canWrite)
+          onKeyDown={(event) => {
+            // Ctrl/⌘ + Enter envía sin soltar el teclado; Enter solo sigue
+            // siendo salto de línea, como en cualquier campo de varias líneas.
+            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              void submit();
             }
-            data-testid="dictar"
-            onClick={() => {
-              if (voice.listening) voice.stop();
-              else {
-                beforeDictation.current = text;
-                setOriginal(null);
-                voice.start();
+          }}
+        />
+        <div className="team-entrada-acciones">
+          <div className="team-entrada-voz">
+            {voice.supported && (
+              <button
+                type="button"
+                className={`team-dictar${voice.listening ? ' escuchando' : ''}`}
+                title={
+                  voice.listening ? 'Parar dictado' : 'Dictar: revisarás el texto antes de enviarlo'
+                }
+                disabled={!dictationAllowed || commanding || voice.stopping}
+                data-testid="dictar"
+                onClick={() => {
+                  if (voice.listening) voice.stop();
+                  else {
+                    beforeDictation.current = text;
+                    setOriginal(null);
+                    voice.start();
+                  }
+                }}
+              >
+                {voice.listening ? <IconoDetener size={15} /> : <IconoMicrofono size={15} />}
+                <span>
+                  {voice.listening ? 'Parar' : voice.stopping ? 'Finalizando…' : 'Dictar'}
+                </span>
+              </button>
+            )}
+            {dictating && (
+              <button
+                type="button"
+                className="fantasma"
+                onClick={() => {
+                  voice.cancel();
+                  setText(beforeDictation.current);
+                  setOriginal(null);
+                }}
+              >
+                Cancelar dictado
+              </button>
+            )}
+            <VoiceCommandButton command={command} disabled={!commandAllowed} helpId={helpId} />
+          </div>
+          <div className="team-entrada-envio">
+            {length > 0 && (
+              <span className={length > 2000 ? 'team-contador excedido' : 'team-contador'}>
+                {length}/2000
+              </span>
+            )}
+            {props.pending && (
+              <button
+                type="button"
+                className="fantasma"
+                data-testid="cancelar-solicitud"
+                onClick={props.cancel}
+              >
+                Cancelar solicitud
+              </button>
+            )}
+            <button
+              type="submit"
+              className="principal team-enviar"
+              title="Enviar (Ctrl + Enter)"
+              disabled={
+                blocked ||
+                full ||
+                dictating ||
+                commanding ||
+                !text.trim() ||
+                text.trim().length > 2000 ||
+                (mode === 'INSTRUCT' && !props.canWrite)
               }
-            }}
-          >
-            {voice.listening ? 'Parar' : voice.stopping ? 'Finalizando…' : 'Dictar'}
-          </button>
-        )}
-        {dictating && (
-          <button
-            type="button"
-            onClick={() => {
-              voice.cancel();
-              setText(beforeDictation.current);
-              setOriginal(null);
-            }}
-          >
-            Cancelar dictado
-          </button>
-        )}
-        <button
-          type="submit"
-          disabled={
-            blocked ||
-            full ||
-            dictating ||
-            commanding ||
-            !text.trim() ||
-            text.trim().length > 2000 ||
-            (mode === 'INSTRUCT' && !props.canWrite)
-          }
-          data-testid="enviar-asistente"
-        >
-          {props.pending ? '…' : 'Enviar'}
-        </button>
-        {props.pending && (
-          <button type="button" data-testid="cancelar-solicitud" onClick={props.cancel}>
-            Cancelar solicitud
-          </button>
-        )}
+              data-testid="enviar-asistente"
+            >
+              <span>{props.pending ? 'Enviando…' : 'Enviar'}</span>
+              <IconoEnviar size={15} />
+            </button>
+          </div>
+        </div>
       </form>
-      <VoiceCommandControl command={command} disabled={!commandAllowed} />
-      <p className={visible.trim().length > 2000 ? 'error' : 'limite-asistente'}>
-        {visible.trim().length}/2000 caracteres
-        {visible.trim().length > 2000
-          ? '. Acorta el texto antes de enviar; tu dictado se conserva completo.'
-          : ''}
-      </p>
-    </>
+      <VoiceCommandStatus command={command} helpId={helpId} />
+      {length > 2000 && (
+        <p className="error" role="alert">
+          {length}/2000 caracteres. Acorta el texto antes de enviar; tu dictado se conserva
+          completo.
+        </p>
+      )}
+    </div>
   );
 }

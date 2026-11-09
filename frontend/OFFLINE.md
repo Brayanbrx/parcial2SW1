@@ -28,7 +28,7 @@ Si el servidor restablece el permiso de edición mientras la pizarra sigue abier
 
 ## Implementación
 
-El service worker precarga únicamente los archivos estáticos de una compilación completa, incluidos los módulos diferidos del editor y las fuentes. No intercepta la API ni WebSocket. Cada compilación tiene su propia caché; una actualización espera a que se cierren las pestañas de la versión anterior antes de activarse.
+El service worker precarga únicamente los archivos estáticos de una compilación completa, incluidos los módulos diferidos del editor y las fuentes. No intercepta la API ni WebSocket. Cada compilación tiene su propia caché; una actualización no se activa sola mientras haya pestañas con la versión anterior. La aplicación busca versiones nuevas cada 30 minutos y al volver a la pestaña, y muestra «Hay una versión nueva — Actualizar»: al pulsarlo se activa la versión y se recarga esa pestaña, y las demás piden recargar. Los cambios de la pizarra no se pierden, porque se guardan en el navegador antes de aplicarse.
 
 La identidad recordada contiene únicamente ID, correo y nombre. Los tokens de acceso siguen en memoria y el refresh token en su cookie HTTP-only. Salir borra la identidad recordada y, si no se pudo contactar al servidor, deja pendiente la revocación para impedir que una recarga restaure la sesión cerrada. Los cambios pendientes permanecen separados por cuenta.
 

@@ -73,7 +73,9 @@ export async function speakCommand(page: Page, text: string) {
   await expect(button).toHaveAttribute('aria-pressed', 'true');
   await commandSpeech(page, 'result', text, false);
   await button.press('Enter');
-  await expect(button).toHaveText('Finalizando comando…');
+  await expect(page.getByTestId('transcripcion-comando-voz')).toHaveText(
+    'Esperando la transcripción final…',
+  );
   await commandSpeech(page, 'result', text);
   await commandSpeech(page, 'end');
 }

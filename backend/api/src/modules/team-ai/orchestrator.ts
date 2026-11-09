@@ -3,7 +3,9 @@ import {
   resolveProposal,
   createTaskRouter,
   buildTeamContext,
+  TeamContextError,
   type AiPorts,
+  type LlmPort,
   type TeachingPolicy,
 } from '@uml/ai';
 import {
@@ -38,7 +40,6 @@ export function createTeamProcessor(
     maxInputTokens: number;
   },
 ): TeamProcessor {
-  const { portFor } = createTaskRouter(ports);
   return async (job, signal) => {
     const model = semanticModelSchema.parse(job.requestModel);
     const board = options
@@ -56,6 +57,7 @@ export function createTeamProcessor(
     if (settings?.enabled === false) throw new Error('ai_disabled');
     if (job.mode === 'REVIEW' && settings?.reviewMode === 'OFF')
       throw new Error('team_ai_review_disabled');
+    const { portFor } = createTaskRouter(ports, settings?.aiSource ?? 'PROVIDERS');
     const teaching: TeachingPolicy | undefined =
       job.mode === 'INSTRUCT'
         ? undefined
@@ -73,11 +75,11 @@ export function createTeamProcessor(
     if (!options && job.replyToId) throw new Error('team_ai_invalid_context');
     const loaded = options ? await loadTeamHistory(options.prisma, job, options.limits) : undefined;
     signal.throwIfAborted();
-    const port = portFor(
+    let port = portFor(
       job.mode === 'INSTRUCT' ? 'instruct' : job.mode === 'REVIEW' ? 'review' : 'mentor',
     );
     const context = loaded?.context ?? [];
-    const team =
+    const contextFor = (selected: LlmPort) =>
       loaded && options
         ? buildTeamContext(
             {
@@ -94,11 +96,22 @@ export function createTeamProcessor(
             {
               maxInputTokens: Math.min(
                 options.maxInputTokens,
-                port.capabilities?.contextWindow ?? options.maxInputTokens,
+                selected.capabilities?.contextWindow ?? options.maxInputTokens,
               ),
             },
           )
         : undefined;
+    let team: ReturnType<typeof contextFor>;
+    try {
+      team = contextFor(port);
+    } catch (error) {
+      // El modelo local tiene una ventana menor que la nube: si la solicitud no
+      // cabe en ella, responde la cadena de proveedores en lugar de fallar.
+      const tooLarge = error instanceof TeamContextError && error.code === 'team_ai_input_budget';
+      if (!tooLarge || port === ports.llm) throw error;
+      port = ports.llm;
+      team = contextFor(port);
+    }
     if (job.mode !== 'INSTRUCT') {
       const result = await port.answer({
         question: text,

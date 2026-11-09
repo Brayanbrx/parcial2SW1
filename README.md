@@ -70,6 +70,27 @@ npm run dev:collab   # http://localhost:3002
 npm run dev:web      # http://localhost:5173  (proxy a las dos anteriores)
 ```
 
+### IA local opcional (texto y voz)
+
+Por defecto la IA usa los proveedores en la nube. En una máquina Windows con GPU NVIDIA se puede añadir un modelo local de texto y un Whisper local para la voz:
+
+```powershell
+.\scripts\preparar-ia-local.ps1    # Ollama, gemma4-texto:e4b y AI_LOCAL_* en infra\.env
+.\scripts\voz-local.ps1            # whisper.cpp, modelos small y turbo, AI_LOCAL_SPEECH_*
+docker compose -f infra/compose.yml --env-file infra/.env up -d api
+```
+
+Después, el OWNER elige **Configurar IA → Motor de IA → Modelo local**:
+
+- Preguntar, Instruir y Revisar usan el modelo local.
+- Dictar y Comando de voz graban en el navegador y Whisper transcribe en el servidor, sin depender de internet.
+- Leer fotos sigue en la nube.
+- Si algo local falla o tarda, responden los proveedores.
+
+`.\scripts\voz-local.ps1 -Modelo turbo` o `-Modelo small` alterna el modelo de voz. Small es el predeterminado: tarda ~1 s por comando, frente a ~3 s de turbo. Whisper se apaga al reiniciar Windows; para levantarlo de nuevo, vuelve a ejecutar el script.
+
+Está probado para una RTX 3050 Laptop de 4 GB con 16 GB de RAM ([ADR-027](docs/adr/ADR-027-ia-local-opcional.md)). Solo funciona cuando la API corre en la misma máquina que Ollama y Whisper.
+
 ## Cuenta de demostración
 
 ```bash

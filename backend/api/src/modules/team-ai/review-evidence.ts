@@ -4,8 +4,16 @@ import { normalizeName } from '@uml/domain-core';
 type Fields = Record<string, unknown>;
 type Expectation = { fields: Fields | null; classId?: string };
 
-export const isSemanticBatch = (commands: readonly Command[]) =>
-  commands.some((command) => command.type !== 'MOVE_CLASS');
+function isSemanticCommand(command: Command): boolean {
+  if (command.type === 'MOVE_CLASS') return false;
+  if (command.type === 'UPDATE_ATTRIBUTE' && command.payload.beforeAttributeId !== undefined) {
+    const { displayName, type, nullable, unique, primaryKey } = command.payload;
+    return [displayName, type, nullable, unique, primaryKey].some((value) => value !== undefined);
+  }
+  return true;
+}
+
+export const isSemanticBatch = (commands: readonly Command[]) => commands.some(isSemanticCommand);
 
 /** Identidad del hallazgo independiente de su redacción y del orden del validador. */
 export const reviewIssueKey = (issue: ValidationIssue) =>
@@ -81,7 +89,14 @@ export function hasBatchEvidence(model: SemanticModel, commands: readonly Comman
           break;
         }
         case 'UPDATE_ATTRIBUTE': {
-          const { attributeId, classId, displayName, ...fields } = command.payload;
+          if (!isSemanticCommand(command)) break;
+          const {
+            attributeId,
+            classId,
+            displayName,
+            beforeAttributeId: _before,
+            ...fields
+          } = command.payload;
           put(
             attributes,
             attributeId,
@@ -157,7 +172,7 @@ export function hasBatchEvidence(model: SemanticModel, commands: readonly Comman
 export function touchedElements(commands: readonly Command[]): Set<string> {
   return new Set(
     commands.flatMap((command) => {
-      if (command.type === 'MOVE_CLASS') return [];
+      if (!isSemanticCommand(command)) return [];
       const p = command.payload;
       if ('relationshipId' in p) return [p.relationshipId];
       if ('attributeId' in p) return [p.classId, p.attributeId];

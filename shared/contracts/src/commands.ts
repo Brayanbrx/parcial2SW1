@@ -72,6 +72,8 @@ const addAttribute = z.object({
     primaryKey: z.boolean().optional(),
     nullable: z.boolean().optional(),
     unique: z.boolean().optional(),
+    // Al restaurar, insertar antes de este atributo si todavía existe.
+    beforeAttributeId: idSchema.optional(),
   }),
 });
 
@@ -85,6 +87,8 @@ const updateAttribute = z.object({
     primaryKey: z.boolean().optional(),
     nullable: z.boolean().optional(),
     unique: z.boolean().optional(),
+    // Ausente conserva el orden; null mueve el atributo al final.
+    beforeAttributeId: idSchema.nullable().optional(),
   }),
 });
 

@@ -1,6 +1,12 @@
 import { fixture } from '@uml/fixtures';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import * as generator from '@uml/generator-backend';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startHarness, type Harness } from '../support/harness.js';
+
+vi.mock('@uml/generator-backend', async (importOriginal) => {
+  const actual = await importOriginal<typeof generator>();
+  return { ...actual, generateSpringProject: vi.fn(actual.generateSpringProject) };
+});
 
 /**
  * Generación desde la pizarra y registro de auditoría (M6, M7 y RF-A09).
@@ -534,6 +540,43 @@ describe('generacion desde la pizarra y auditoria', () => {
   // -------------------------------------------------------------------------
 
   describe('eliminar una generacion (limpieza del servidor)', () => {
+    it.each([false, true])(
+      'borrar durante la emisión devuelve 404 aunque falle el generador: %s',
+      async (fails) => {
+      const generate = vi.mocked(generator.generateSpringProject);
+        const original = generate.getMockImplementation()!;
+        let release!: () => void;
+        let started = false;
+        const paused = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        generate.mockImplementationOnce(async (...args) => {
+          started = true;
+          await paused;
+          if (fails) throw new Error('Fallo de emisión simulado');
+          return original(...args);
+        });
+        const request = api.request('POST', `/boards/${boardId}/generations`, {
+          token: duena.token,
+        });
+        try {
+          await vi.waitFor(() => expect(started).toBe(true));
+          const generation = await api.app.prisma.generation.findFirstOrThrow({
+            where: { boardId, status: 'CREATING' },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true },
+          });
+          const deleted = await api.request('DELETE', `/generations/${generation.id}`, {
+            token: duena.token,
+          });
+          expect(deleted.status).toBe(204);
+        } finally {
+          release();
+        }
+        expect((await request).status).toBe(404);
+      },
+    );
+
     it('borra el registro y la version congelada, y la descarga deja de existir', async () => {
       const generacion = await api.request('POST', `/boards/${boardId}/generations`, {
         token: duena.token,
@@ -624,6 +667,38 @@ describe('generacion desde la pizarra y auditoria', () => {
         token: duena.token,
       });
       expect(repetido.status).toBe(404);
+    });
+
+    it('dos borrados concurrentes devuelven un 204 y un 404', async () => {
+      const generacion = await api.request('POST', `/boards/${boardId}/generations`, {
+        token: duena.token,
+      });
+      expect(generacion.status).toBe(201);
+      const generationId = generacion.body.id as string;
+      const prisma = api.app.prisma;
+      let requests: Promise<Awaited<ReturnType<Harness['request']>>[]> | undefined;
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM generations WHERE id = ${generationId}::uuid FOR UPDATE`;
+          const path = `/generations/${generationId}`;
+          requests = Promise.all([
+            api.request('DELETE', path, { token: duena.token }),
+            api.request('DELETE', path, { token: duena.token }),
+          ]);
+          // Ambas peticiones ya leyeron el registro y están intentando borrarlo.
+          await vi.waitFor(async () => {
+            const [activity] = await prisma.$queryRaw<{ waiting: number }[]>`
+              SELECT count(*)::int AS waiting FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'
+                AND query LIKE '%generations%' AND query LIKE '%DELETE FROM%'
+            `;
+            expect(activity?.waiting).toBe(2);
+          });
+        });
+        expect((await requests)?.map(({ status }) => status).sort()).toEqual([204, 404]);
+      } finally {
+        await requests;
+      }
     });
   });
 

@@ -103,6 +103,9 @@ $RECYCLE.BIN/
 # Herramientas de asistencia: configuracion de la maquina, no del proyecto.
 .agents/
 .claude/
+/.codex/
+/AGENTS.md
+/CLAUDE.md
 .github/modernize/
 skills-lock.json
 
@@ -131,7 +134,11 @@ docs/
 !/docs/paso-13-estabilizacion-team-ai.md
 !/docs/adr/
 /docs/adr/*
-!/docs/adr/ADR-02[1-6]-*.md
+!/docs/adr/ADR-02[1-7]-*.md
 Plan_2do_Parcial.md
 docs
 
+# Plantillas de documentación incluidas en el ZIP de Flutter.
+!/templates/flutter/docs/
+/templates/flutter/docs/*
+!/templates/flutter/docs/*.md.tpl

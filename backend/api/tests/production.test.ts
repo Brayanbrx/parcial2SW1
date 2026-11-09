@@ -144,8 +144,28 @@ describe('production safeguards', () => {
     expect((await send('/boards/a/assistant/test', token, '192.0.2.1')).statusCode).toBe(200);
     expect((await send('/boards/b/import/test', token, '192.0.2.2')).statusCode).toBe(200);
     expect((await send('/boards/c/team-ai/messages', token, '192.0.2.3')).statusCode).toBe(429);
+    expect((await send('/boards/d/team-ai/transcribe', token, '192.0.2.4')).statusCode).toBe(429);
     const other = await app.tokens.signAccessToken({ userId: 'user-b', email: 'b@example.org' });
     expect((await send('/boards/a/import/test', other, '192.0.2.1')).statusCode).toBe(200);
+  });
+  it('charges transcription against the same work quota as AI messages', async () => {
+    app = await buildApp(loadConfig(base));
+    vi.spyOn(app.prisma.user, 'findUnique').mockResolvedValue({ sessionVersion: 0 } as never);
+    const token = await app.tokens.signAccessToken({
+      userId: 'voice-user',
+      email: 'v@example.org',
+    });
+    const send = () =>
+      app!.inject({
+        method: 'POST',
+        url: '/boards/00000000-0000-4000-8000-000000000001/team-ai/transcribe',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {},
+      });
+    // Invalid input still consumes work quota; the provider must never be called.
+    expect((await send()).statusCode).toBe(400);
+    expect((await send()).statusCode).toBe(400);
+    expect((await send()).statusCode).toBe(429);
   });
   it('readiness returns 503 when the database is unavailable while liveness remains 200', async () => {
     app = await buildApp(loadConfig(base));

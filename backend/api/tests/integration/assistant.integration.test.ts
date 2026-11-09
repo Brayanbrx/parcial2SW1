@@ -13,6 +13,7 @@ describe('asistente', () => {
   let lector: Awaited<ReturnType<Harness['signUp']>>;
   let extrano: Awaited<ReturnType<Harness['signUp']>>;
   let boardId: string;
+  let projectId: string;
 
   const modelo = {
     classes: [
@@ -53,6 +54,7 @@ describe('asistente', () => {
       body: { displayName: 'Ventas' },
     });
     boardId = pizarra.body.id as string;
+    projectId = proyecto.body.id as string;
 
     const invitacion = await api.request('POST', `/projects/${proyecto.body.id}/invites`, {
       token: duena.token,
@@ -71,6 +73,40 @@ describe('asistente', () => {
       body: { instruction, model: modelo },
     });
   }
+
+  it('respeta desactivar y reactivar IA también en las rutas anteriores', async () => {
+    const settings = {
+      enabled: false,
+      solutionMode: 'ON_REQUEST',
+      executionMode: 'PROPOSE_ONLY',
+      reviewMode: 'OFF',
+      aiSource: 'PROVIDERS',
+    };
+    const url = `/projects/${projectId}/ai-settings`;
+    expect((await api.request('PUT', url, { token: duena.token, body: settings })).status).toBe(
+      200,
+    );
+    try {
+      expect((await instruir('crea Producto')).status).toBe(409);
+      const answer = await api.request('POST', `/boards/${boardId}/assistant/question`, {
+        token: lector.token,
+        body: { question: '¿Puedo generar?', model: modelo },
+      });
+      expect(answer.status).toBe(409);
+      expect(answer.body.error.code).toBe('ai_disabled');
+      expect((await instruir('crea Producto', extrano.token)).status).toBe(404);
+    } finally {
+      expect(
+        (
+          await api.request('PUT', url, {
+            token: duena.token,
+            body: { ...settings, enabled: true },
+          })
+        ).status,
+      ).toBe(200);
+    }
+    expect((await instruir('crea Producto')).status).toBe(200);
+  });
 
   it('RF-032 — traduce la instruccion a un lote validado', async () => {
     const respuesta = await instruir('agrega telefono tipo String a Cliente');

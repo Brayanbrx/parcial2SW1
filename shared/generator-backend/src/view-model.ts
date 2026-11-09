@@ -41,6 +41,8 @@ interface DependencyView {
 export interface EntityTemplateView {
   readonly project: GenerationIr['project'];
   readonly entity: IrEntity;
+  readonly entityType: string;
+  readonly jpa: { entity: string; table: string; id: string; column: string };
   /**
    * Lo que la clase Java escribe entre sus llaves.
    *
@@ -72,13 +74,33 @@ export function createProjectView(ir: GenerationIr): object {
 }
 
 export function createEntityView(ir: GenerationIr, entity: IrEntity): EntityTemplateView {
+  // Un import de JPA puede ocultar un tipo del modelo usado en el mismo archivo.
+  const modelTypes = new Set([
+    entity.className,
+    entity.superClassName,
+    ...entity.declaredRelationships.map((relationship) => relationship.targetClassName),
+  ]);
+  const jpaName = (name: string): string =>
+    modelTypes.has(name) ? `jakarta.persistence.${name}` : name;
+
   const toAttributeView = (attribute: IrAttribute): AttributeView => ({
     fieldName: attribute.fieldName,
     javaType: attribute.javaType,
     getterName: `get${upperFirst(attribute.fieldName)}`,
     setterName: `set${upperFirst(attribute.fieldName)}`,
-    columnAnnotation: columnAnnotation(attribute),
+    columnAnnotation: columnAnnotation(attribute, jpaName('Column')),
     primaryKey: attribute.primaryKey,
+  });
+
+  const declaredAttributes = entity.declaredAttributes.map((attribute) => {
+    const view = toAttributeView(attribute);
+    if (attribute.javaImport !== null) {
+      return modelTypes.has(view.javaType) ? { ...view, javaType: attribute.javaImport } : view;
+    }
+    // Los tipos de java.lang también quedan ocultos por clases del mismo paquete.
+    return ir.entities.some((item) => item.className === view.javaType)
+      ? { ...view, javaType: `java.lang.${view.javaType}` }
+      : view;
   });
 
   const attributes: AttributeView[] = entity.attributes.map(toAttributeView);
@@ -90,9 +112,9 @@ export function createEntityView(ir: GenerationIr, entity: IrEntity): EntityTemp
     setterName: `set${upperFirst(relationship.fieldName)}`,
     associationAnnotation:
       relationship.kind === 'MANY_TO_ONE'
-        ? `@ManyToOne(fetch = FetchType.LAZY, optional = ${String(relationship.optional)})`
-        : `@OneToOne(fetch = FetchType.LAZY, optional = ${String(relationship.optional)})`,
-    joinColumnAnnotation: joinColumnAnnotation(relationship),
+        ? `@${jpaName('ManyToOne')}(fetch = ${jpaName('FetchType')}.LAZY, optional = ${String(relationship.optional)})`
+        : `@${jpaName('OneToOne')}(fetch = ${jpaName('FetchType')}.LAZY, optional = ${String(relationship.optional)})`,
+    joinColumnAnnotation: joinColumnAnnotation(relationship, jpaName('JoinColumn')),
     targetClassName: relationship.targetClassName,
     targetGetterName: `get${upperFirst(relationship.targetPrimaryKeyFieldName)}`,
     repositoryFieldName: lowerFirst(relationship.targetRepositoryName),
@@ -143,26 +165,51 @@ export function createEntityView(ir: GenerationIr, entity: IrEntity): EntityTemp
   const declaredFieldNames = new Set(
     entity.declaredRelationships.map((relationship) => relationship.fieldName),
   );
+  const modelImport = `${entityPackagePlaceholder()}.model.${entity.className}`;
+  const repositoryTypeImports = repositoryImports(entity);
+  const serviceTypeImports = serviceImports(entity);
+  const qualifyEntity =
+    entity.className === 'IllegalArgumentException' ||
+    entity.className === entity.primaryKey.javaType ||
+    entity.relationships.some(
+      (relationship) => relationship.targetPrimaryKeyJavaType === entity.className,
+    ) ||
+    [...repositoryTypeImports, ...serviceTypeImports].some(
+      (name) => name !== modelImport && name.endsWith(`.${entity.className}`),
+    );
 
   return {
     project: ir.project,
     entity,
-    declaredAttributes: entity.declaredAttributes.map(toAttributeView),
+    entityType: qualifyEntity
+      ? `${ir.project.packageName}.model.${entity.className}`
+      : entity.className,
+    jpa: {
+      entity: jpaName('Entity'),
+      table: jpaName('Table'),
+      id: jpaName('Id'),
+      column: jpaName('Column'),
+    },
+    declaredAttributes,
     declaredRelationships: relationships.filter((view) => declaredFieldNames.has(view.fieldName)),
     // La estrategia unida es la unica que conserva las columnas de la subclase
     // en su propia tabla y una fila por objeto: la tabla hija comparte la clave
     // primaria de la madre y la fila completa se lee uniendo las dos.
     inheritanceAnnotation: entity.inheritanceRoot
-      ? '@Inheritance(strategy = InheritanceType.JOINED)'
+      ? `@${jpaName('Inheritance')}(strategy = ${jpaName('InheritanceType')}.JOINED)`
       : null,
     primaryKeyJoinAnnotation:
       entity.superClassName === null
         ? null
-        : `@PrimaryKeyJoinColumn(name = "${entity.primaryKey.columnName}")`,
-    entityImports: entityImports(entity),
+        : `@${jpaName('PrimaryKeyJoinColumn')}(name = "${entity.primaryKey.columnName}")`,
+    entityImports: entityImports(entity).filter((name) => !modelTypes.has(name.split('.').at(-1)!)),
     dtoImports: dtoImports(entity),
-    repositoryImports: repositoryImports(entity),
-    serviceImports: serviceImports(entity),
+    repositoryImports: qualifyEntity
+      ? repositoryTypeImports.filter((name) => name !== modelImport)
+      : repositoryTypeImports,
+    serviceImports: qualifyEntity
+      ? serviceTypeImports.filter((name) => name !== modelImport)
+      : serviceTypeImports,
     controllerImports: controllerImports(entity),
     attributes,
     nonPrimaryAttributes: attributes.filter((attribute) => !attribute.primaryKey),
@@ -180,7 +227,7 @@ export function createEntityView(ir: GenerationIr, entity: IrEntity): EntityTemp
   };
 }
 
-function columnAnnotation(attribute: IrAttribute): string {
+function columnAnnotation(attribute: IrAttribute, annotation: string): string {
   const options = [
     `name = "${attribute.columnName}"`,
     `nullable = ${String(attribute.nullable)}`,
@@ -190,16 +237,16 @@ function columnAnnotation(attribute: IrAttribute): string {
     ...(attribute.precision === null ? [] : [`precision = ${attribute.precision}`]),
     ...(attribute.scale === null ? [] : [`scale = ${attribute.scale}`]),
   ];
-  return `@Column(${options.join(', ')})`;
+  return `@${annotation}(${options.join(', ')})`;
 }
 
-function joinColumnAnnotation(relationship: IrRelationship): string {
+function joinColumnAnnotation(relationship: IrRelationship, annotation: string): string {
   const options = [
     `name = "${relationship.columnName}"`,
     `nullable = ${String(relationship.optional)}`,
     ...(relationship.unique ? ['unique = true'] : []),
   ];
-  return `@JoinColumn(${options.join(', ')})`;
+  return `@${annotation}(${options.join(', ')})`;
 }
 
 function validationAnnotations(attribute: IrAttribute): string[] {

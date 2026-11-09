@@ -15,6 +15,13 @@ import {
 } from '@uml/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import {
+  NoSpeechError,
+  ProviderContractError,
+  ProviderUnavailableError,
+  type SpeechPort,
+} from '@uml/ai';
+import { withRequestCancellation } from '../../lib/request-cancellation.js';
 import type { Config } from '../../config.js';
 import type { PublishTeamEvent } from './events.js';
 import type { TeamWorker } from './worker.js';
@@ -30,6 +37,11 @@ import {
 } from './persistence.js';
 
 const boardParams = z.object({ boardId: z.string().uuid() });
+/** Audio en base64: WAV de 16 kHz que arma el navegador; ~4 min caben en el límite. */
+const transcribeBody = z
+  .object({ audio: z.string().min(1).max(8_000_000), mediaType: z.string().min(1).max(100) })
+  .strict();
+const TRANSCRIBE_BODY_LIMIT = 8_000_000 + 1024;
 const resourceParams = boardParams.extend({ id: z.string().uuid() });
 const projectParams = z.object({ projectId: z.string().uuid() });
 const querySchema = z
@@ -81,7 +93,24 @@ export async function teamAiRoutes(
     config,
     publish,
     worker,
-  }: { config: Config; publish: PublishTeamEvent; worker?: TeamWorker | undefined },
+    localModel = null,
+    speech,
+    localSpeech,
+    localSpeechModel = null,
+    speechTimeoutMs = 120_000,
+  }: {
+    config: Config;
+    publish: PublishTeamEvent;
+    worker?: TeamWorker | undefined;
+    /** Modelo local configurado en el servidor; null si el proyecto no puede elegirlo. */
+    localModel?: string | null;
+    /** Cadena de voz de los proveedores, para transcribir grabaciones del panel. */
+    speech?: SpeechPort | undefined;
+    /** Whisper local seguido de los proveedores; se usa con «Modelo local». */
+    localSpeech?: SpeechPort | undefined;
+    localSpeechModel?: string | null;
+    speechTimeoutMs?: number;
+  },
 ): Promise<void> {
   app.addHook('preHandler', app.authenticate);
   const boardTransaction = <T>(
@@ -93,7 +122,7 @@ export async function teamAiRoutes(
   app.get('/projects/:projectId/ai-settings', async (request) => {
     const { projectId } = projectParams.parse(request.params);
     const { userId } = currentUser(request);
-    return app.prisma.$transaction(async (tx) => {
+    const settings = await app.prisma.$transaction(async (tx) => {
       const project = await lockProject(tx, projectId, userId);
       return (
         (await tx.projectAiSettings.findUnique({ where: { projectId } })) ?? {
@@ -103,10 +132,16 @@ export async function teamAiRoutes(
         }
       );
     });
+    return { ...settings, localModel, localSpeechModel, speechTimeoutMs };
   });
   app.put('/projects/:projectId/ai-settings', async (request) => {
     const { projectId } = projectParams.parse(request.params);
     const body = aiSettingsValuesSchema.parse(request.body);
+    if (body.aiSource === 'LOCAL' && localModel === null)
+      throw badRequest(
+        'local_ai_unavailable',
+        'Este servidor no tiene un modelo local configurado.',
+      );
     const { userId } = currentUser(request);
     let changed = false;
     const settings = await app.prisma.$transaction(async (tx) => {
@@ -126,8 +161,55 @@ export async function teamAiRoutes(
       });
     });
     if (changed) publish({ type: 'ai.settings', projectId });
-    return settings;
+    return { ...settings, localModel, localSpeechModel, speechTimeoutMs };
   });
+
+  /** Transcribe una grabación del panel. Con «Modelo local» prueba primero Whisper local. */
+  app.post(
+    '/boards/:boardId/team-ai/transcribe',
+    { bodyLimit: TRANSCRIBE_BODY_LIMIT },
+    async (request, reply) => {
+      const { boardId } = boardParams.parse(request.params);
+      const body = transcribeBody.parse(request.body);
+      const { userId } = currentUser(request);
+      if (!speech) throw new HttpError(503, 'ai_provider_unavailable', 'No hay transcripción.');
+      // Solo se comprueba el acceso: la transacción no se mantiene mientras se transcribe.
+      const settings = await app.prisma.$transaction(async (tx) => {
+        const board = await tx.board.findUnique({
+          where: { id: boardId },
+          select: { projectId: true },
+        });
+        if (!board) throw notFound();
+        await lockProject(tx, board.projectId, userId);
+        return tx.projectAiSettings.findUnique({ where: { projectId: board.projectId } });
+      });
+      if (settings?.enabled === false)
+        throw new HttpError(409, 'ai_disabled', 'El OWNER desactivó la IA en este proyecto.');
+      const port = settings?.aiSource === 'LOCAL' && localSpeech ? localSpeech : speech;
+      try {
+        const { text } = await withRequestCancellation(request, reply, (signal) =>
+          port.transcribe({
+            audio: Buffer.from(body.audio, 'base64'),
+            mediaType: body.mediaType,
+            signal,
+          }),
+        );
+        return { text };
+      } catch (error) {
+        if (error instanceof NoSpeechError)
+          throw new HttpError(422, 'no_speech', 'No se reconocieron palabras en el audio.');
+        if (error instanceof ProviderUnavailableError)
+          throw new HttpError(
+            503,
+            'ai_provider_unavailable',
+            `La transcripción no está disponible ahora mismo (${error.provider}).`,
+          );
+        if (error instanceof ProviderContractError)
+          throw new HttpError(502, 'ai_provider_contract', `${error.provider}: ${error.message}`);
+        throw error;
+      }
+    },
+  );
 
   app.post('/boards/:boardId/team-ai/messages', async (request, reply) => {
     const { boardId } = boardParams.parse(request.params);

@@ -1,5 +1,6 @@
 import { hasErrors, type ValidationIssue } from '@uml/contracts';
-import { useCallback, useEffect, useState } from 'react';
+import type { HocuspocusProvider } from '@hocuspocus/provider';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api, ApiError, downloadGeneration, type GenerationSummary } from '../../lib/api.js';
 
 /**
@@ -17,12 +18,17 @@ export function GenerationPanel({
   boardId,
   issues,
   canWrite,
+  provider,
+  connected,
 }: {
   readonly boardId: string;
   readonly issues: readonly ValidationIssue[];
   readonly canWrite: boolean;
+  readonly provider: HocuspocusProvider | null;
+  readonly connected: boolean;
 }): React.JSX.Element {
   const [historial, setHistorial] = useState<readonly GenerationSummary[]>([]);
+  const consultaHistorial = useRef<AbortController | null>(null);
   const [ultima, setUltima] = useState<string | null>(null);
   const [estado, setEstado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,23 +38,51 @@ export function GenerationPanel({
   const [ultimoMobile, setUltimoMobile] = useState(false);
 
   const bloqueado = hasErrors(issues);
+  const estaSincronizado = useCallback(
+    () =>
+      connected && !!provider?.synced && provider.isAuthenticated && !provider.hasUnsyncedChanges,
+    [connected, provider],
+  );
+  const observarSincronizacion = useCallback(
+    (change: () => void) => {
+      provider?.on('unsyncedChanges', change);
+      provider?.on('synced', change);
+      return () => {
+        provider?.off('unsyncedChanges', change);
+        provider?.off('synced', change);
+      };
+    },
+    [provider],
+  );
+  const sincronizado = useSyncExternalStore(observarSincronizacion, estaSincronizado);
 
   const refrescar = useCallback(() => {
+    consultaHistorial.current?.abort();
+    const consulta = new AbortController();
+    consultaHistorial.current = consulta;
     api
-      .listGenerations(boardId)
-      .then(setHistorial)
-      .catch((causa: unknown) =>
+      .listGenerations(boardId, consulta.signal)
+      .then((generaciones) => {
+        if (!consulta.signal.aborted) setHistorial(generaciones);
+      })
+      .catch((causa: unknown) => {
+        if (consulta.signal.aborted) return;
         setError(
           causa instanceof Error
             ? `No se pudo cargar el historial: ${causa.message}`
             : 'No se pudo cargar el historial.',
-        ),
-      );
+        );
+      });
   }, [boardId]);
 
-  useEffect(refrescar, [refrescar]);
+  useEffect(() => {
+    refrescar();
+    return () => consultaHistorial.current?.abort();
+  }, [refrescar]);
 
   const generar = useCallback(async () => {
+    // El volcado HTTP solo contiene cambios que el servidor colaborativo recibió.
+    if (!canWrite || bloqueado || !estaSincronizado()) return;
     setTrabajando(true);
     setError(null);
     setEstado(null);
@@ -77,7 +111,7 @@ export function GenerationPanel({
     } finally {
       setTrabajando(false);
     }
-  }, [boardId, basePackage, includeMobile, refrescar]);
+  }, [boardId, basePackage, includeMobile, refrescar, canWrite, bloqueado, estaSincronizado]);
 
   const descargar = useCallback(
     async (generationId: string, target: 'spring' | 'mobile' = 'spring') => {
@@ -174,11 +208,17 @@ export function GenerationPanel({
         type="button"
         className="principal"
         data-testid="generar"
-        disabled={!canWrite || bloqueado || trabajando}
+        disabled={!canWrite || bloqueado || trabajando || !sincronizado}
         onClick={() => void generar()}
       >
         {trabajando ? 'Generando…' : 'Generar proyecto'}
       </button>
+
+      {canWrite && !sincronizado && (
+        <p className="aviso" role="status">
+          Esperando a que la pizarra se sincronice para generar.
+        </p>
+      )}
 
       {bloqueado && (
         <p className="aviso" data-testid="generacion-bloqueada">

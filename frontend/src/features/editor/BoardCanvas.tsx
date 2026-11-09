@@ -276,6 +276,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         const target = event.target;
         if (!(target instanceof Element)) return;
+        // La edición sobre el diagrama tiene sus propias teclas: escribir un
+        // espacio o confirmar con Enter no debe seleccionar la tarjeta.
+        if (target.closest('input, textarea, select, button, [data-atributo]')) return;
 
         const node = target.closest<HTMLElement>('.react-flow__node[data-id]');
         if (node !== null) {

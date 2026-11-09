@@ -1,6 +1,7 @@
 import { semanticModelSchema } from '@uml/contracts';
 import { validateModel } from '@uml/domain-core';
 import {
+  NoSpeechError,
   ProviderContractError,
   ProviderUnavailableError,
   createAiPorts,
@@ -67,6 +68,7 @@ export async function aiRoutes(
 
     const board = await findBoard(app, boardId);
     await requireWriteAccess(app.prisma, board.projectId, userId);
+    await requireEnabledAi(app, board.projectId);
 
     const { proposal, usage } = await withRequestCancellation(request, reply, (signal) =>
       conProveedor(() =>
@@ -113,6 +115,7 @@ export async function aiRoutes(
     const board = await findBoard(app, boardId);
     // Solo lectura: un VIEWER puede consultar al asistente sin modificar.
     await requireMembership(app.prisma, board.projectId, userId);
+    await requireEnabledAi(app, board.projectId);
 
     const issues = validateModel(body.model).map((hallazgo) => ({
       code: hallazgo.code,
@@ -173,6 +176,9 @@ async function conProveedor<T>(llamar: () => Promise<T>): Promise<T> {
   try {
     return await llamar();
   } catch (error) {
+    if (error instanceof NoSpeechError) {
+      throw new HttpError(422, 'no_speech', 'No se reconocieron palabras en el audio.');
+    }
     if (error instanceof ProviderUnavailableError) {
       throw new HttpError(
         503,
@@ -184,6 +190,13 @@ async function conProveedor<T>(llamar: () => Promise<T>): Promise<T> {
       throw new HttpError(502, 'ai_provider_contract', `${error.provider}: ${error.message}`);
     }
     throw error;
+  }
+}
+
+async function requireEnabledAi(app: FastifyInstance, projectId: string): Promise<void> {
+  const settings = await app.prisma.projectAiSettings.findUnique({ where: { projectId } });
+  if (settings?.enabled === false) {
+    throw new HttpError(409, 'ai_disabled', 'El OWNER desactivó la IA en este proyecto.');
   }
 }
 

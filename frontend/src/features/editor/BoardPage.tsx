@@ -1,6 +1,6 @@
 import { hasErrors, type Position, type RelationshipKind } from '@uml/contracts';
 import { ReactFlowProvider } from '@xyflow/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import {
   api,
@@ -21,17 +21,28 @@ import { ValidationPanel } from './ValidationPanel.js';
 import { gui, makeBatch, newId, type CommandBody } from './commands.js';
 import { isRelationshipTool, relationshipKindFor, type EditorTool } from './editor-tools.js';
 import { useBoardDocument } from './useBoardDocument.js';
+import { CanvasEditingContext } from './canvas-editing.js';
+import { undoForDeletion, type UndoDeletion } from './undo-delete.js';
+import { UndoToast } from './UndoToast.js';
 import { ThemeSelect } from '../../components/ThemeProvider.js';
 import { SoftwareGuide } from '../help/SoftwareGuide.js';
 import { cachedBoard, forgetBoard, type OfflineBoard } from '../../lib/offline.js';
+import { IconoCodigo, IconoIA, IconoImportar } from '../../components/icons.js';
+import { ACTIVIDAD_INICIAL, IA_EQUIPO, type ActividadIa } from '../team-assistant/identity.js';
 
 type Herramienta = 'asistente' | 'importar' | 'generar';
 
-const HERRAMIENTAS: readonly (readonly [Herramienta, string])[] = [
-  ['asistente', 'Asistente'],
-  ['importar', 'Importar'],
-  ['generar', 'Generar'],
+const HERRAMIENTAS: readonly (readonly [Herramienta, string, React.ReactNode])[] = [
+  ['asistente', 'Conversación', <IconoIA key="i" size={15} />],
+  ['importar', 'Importar', <IconoImportar key="i" size={15} />],
+  ['generar', 'Generar', <IconoCodigo key="i" size={15} />],
 ];
+
+const CLAVE_PROPIEDADES = 'uml.propiedades-plegadas.v1';
+
+function textoNuevos(cantidad: number): string {
+  return cantidad === 1 ? '1 mensaje nuevo' : `${cantidad} mensajes nuevos`;
+}
 
 const ESTADO_CONEXION = {
   conectando: 'Conectando…',
@@ -217,6 +228,30 @@ function BoardSession({
   // se quedaba con unos centimetros y todas con su propia barra de
   // desplazamiento, asi que ninguna se podia usar de verdad.
   const [herramienta, setHerramienta] = useState<Herramienta>('asistente');
+  const [actividadIa, setActividadIa] = useState<ActividadIa>(ACTIVIDAD_INICIAL);
+  const [mensajesNuevos, setMensajesNuevos] = useState(0);
+  // El último borrado hecho desde esta pantalla, mientras se puede deshacer.
+  const [deshacer, setDeshacer] = useState<(UndoDeletion & { readonly clave: number }) | null>(
+    null,
+  );
+  // Preferencia de cada persona: plegar Propiedades deja la columna a la conversación.
+  const [propiedadesPlegadas, setPropiedadesPlegadas] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_PROPIEDADES) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const alternarPropiedades = useCallback(() => {
+    setPropiedadesPlegadas((plegadas) => {
+      try {
+        localStorage.setItem(CLAVE_PROPIEDADES, plegadas ? '0' : '1');
+      } catch {
+        // Sin almacenamiento, la preferencia dura lo que la pestaña.
+      }
+      return !plegadas;
+    });
+  }, []);
 
   useEffect(() => {
     const updateCount = (): void => setAuditoriasPendientes(pendingAuditCount(userId));
@@ -238,16 +273,33 @@ function BoardSession({
     (...commands: readonly CommandBody[]) => {
       if (user === null) return;
 
+      // Se calcula antes de aplicar: después ya no queda qué recuperar.
+      const recuperar = undoForDeletion(documento.state, commands);
       const rechazado = documento.dispatch(makeBatch(user.id, ...commands));
+      const aplicado = rechazado === null || rechazado.length === 0;
       // RA-03: si el lote se rechaza no cambia nada, y hay que decir por que.
-      setRechazo(
-        rechazado === null || rechazado.length === 0
-          ? null
-          : (rechazado[0]?.message ?? 'El cambio no se pudo aplicar.'),
-      );
+      setRechazo(aplicado ? null : (rechazado[0]?.message ?? 'El cambio no se pudo aplicar.'));
+      if (aplicado && recuperar !== null) setDeshacer({ ...recuperar, clave: Date.now() });
     },
     [documento, user],
   );
+  const edicionLienzo = useMemo(() => ({ run }), [run]);
+
+  const cerrarDeshacer = useCallback(() => setDeshacer(null), []);
+  const deshacerBorrado = useCallback(() => {
+    if (deshacer === null || user === null) return;
+    setDeshacer(null);
+    // Directo al documento y no por `run`: deshacer no ofrece a su vez deshacer.
+    const rechazado = documento.dispatch(makeBatch(user.id, ...deshacer.commands));
+    if (rechazado !== null && rechazado.length > 0) {
+      setRechazo(
+        `No se pudo deshacer: ${rechazado[0]?.message ?? 'el diagrama cambió mientras tanto.'}`,
+      );
+      return;
+    }
+    setRechazo(null);
+    if (deshacer.selectId !== null) setSelectedId(deshacer.selectId);
+  }, [deshacer, documento, user, setSelectedId]);
 
   // Se depende de la funcion, que es estable, y no del objeto del documento, que
   // cambia con cada actualizacion del modelo.
@@ -311,6 +363,7 @@ function BoardSession({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       // A modal owns keyboard interaction, including Escape and tool shortcuts.
       if (target?.closest('dialog[open], [data-tour-ui]')) return;
@@ -322,6 +375,20 @@ function BoardSession({
       ) {
         return;
       }
+
+      if (
+        deshacer !== null &&
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLocaleLowerCase() === 'z'
+      ) {
+        event.preventDefault();
+        deshacerBorrado();
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
 
       if (event.key === 'Delete' && selectedId !== null && canWrite) {
         const esClase = documento.state.semantic.classes.some((item) => item.id === selectedId);
@@ -354,7 +421,7 @@ function BoardSession({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [canWrite, chooseTool, documento.state.semantic, run, selectedId]);
+  }, [canWrite, chooseTool, documento.state.semantic, run, selectedId, deshacer, deshacerBorrado]);
 
   useEffect(() => {
     if (
@@ -455,7 +522,7 @@ function BoardSession({
             onClick={() => setPanelVisible((visible) => !visible)}
           >
             <span className="icono-panel icono-panel-derecho" aria-hidden="true" />
-            Propiedades
+            Panel
           </button>
         </div>
 
@@ -523,6 +590,36 @@ function BoardSession({
           ))}
         </ul>
 
+        {/* La IA se muestra como una integrante más del equipo, pero fuera de
+            `presencia`: no es una conexión Yjs y su estado sale del feed. */}
+        <button
+          type="button"
+          className={`colaborador-ia estado-${actividadIa.estado}`}
+          data-testid="colaborador-ia"
+          aria-label={`${IA_EQUIPO.nombre}: ${actividadIa.detalle}.${mensajesNuevos > 0 ? ` ${textoNuevos(mensajesNuevos)}.` : ''} Abrir conversación`}
+          title={`${IA_EQUIPO.nombre} · ${actividadIa.detalle}`}
+          onClick={() => {
+            setPanelVisible(true);
+            setHerramienta('asistente');
+            requestAnimationFrame(() =>
+              document.querySelector<HTMLElement>('[data-testid="entrada-asistente"]')?.focus(),
+            );
+          }}
+        >
+          <span className="colaborador-ia-avatar" aria-hidden="true">
+            <IconoIA size={15} />
+            {mensajesNuevos > 0 && (
+              <span className="insignia-nuevos" data-testid="ia-mensajes-nuevos">
+                {mensajesNuevos > 9 ? '9+' : mensajesNuevos}
+              </span>
+            )}
+          </span>
+          <span className="colaborador-ia-texto" aria-hidden="true">
+            <b>IA</b>
+            <small>{actividadIa.detalle}</small>
+          </span>
+        </button>
+
         {/* Cerrar sesion desde el editor: es donde se pasa el tiempo, y tener
             que volver a la lista de proyectos para salir invita a dejar la
             sesion abierta en una maquina compartida. */}
@@ -569,34 +666,36 @@ function BoardSession({
           />
         </div>
 
-        <ReactFlowProvider>
-          <BoardCanvas
-            state={documento.state}
-            issues={documento.issues}
-            participants={documento.participants}
-            selectedId={selectedId}
-            revealClassId={classToRevealId}
-            activeTool={activeTool}
-            relationshipSourceId={relationshipSourceId}
-            canWrite={canWrite}
-            onSelect={setSelectedId}
-            onClassClick={selectClassForTool}
-            onCancelTool={() => chooseTool('SELECT')}
-            onCreateClass={createClassAt}
-            onMove={(classId, position, size) => run(gui.moveClass(classId, position, size))}
-            onConnect={(origen, destino) =>
-              createRelationship(
-                origen,
-                destino,
-                isRelationshipTool(activeTool) ? relationshipKindFor(activeTool) : 'ASSOCIATION',
-              )
-            }
-          />
-        </ReactFlowProvider>
+        <CanvasEditingContext.Provider value={edicionLienzo}>
+          <ReactFlowProvider>
+            <BoardCanvas
+              state={documento.state}
+              issues={documento.issues}
+              participants={documento.participants}
+              selectedId={selectedId}
+              revealClassId={classToRevealId}
+              activeTool={activeTool}
+              relationshipSourceId={relationshipSourceId}
+              canWrite={canWrite}
+              onSelect={setSelectedId}
+              onClassClick={selectClassForTool}
+              onCancelTool={() => chooseTool('SELECT')}
+              onCreateClass={createClassAt}
+              onMove={(classId, position, size) => run(gui.moveClass(classId, position, size))}
+              onConnect={(origen, destino) =>
+                createRelationship(
+                  origen,
+                  destino,
+                  isRelationshipTool(activeTool) ? relationshipKindFor(activeTool) : 'ASSOCIATION',
+                )
+              }
+            />
+          </ReactFlowProvider>
+        </CanvasEditingContext.Provider>
 
         <div id="panel-editor" className="paneles" hidden={!panelVisible}>
           <div className="pestanas-panel" role="tablist" aria-label="Herramientas auxiliares">
-            {HERRAMIENTAS.map(([clave, etiqueta], indice) => (
+            {HERRAMIENTAS.map(([clave, etiqueta, icono], indice) => (
               <button
                 key={clave}
                 id={`pestana-${clave}`}
@@ -626,7 +725,20 @@ function BoardSession({
                   document.getElementById(`pestana-${siguiente}`)?.focus();
                 }}
               >
-                {etiqueta}
+                {icono}
+                <span>{etiqueta}</span>
+                {clave === 'asistente' && mensajesNuevos > 0 && (
+                  <>
+                    <span
+                      className="insignia-nuevos"
+                      data-testid="mensajes-nuevos"
+                      aria-hidden="true"
+                    >
+                      {mensajesNuevos > 9 ? '9+' : mensajesNuevos}
+                    </span>
+                    <span className="visualmente-oculto">, {textoNuevos(mensajesNuevos)}</span>
+                  </>
+                )}
               </button>
             ))}
           </div>
@@ -653,6 +765,9 @@ function BoardSession({
                   state={documento.state}
                   canWrite={canWrite}
                   apply={documento.dispatch}
+                  participants={documento.participants}
+                  onActivity={setActividadIa}
+                  onUnread={setMensajesNuevos}
                 />
               )}
             </div>
@@ -677,7 +792,13 @@ function BoardSession({
               aria-labelledby="pestana-generar"
               hidden={herramienta !== 'generar'}
             >
-              <GenerationPanel boardId={board.id} issues={documento.issues} canWrite={canWrite} />
+              <GenerationPanel
+                boardId={board.id}
+                issues={documento.issues}
+                canWrite={canWrite}
+                provider={documento.provider}
+                connected={!offline && documento.status === 'conectado'}
+              />
             </div>
           </div>
 
@@ -687,16 +808,29 @@ function BoardSession({
             canWrite={canWrite}
             run={run}
             onSelect={setSelectedId}
+            collapsed={propiedadesPlegadas}
+            onToggleCollapsed={alternarPropiedades}
           />
-          <ValidationPanel issues={documento.issues} onSelect={setSelectedId} />
         </div>
       </div>
+
+      <UndoToast aviso={deshacer} onUndo={deshacerBorrado} onClose={cerrarDeshacer} />
 
       <footer className="barra-estado">
         <span className="dato">{documento.state.semantic.classes.length} clases</span>
         <span className="dato">{documento.state.semantic.relationships.length} relaciones</span>
 
         <span className="separa" />
+
+        <ValidationPanel
+          issues={documento.issues}
+          onSelect={(elementId) => {
+            // Ir al hallazgo es para corregirlo: se muestra lo necesario para hacerlo.
+            setSelectedId(elementId);
+            setPanelVisible(true);
+            setPropiedadesPlegadas(false);
+          }}
+        />
 
         {/* El mismo criterio que el panel de validacion, en el sitio donde se
             mira sin pensar: los errores bloquean generar, no editar. */}

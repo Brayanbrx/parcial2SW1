@@ -3,6 +3,7 @@ import type { CommandBatch } from '@uml/contracts';
 import { readBoardState } from '@uml/yjs-adapter';
 import * as Y from 'yjs';
 import { BoardDrafts } from '../src/features/editor/board-drafts.js';
+import { gui, makeBatch } from '../src/features/editor/commands.js';
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -142,6 +143,47 @@ describe('copia local del editor', () => {
     expect(readBoardState(remote).semantic.classes).toHaveLength(0);
     doc.destroy();
     remote.destroy();
+  });
+
+  it('libera el borrador ya confirmado sin necesitar otra ranura cuando se agotó la cuota', () => {
+    const storage = new MemoryStorage();
+    const local = new Y.Doc();
+    const drafts = new BoardDrafts(storage, 'ana', 'ventas');
+    drafts.apply(local, createClass('Confirmada'));
+    drafts.snapshot(local);
+    const server = new Y.Doc();
+    Y.applyUpdate(server, Y.encodeStateAsUpdate(local));
+    const save = storage.setItem.bind(storage);
+    storage.setItem = (key, value) => {
+      if (storage.length >= 2 && storage.getItem(key) === null) {
+        throw new DOMException('Cuota agotada', 'QuotaExceededError');
+      }
+      save(key, value);
+    };
+
+    const reopened = new BoardDrafts(storage, 'ana', 'ventas');
+    expect(reopened.restore(server)).toBe(false);
+    expect(storage.length).toBe(1);
+    expect(reopened.apply(server, createClass('Nueva')).applied).toBe(true);
+    expect(readBoardState(server).semantic.classes).toHaveLength(2);
+    local.destroy();
+    server.destroy();
+  });
+
+  it('recupera un borrado pendiente aunque los vectores de estado coincidan', () => {
+    const storage = new MemoryStorage();
+    const local = new Y.Doc();
+    const server = new Y.Doc();
+    const drafts = new BoardDrafts(storage, 'ana', 'ventas');
+    drafts.apply(local, createClass('Borrada'));
+    Y.applyUpdate(server, Y.encodeStateAsUpdate(local));
+    const classId = readBoardState(local).semantic.classes[0]!.id;
+    drafts.apply(local, makeBatch('ana', gui.deleteClass(classId)));
+    expect(Y.encodeStateVector(server)).toEqual(Y.encodeStateVector(local));
+    expect(new BoardDrafts(storage, 'ana', 'ventas').restore(server)).toBe(true);
+    expect(readBoardState(server).semantic.classes).toHaveLength(0);
+    local.destroy();
+    server.destroy();
   });
 
   it('recupera cambios al cerrar antes de sincronizar y fusiona los del servidor', () => {

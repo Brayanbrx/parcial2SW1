@@ -36,6 +36,8 @@ export const AI_REJECT_REASONS = ['USER', 'STALE', 'APPLY_FAILED'] as const;
 export const AI_SOLUTION_MODES = ['HINTS_ONLY', 'ON_REQUEST'] as const;
 export const AI_EXECUTION_MODES = ['PROPOSE_ONLY', 'AUTO_SAFE_VOICE', 'AUTO_SAFE_ALL'] as const;
 export const AI_REVIEW_MODES = ['OFF', 'ON_DEMAND', 'ON_ISSUES'] as const;
+/** PROVIDERS usa la cadena de nube; LOCAL prueba primero el modelo instalado y cae a la nube. */
+export const AI_SOURCES = ['PROVIDERS', 'LOCAL'] as const;
 export const TEAM_AI_EVENT_TYPES = [
   'team.message',
   'team.update',
@@ -168,6 +170,7 @@ export const aiSettingsValuesSchema = z
     solutionMode: z.enum(AI_SOLUTION_MODES),
     executionMode: z.enum(AI_EXECUTION_MODES),
     reviewMode: z.enum(AI_REVIEW_MODES),
+    aiSource: z.enum(AI_SOURCES),
   })
   .strict();
 export type AiSettingsValues = z.infer<typeof aiSettingsValuesSchema>;
@@ -176,11 +179,18 @@ export const DEFAULT_AI_SETTINGS: Readonly<AiSettingsValues> = Object.freeze({
   solutionMode: 'ON_REQUEST',
   executionMode: 'AUTO_SAFE_VOICE',
   reviewMode: 'ON_ISSUES',
+  aiSource: 'PROVIDERS',
 });
 export const projectAiSettingsSchema = aiSettingsValuesSchema
   .extend({
     projectId: idSchema,
     updatedAt: timestampSchema,
+    /** Lo informa la API desde su configuración; null si el servidor no tiene modelo local. */
+    localModel: z.string().trim().min(1).max(200).nullable().optional(),
+    /** Whisper local del servidor; con «Modelo local» la voz se transcribe con él. */
+    localSpeechModel: z.string().trim().min(1).max(200).nullable().optional(),
+    /** Plazo total de la cadena de voz del servidor, para coordinar el cliente. */
+    speechTimeoutMs: z.number().int().positive().optional(),
   })
   .strict();
 export type ProjectAiSettings = z.infer<typeof projectAiSettingsSchema>;

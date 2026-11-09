@@ -27,6 +27,8 @@ export function createSpeechSession(
     error(value: string | null): void;
     complete(value: string): void;
   },
+  /** Espera tras Parar; la transcripción en el servidor necesita más que el navegador. */
+  options: { stopTimeoutMs?: number } = {},
 ) {
   let current: SpeechRecognitionLike | null = null;
   let active = false;
@@ -48,7 +50,7 @@ export function createSpeechSession(
     if (previous) previous.onresult = previous.onerror = previous.onend = null;
     return previous;
   };
-  const finish = () => {
+  const finish = (failed = false) => {
     if (phase === 'idle') return;
     active = false;
     clear();
@@ -59,7 +61,7 @@ export function createSpeechSession(
       /* Ya puede estar desconectado. */
     }
     setPhase('idle');
-    callbacks.complete(text);
+    if (!failed || text.trim()) callbacks.complete(text);
   };
   const begin = () => {
     if (!active) return;
@@ -125,7 +127,12 @@ export function createSpeechSession(
         return;
       }
       // Plazo solo después de una parada explícita, nunca límite del dictado.
-      timer = setTimeout(finish, 3000);
+      timer = setTimeout(() => {
+        callbacks.error(
+          'La transcripción tardó demasiado. Conservamos el texto recibido; vuelve a dictar la parte pendiente.',
+        );
+        finish(true);
+      }, options.stopTimeoutMs ?? 3000);
       try {
         current.stop();
       } catch {
@@ -145,6 +152,10 @@ export function createSpeechSession(
       callbacks.text('');
       callbacks.error(null);
       setPhase('idle');
+    },
+    interrupt() {
+      // Corta la captura sin esperar otro resultado. El texto ya disponible queda editable.
+      finish();
     },
   };
 }

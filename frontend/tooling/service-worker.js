@@ -8,6 +8,13 @@ self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
 });
 
+// Only on explicit request from an open tab («Hay una versión nueva →
+// Actualizar»). The tab reloads as soon as this worker takes control, and the
+// other tabs are told to reload, so no page keeps running mixed builds.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
+});
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {

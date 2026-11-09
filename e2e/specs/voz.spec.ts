@@ -7,6 +7,7 @@ interface SpeechControl {
   starts: number;
   stops: number;
   aborts: number;
+  endOnStop: boolean;
   result(text: string): void;
   end(): void;
   error(code: string): void;
@@ -21,6 +22,7 @@ async function abrirAsistente(page: Page, handler?: (turn: MockTurn) => Promise<
       starts: 0,
       stops: 0,
       aborts: 0,
+      endOnStop: true,
       result(text) {
         engines.at(-1)?.onresult?.({ results: [[{ transcript: text }]] });
       },
@@ -44,7 +46,7 @@ async function abrirAsistente(page: Page, handler?: (turn: MockTurn) => Promise<
       }
       stop() {
         control.stops++;
-        queueMicrotask(() => this.onend?.());
+        if (control.endOnStop) queueMicrotask(() => this.onend?.());
       }
       abort() {
         control.aborts++;
@@ -90,6 +92,29 @@ async function voz(page: Page, action: 'result' | 'end' | 'error', text = '') {
     { action, text },
   );
 }
+
+test('el plazo agotado avisa, conserva el borrador y los parciales y descarta resultados tardíos', async ({
+  page,
+}) => {
+  const calls = await abrirAsistente(page);
+  await page.evaluate(() => {
+    (window as unknown as { __speechTest: SpeechControl }).__speechTest.endOnStop = false;
+  });
+  const input = page.getByTestId('entrada-asistente');
+  await input.fill('No borres Cliente.');
+  await page.getByTestId('dictar').click();
+  await page.getByTestId('dictar').click();
+  await expect(page.getByText(/La transcripción tardó demasiado/)).toBeVisible();
+  await expect(input).toHaveValue('No borres Cliente.');
+  await voz(page, 'result', 'tardío');
+  await expect(input).toHaveValue('No borres Cliente.');
+  await page.getByTestId('dictar').click();
+  await voz(page, 'result', 'agrega correo');
+  await page.getByTestId('dictar').click();
+  await expect(page.getByText(/La transcripción tardó demasiado/)).toBeVisible();
+  await expect(input).toHaveValue('No borres Cliente. agrega correo');
+  expect(calls).toHaveLength(0);
+});
 
 test('al agotar el contexto se revisa la solicitud completa sin descartar instrucciones ni gastar otra llamada', async ({
   page,

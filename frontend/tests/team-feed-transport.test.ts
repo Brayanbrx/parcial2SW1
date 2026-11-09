@@ -114,6 +114,24 @@ describe('recuperación del feed de equipo', () => {
     await transport.refresh();
     expect(loadPage.mock.calls.length).toBeGreaterThan(before + 1);
   });
+  it('con el panel oculto no sondea, pero un aviso válido trae los cambios', async () => {
+    vi.useFakeTimers();
+    const { transport, loadPage, loadSettings } = setup(
+      vi.fn(async () => page([message('CANCELLED', 1)])),
+    );
+    transport.acceptEvent('bad json');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(loadPage).not.toHaveBeenCalled();
+
+    transport.acceptEvent(event);
+    await transport.refresh(true);
+    expect(transport.snapshot().messages[0]?.status).toBe('CANCELLED');
+    expect(loadSettings).toHaveBeenCalled();
+    const after = loadPage.mock.calls.length;
+    // Atender el aviso no deja un sondeo encendido mientras siga oculto.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(loadPage).toHaveBeenCalledTimes(after);
+  });
   it('ignora eventos inválidos, ajenos y estados anunciados sin persistencia', async () => {
     const { transport, loadPage } = setup(vi.fn(async () => page([message('QUEUED')])));
     transport.setVisible(true);
@@ -144,6 +162,49 @@ describe('recuperación del feed de equipo', () => {
     expect(loadPage.mock.calls.at(-1)?.[0]).toBe('cursor');
     expect(transport.snapshot().messages[0]?.status).toBe('CANCELLED');
   });
+  it('atiende un aviso recibido mientras falla otra consulta con el panel oculto', async () => {
+    const { transport, loadPage } = setup(vi.fn(async () => page([message('QUEUED')])));
+    await transport.refresh(true);
+    let rejectPage!: (error: Error) => void;
+    loadPage.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectPage = reject;
+        }),
+    );
+    loadPage.mockResolvedValueOnce(page([message('CANCELLED', 1)], 'updated'));
+
+    const pending = transport.refresh(true);
+    transport.acceptEvent(event);
+    rejectPage(new Error('offline'));
+    await pending;
+
+    expect(loadPage).toHaveBeenCalledTimes(3);
+    expect(transport.snapshot().messages[0]?.status).toBe('CANCELLED');
+  });
+  it('atiende un aviso en cola aunque el panel se oculte antes de procesarlo', async () => {
+    const { transport, loadPage } = setup(vi.fn(async () => page([message('QUEUED')])));
+    transport.setVisible(true);
+    await transport.refresh();
+    const before = loadPage.mock.calls.length;
+    let resolvePage!: (value: TeamFeedPage) => void;
+    loadPage.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePage = resolve;
+        }),
+    );
+    loadPage.mockResolvedValueOnce(page([message('CANCELLED', 1)], 'updated'));
+
+    const pending = transport.refresh();
+    transport.acceptEvent(event);
+    transport.setVisible(false);
+    resolvePage(page([message('QUEUED')]));
+    await pending;
+
+    expect(loadPage).toHaveBeenCalledTimes(before + 2);
+    expect(transport.snapshot().messages[0]?.status).toBe('CANCELLED');
+  });
   it('aborta al desmontar y descarta respuestas tardías', async () => {
     let resolve!: (value: TeamFeedPage) => void;
     const { transport, loadPage, onChange } = setup(
@@ -160,6 +221,8 @@ describe('recuperación del feed de equipo', () => {
     expect(loadPage.mock.calls[0]?.[1].aborted).toBe(true);
     resolve(page([message('QUEUED')]));
     await pending;
+    await transport.retry();
+    expect(loadPage).toHaveBeenCalledTimes(1);
     expect(onChange).not.toHaveBeenCalled();
   });
   it.each([401, 403, 404])(
@@ -175,6 +238,10 @@ describe('recuperación del feed de equipo', () => {
       const count = loadPage.mock.calls.length;
       await vi.advanceTimersByTimeAsync(10_000);
       expect(loadPage).toHaveBeenCalledTimes(count);
+      loadPage.mockResolvedValue(page([message('CANCELLED', 1)], 'recovered'));
+      await transport.retry();
+      expect(loadPage.mock.calls.at(-1)?.[0]).toBe('start');
+      expect(transport.snapshot().messages).toEqual([message('CANCELLED', 1)]);
     },
   );
   it('rechaza una página de otra pizarra sin avanzar el cursor', async () => {

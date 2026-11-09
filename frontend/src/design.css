@@ -66,6 +66,12 @@
   --clase-tenue: #5d6a5e;
   --clase-seleccion: #397253;
   --minimapa-mascara: rgb(60 73 60 / 10%);
+  /* La IA del equipo: violeta, ajeno al acento (acciones) y a los estados. */
+  --ia: #6a4fc4;
+  --ia-sobre: #ffffff;
+  --ia-texto: #5a3fb3;
+  --ia-suave: #ece7fa;
+  --ia-fondo: #f6f3fd;
 }
 
 :root[data-theme='dark'] {
@@ -106,6 +112,11 @@
   --clase-tenue: #b5b5b5;
   --clase-seleccion: #569cd6;
   --minimapa-mascara: rgb(0 0 0 / 28%);
+  --ia: #a48cf2;
+  --ia-sobre: #1b1530;
+  --ia-texto: #c4b5fd;
+  --ia-suave: #332a52;
+  --ia-fondo: #2a2638;
 }
 
 /* Se heredan los colores del documento, también dentro de React Flow. */
@@ -816,4 +827,653 @@ button.toolbox-item.active,
   .barra-editor .estado-barra {
     grid-column: 1;
   }
+}
+
+/* ================================================================== */
+/* Columna lateral: una región de trabajo, no tres que se pisan.      */
+/*                                                                    */
+/* La herramienta activa (sobre todo la conversación con la IA) se     */
+/* queda con el alto disponible. Propiedades ocupa una línea mientras  */
+/* no hay selección y crece, con tope, al seleccionar. La revisión del */
+/* modelo muestra siempre su resumen y despliega la lista a demanda.   */
+/* ================================================================== */
+
+.herramienta {
+  flex: 1 1 0;
+  max-height: none;
+  min-height: 13rem;
+}
+.herramienta > #panel-asistente:not([hidden]) {
+  height: 100%;
+}
+/* Con la conversación activa, su campo de escribir nunca queda bajo el borde:
+   lo que cede alto es la revisión del modelo (de consulta) y el inspector. */
+.herramienta:has(> #panel-asistente:not([hidden])) {
+  min-height: min(21rem, 62%);
+}
+.pestanas-panel button {
+  min-height: 2.375rem;
+  padding: var(--e-2) var(--e-1);
+  gap: 0.375rem;
+}
+.pestanas-panel button svg {
+  flex: none;
+  opacity: 0.8;
+}
+
+.inspector {
+  flex: 0 1 auto;
+  max-height: 46%;
+}
+.inspector.inspector-sin-seleccion {
+  flex: none;
+  min-height: 0;
+  max-height: none;
+  gap: var(--e-1);
+  padding: var(--e-3) var(--e-4);
+}
+.inspector-sin-seleccion .inspector-header {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.inspector-pista {
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: 1.45;
+  color: var(--texto-tenue);
+}
+
+/* Propiedades plegada: solo su cabecera, el resto del alto es para trabajar. */
+.inspector.plegado {
+  flex: none;
+  min-height: 0;
+  max-height: none;
+  padding-block: var(--e-2);
+  gap: 0;
+  overflow: hidden;
+}
+.inspector.plegado > :not(.inspector-header) {
+  display: none;
+}
+.inspector.plegado .inspector-header {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.inspector-header h2 {
+  display: flex;
+  align-items: center;
+}
+button.inspector-plegar {
+  min-height: 1.75rem;
+  margin-left: -0.375rem;
+  padding: 0 0.375rem;
+  gap: 0.25rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+button.inspector-plegar:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  border-color: transparent;
+}
+.inspector-chevron {
+  color: var(--texto-tenue);
+  transition: transform var(--transicion);
+}
+.inspector.plegado .inspector-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Revisión del modelo en la barra de estado: recuento siempre visible y la
+   lista como panel emergente, anclado a la derecha sobre el lienzo. */
+.barra-estado {
+  position: relative;
+}
+.validacion-dock {
+  display: inline-flex;
+}
+button.validacion-boton {
+  min-height: 1.5rem;
+  padding: 0 var(--e-2);
+  gap: 0.375rem;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+button.validacion-boton:hover:not(:disabled),
+button.validacion-boton[aria-expanded='true'] {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+.validacion-punto {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.validacion-boton.aviso .validacion-punto {
+  background: var(--aviso);
+}
+.validacion-boton.error {
+  color: var(--error-texto);
+}
+.validacion-boton.error .validacion-punto {
+  background: var(--error);
+}
+.validacion-chevron {
+  transform: rotate(180deg);
+  transition: transform var(--transicion);
+}
+.validacion-boton[aria-expanded='true'] .validacion-chevron {
+  transform: none;
+}
+
+.barra-estado .validacion {
+  position: absolute;
+  right: var(--e-3);
+  bottom: calc(100% + var(--e-2));
+  z-index: 20;
+  width: min(28rem, calc(100vw - 1.5rem));
+  max-height: min(60vh, 32rem);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-lg);
+  background: var(--superficie);
+  box-shadow: var(--sombra-2);
+  color: var(--texto);
+  font-size: var(--t-base);
+}
+.barra-estado .validacion[hidden] {
+  display: none;
+}
+.barra-estado .validacion header {
+  flex: none;
+  margin: 0;
+  padding: var(--e-3) var(--e-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem var(--e-3);
+  border-bottom: 1px solid var(--borde);
+}
+.barra-estado .validacion .validacion-titulo {
+  flex-basis: 100%;
+}
+.barra-estado .validacion .estado {
+  margin-left: auto;
+}
+.validacion-cuerpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--e-4) var(--e-2);
+}
+.validacion-cuerpo .pista {
+  margin: var(--e-3) 0;
+  font-size: var(--t-sm);
+  color: var(--texto-tenue);
+}
+
+/* La IA en la barra superior, junto al equipo pero fuera de la presencia. */
+button.colaborador-ia {
+  flex: none;
+  min-height: 2rem;
+  max-width: 13rem;
+  padding: 0 var(--e-3) 0 0.1875rem;
+  gap: var(--e-2);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie);
+}
+button.colaborador-ia:hover:not(:disabled) {
+  background: var(--ia-fondo);
+  border-color: var(--ia);
+}
+.colaborador-ia-avatar {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 50%;
+  background: var(--ia);
+  color: var(--ia-sobre);
+}
+.colaborador-ia-avatar::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 0.5625rem;
+  height: 0.5625rem;
+  border-radius: 50%;
+  border: 2px solid var(--superficie);
+  background: var(--ok);
+}
+.colaborador-ia.estado-pensando .colaborador-ia-avatar::after,
+.colaborador-ia.estado-en-cola .colaborador-ia-avatar::after {
+  background: var(--ia-texto);
+  animation: team-parpadeo 1.2s ease-in-out infinite;
+}
+.colaborador-ia.estado-pausada .colaborador-ia-avatar,
+.colaborador-ia.estado-sin-conexion .colaborador-ia-avatar {
+  background: var(--superficie-3);
+  color: var(--texto-tenue);
+}
+.colaborador-ia.estado-pausada .colaborador-ia-avatar::after,
+.colaborador-ia.estado-sin-conexion .colaborador-ia-avatar::after {
+  background: var(--texto-tenue);
+}
+.colaborador-ia-texto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.15;
+}
+.colaborador-ia-texto b {
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.colaborador-ia-texto small {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--texto-tenue);
+}
+.colaborador-ia.estado-pensando .colaborador-ia-texto small {
+  color: var(--ia-texto);
+}
+
+/* Barra superior más tranquila: estados como texto pequeño, sin cajas. */
+.barra-editor .estado-barra {
+  font-size: var(--t-sm);
+}
+
+@media (max-width: 1200px) {
+  .colaborador-ia-texto {
+    display: none;
+  }
+  button.colaborador-ia {
+    padding: 0.1875rem;
+  }
+}
+@media (max-height: 800px) {
+  .herramienta {
+    min-height: 12rem;
+  }
+  .inspector {
+    max-height: 40%;
+  }
+}
+/* Con la columna debajo del lienzo, la columna entera se desplaza y cada
+   región conserva su alto natural; la conversación lleva su propio tope. */
+@media (max-width: 900px) {
+  .paneles {
+    overflow-y: auto;
+  }
+  .herramienta,
+  .inspector,
+  .validacion {
+    flex: none;
+    max-height: none;
+  }
+  .herramienta > #panel-asistente:not([hidden]) {
+    height: auto;
+  }
+  .herramienta:has(> #panel-asistente:not([hidden])) {
+    min-height: 0;
+  }
+  .team-assistant .conversacion {
+    max-height: 40vh;
+  }
+  button.colaborador-ia {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .colaborador-ia-avatar::after,
+  .validacion-chevron {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Ayuda como acción discreta: la barra ya tiene una principal (Nueva clase).
+   Solo en escritorio; en móvil ocupa su propia fila y necesita su borde. */
+@media (min-width: 901px) {
+  .barra-editor .ayuda-software-boton {
+    background: transparent;
+    border-color: transparent;
+    color: var(--texto-suave);
+  }
+  .barra-editor .ayuda-software-boton:hover:not(:disabled) {
+    background: var(--suave-fuerte);
+    border-color: transparent;
+    color: var(--texto);
+  }
+}
+
+/* Hallazgos compactos: es una lista de consulta, no el contenido principal. */
+.validacion-cuerpo li button {
+  padding-block: 0.5rem;
+  font-size: var(--t-sm);
+  line-height: 1.45;
+}
+.validacion-cuerpo li button::before {
+  top: 0.8125rem;
+}
+.validacion-cuerpo .sugerencia {
+  font-size: var(--t-xs);
+}
+
+/* En teléfonos la barra de estado pasa a dos líneas en lugar de ensanchar la página. */
+@media (max-width: 640px) {
+  .barra-estado {
+    flex-wrap: wrap;
+    gap: var(--e-1) var(--e-4);
+    padding-inline: var(--e-3);
+  }
+}
+
+/* ================================================================== */
+/* Edición directa sobre el diagrama                                   */
+/* ================================================================== */
+
+.nodo-clase.editable .atributos li {
+  position: relative;
+  border-radius: 2px;
+}
+.nodo-clase.editable .atributos li:not(.vacio):not(.editando-atributo):hover {
+  background: color-mix(in srgb, var(--clase-seleccion) 9%, transparent);
+}
+.nodo-clase .atributos li:focus-visible {
+  outline: 2px solid var(--clase-seleccion);
+  outline-offset: -2px;
+}
+.nodo-clase.editable .nombre {
+  cursor: text;
+}
+
+/* La columna del guion se convierte en asa al pasar por la fila. */
+.atributos .asa {
+  cursor: grab;
+}
+.atributos .asa .agarre {
+  display: none;
+  color: var(--clase-seleccion);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.atributos li:hover .asa .guion,
+.atributos li:focus-visible .asa .guion {
+  display: none;
+}
+.atributos li:hover .asa .agarre,
+.atributos li:focus-visible .asa .agarre {
+  display: inline;
+}
+.atributos li.soltar-antes {
+  box-shadow: inset 0 2px 0 var(--clase-seleccion);
+}
+.atributos li.soltar-despues {
+  box-shadow: inset 0 -2px 0 var(--clase-seleccion);
+}
+
+.atributos .marcas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.nodo-clase button.quitar-atributo {
+  min-height: 0;
+  width: 0.95rem;
+  height: 0.95rem;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--clase-tenue);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0;
+}
+.atributos li:hover button.quitar-atributo,
+.atributos li:focus-within button.quitar-atributo {
+  opacity: 1;
+}
+.nodo-clase button.quitar-atributo:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 18%, transparent);
+  color: var(--error-texto);
+}
+
+/* Campos sobre el diagrama: con los colores de la tarjeta, no del cromo. */
+input.entrada-en-linea {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 1.35rem;
+  margin: 0;
+  padding: 0 0.3rem;
+  border: 1px solid var(--clase-seleccion);
+  border-radius: 2px;
+  background: var(--clase-cuerpo);
+  color: var(--clase-texto);
+  font: inherit;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--clase-seleccion) 25%, transparent);
+}
+input.entrada-en-linea.invalido {
+  border-color: var(--error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 25%, transparent);
+}
+.nodo-clase header input.entrada-en-linea {
+  text-align: center;
+  font-weight: 700;
+}
+.atributos li.editando-atributo {
+  display: block;
+  padding: 0.06rem 0.3rem;
+}
+
+/* Barra contextual bajo la clase seleccionada. */
+.barra-nodo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: 0.1875rem;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: 999px;
+  background: var(--superficie);
+  box-shadow: var(--sombra-2);
+  font-size: var(--t-xs);
+}
+.barra-nodo button.barra-nodo-agregar {
+  min-height: 1.625rem;
+  padding: 0 var(--e-3);
+  border: 0;
+  border-radius: 999px;
+  background: var(--acento);
+  color: #fff;
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.barra-nodo button.barra-nodo-agregar:hover:not(:disabled) {
+  background: var(--acento-vivo);
+}
+.barra-nodo-pista {
+  padding-right: var(--e-3);
+  color: var(--texto-tenue);
+  white-space: nowrap;
+}
+.barra-nodo input.entrada-en-linea {
+  width: 16rem;
+  height: 1.625rem;
+  border-radius: 999px;
+  padding-inline: var(--e-3);
+  border-color: var(--borde-fuerte);
+  background: var(--fondo);
+  color: var(--texto);
+  font-size: var(--t-sm);
+  box-shadow: none;
+}
+.barra-nodo input.entrada-en-linea:focus {
+  border-color: var(--acento);
+}
+
+/* Inspector: subir y bajar junto a las marcas del atributo. */
+.marcadores {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.orden-atributo {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0.125rem;
+}
+.orden-atributo button {
+  min-height: 1.5rem;
+  width: 1.5rem;
+  padding: 0;
+  font-size: var(--t-sm);
+}
+
+/* La cabecera de Propiedades (con su botón de plegar) no se va con el scroll. */
+.inspector > .inspector-header {
+  position: sticky;
+  top: calc(var(--e-4) * -1);
+  z-index: 1;
+  margin-top: calc(var(--e-4) * -1);
+  padding-top: var(--e-3);
+  background: var(--superficie);
+}
+.inspector.plegado > .inspector-header,
+.inspector-sin-seleccion > .inspector-header {
+  position: static;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* Avisos flotantes: deshacer un borrado y versión nueva de la aplicación.
+   Por encima de la barra de estado; la región ignora el puntero para no
+   bloquear el lienzo que queda alrededor del aviso. */
+.aviso-deshacer-region,
+.aviso-version-region {
+  position: fixed;
+  z-index: 60;
+  bottom: 2.75rem;
+  pointer-events: none;
+}
+.aviso-deshacer-region {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.aviso-version-region {
+  left: var(--e-5);
+}
+.aviso-flotante {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  width: max-content;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: var(--e-2) var(--e-2) var(--e-2) var(--e-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-lg);
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: var(--sombra-2);
+  font-size: 0.8125rem;
+  pointer-events: auto;
+  animation: aviso-entra 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+.aviso-flotante > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.aviso-flotante button.principal {
+  flex: none;
+  min-height: 2rem;
+}
+.aviso-version {
+  border-color: var(--ia);
+}
+button.aviso-cerrar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--texto-tenue);
+  font-size: 1.125rem;
+  line-height: 1;
+}
+button.aviso-cerrar:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+@keyframes aviso-entra {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aviso-flotante {
+    animation: none;
+  }
+}
+@media (max-width: 640px) {
+  .aviso-deshacer-region,
+  .aviso-version-region {
+    left: var(--e-5);
+    right: var(--e-5);
+    transform: none;
+  }
+  .aviso-flotante {
+    width: auto;
+    max-width: none;
+  }
+}
+
+/* Mensajes nuevos de la conversación mientras no se está mirando. */
+.insignia-nuevos {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.3125rem;
+  border-radius: 999px;
+  background: var(--ia);
+  color: var(--ia-sobre);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.colaborador-ia-avatar .insignia-nuevos {
+  position: absolute;
+  top: -0.4375rem;
+  right: -0.625rem;
+  box-sizing: content-box;
+  border: 2px solid var(--superficie);
 }

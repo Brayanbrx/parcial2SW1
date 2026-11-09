@@ -55,7 +55,7 @@ public class {{entity.serviceName}} {
             return toDto(existing.get());
         }
 
-        var entity = new {{entity.className}}();
+        var entity = new {{entityType}}();
         entity.{{primaryKey.setterName}}(id);
         apply(dto, entity);
         return toDto(repository.save(entity));
@@ -76,12 +76,12 @@ public class {{entity.serviceName}} {
         repository.flush();
     }
 
-    private {{entity.className}} requireEntity({{primaryKey.javaType}} id) {
+    private {{entityType}} requireEntity({{primaryKey.javaType}} id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("{{entity.className}}", id));
     }
 
-    private void apply({{entity.dtoName}} dto, {{entity.className}} entity) {
+    private void apply({{entity.dtoName}} dto, {{entityType}} entity) {
 {{#each nonPrimaryAttributes}}
         entity.{{setterName}}(dto.{{fieldName}}());
 {{/each}}
@@ -100,7 +100,7 @@ public class {{entity.serviceName}} {
 {{/each}}
     }
 
-    private {{entity.dtoName}} toDto({{entity.className}} entity) {
+    private {{entity.dtoName}} toDto({{entityType}} entity) {
         return new {{entity.dtoName}}(
 {{#each dtoValues}}
                 {{{expression}}}{{#unless last}},{{/unless}}

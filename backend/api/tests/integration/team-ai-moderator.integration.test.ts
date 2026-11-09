@@ -81,6 +81,7 @@ describe('paso 9: auditoría, prueba de contenido y moderador persistido', () =>
         solutionMode: 'ON_REQUEST',
         reviewMode: 'ON_ISSUES',
         executionMode: 'PROPOSE_ONLY',
+        aiSource: 'PROVIDERS',
         ...values,
       },
     });

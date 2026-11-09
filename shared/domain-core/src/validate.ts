@@ -97,8 +97,20 @@ function validateClassName(umlClass: UmlClass): ValidationIssue[] {
 
 function validateAttributes(umlClass: UmlClass): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const seen = new Set<string>();
 
   for (const attribute of umlClass.attributes) {
+    if (seen.has(attribute.id)) {
+      issues.push(
+        issue({
+          code: 'DUPLICATE_ID',
+          message: `«${umlClass.displayName}» contiene más de una copia del atributo «${attribute.displayName}».`,
+          elementIds: [umlClass.id, attribute.id],
+        }),
+      );
+      continue;
+    }
+    seen.add(attribute.id);
     issues.push(
       ...normalizationIssues(attribute.displayName, 'ATTRIBUTE', attribute.id, 'El atributo'),
     );

@@ -9,9 +9,22 @@ interface Props {
   readonly canWrite: boolean;
   readonly canUseExample: boolean;
   useExample(mode: AssistantMode, text: string): void;
+  /** Aspecto del botón que abre la guía; el nombre accesible no cambia. */
+  readonly triggerClassName?: string;
+  readonly triggerIcon?: React.ReactNode;
+  /** Solo el icono a la vista; el texto pasa a nombre accesible y descripción emergente. */
+  readonly iconOnly?: boolean;
 }
 
-export function AssistantLearningGuide({ model, canWrite, canUseExample, useExample }: Props) {
+export function AssistantLearningGuide({
+  model,
+  canWrite,
+  canUseExample,
+  useExample,
+  triggerClassName,
+  triggerIcon,
+  iconOnly = false,
+}: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [step, setStep] = useState(0);
@@ -24,6 +37,7 @@ export function AssistantLearningGuide({ model, canWrite, canUseExample, useExam
     }
   });
   const lesson = learningSteps[step]!;
+  const triggerLabel = completed ? 'Repasar guía de IA' : 'Aprender a usar la IA';
   const example =
     step === 0 ? '¿Qué clases hay en el diagrama y cómo se relacionan?' : instructionExample(model);
 
@@ -39,8 +53,15 @@ export function AssistantLearningGuide({ model, canWrite, canUseExample, useExam
 
   return (
     <>
-      <button type="button" onClick={() => dialog.current?.showModal()}>
-        {completed ? 'Repasar guía de IA' : 'Aprender a usar la IA'}
+      <button
+        type="button"
+        className={triggerClassName}
+        aria-label={iconOnly ? triggerLabel : undefined}
+        title={iconOnly ? triggerLabel : undefined}
+        onClick={() => dialog.current?.showModal()}
+      >
+        {triggerIcon}
+        {!iconOnly && triggerLabel}
       </button>
       <dialog ref={dialog} className="guia-ia" aria-labelledby={headingId}>
         <header className="guia-ia-cabecera">

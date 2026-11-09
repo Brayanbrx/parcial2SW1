@@ -83,6 +83,10 @@ function colorPara(clientId: number): string {
 /** Sin cambios durante este tiempo, la copia para abrir sin conexion se reescribe. */
 const ESPERA_INSTANTANEA = 1000;
 
+const AVISO_RECUPERADA = 'Se recuperó la copia local de esta pizarra y se enviará al servidor.';
+const AVISO_ENVIADA = 'La copia local recuperada ya está guardada en el servidor.';
+const AVISO_ENVIADA_MS = 6000;
+
 export function useBoardDocument(
   room: string | null,
   me: { id: string; displayName: string } | null,
@@ -208,10 +212,28 @@ export function useBoardDocument(
     let disposed = false;
     let draftsRestored = false;
     let serverSynced = false;
+    /**
+     * El aviso de copia recuperada promete un envío: cuando el servidor confirma
+     * todos los cambios pendientes, se dice que terminó y luego se retira. Antes
+     * quedaba fijo toda la sesión, como si algo siguiera sin resolver.
+     */
+    let recuperacionPendiente = false;
+    let avisoTimer: number | undefined;
+    const alConfirmarEnvio = ({ number }: { number: number }): void => {
+      if (disposed || !recuperacionPendiente || number > 0) return;
+      recuperacionPendiente = false;
+      setAccessNotice((previo) => (previo === AVISO_RECUPERADA ? AVISO_ENVIADA : previo));
+      window.clearTimeout(avisoTimer);
+      avisoTimer = window.setTimeout(
+        () => setAccessNotice((previo) => (previo === AVISO_ENVIADA ? null : previo)),
+        AVISO_ENVIADA_MS,
+      );
+    };
     const restoreDrafts = (): void => {
       if (
         disposed ||
         !serverSynced ||
+        provider.hasUnsyncedChanges ||
         draftsRestored ||
         !writeAllowed.current ||
         draftsRef.current === null
@@ -221,7 +243,10 @@ export function useBoardDocument(
       draftsRestored = true;
       try {
         if (draftsRef.current.restore(doc)) {
-          setAccessNotice('Se recuperó la copia local de esta pizarra y se enviará al servidor.');
+          setAccessNotice(AVISO_RECUPERADA);
+          recuperacionPendiente = true;
+          // Si no había nada nuevo que enviar, la copia ya coincide con el servidor.
+          if (!provider.hasUnsyncedChanges) alConfirmarEnvio({ number: 0 });
         }
       } catch {
         writeAllowed.current = false;
@@ -231,6 +256,10 @@ export function useBoardDocument(
         );
       }
     };
+    provider.on('unsyncedChanges', ({ number }: { number: number }) => {
+      alConfirmarEnvio({ number });
+      if (number === 0) restoreDrafts();
+    });
     let snapshotTimer: number | undefined;
     const saveSnapshot = (): void => {
       if (snapshotTimer !== undefined) {
@@ -467,6 +496,7 @@ export function useBoardDocument(
 
     return () => {
       disposed = true;
+      window.clearTimeout(avisoTimer);
       window.clearInterval(accessTimer);
       window.removeEventListener('focus', checkAccess);
       doc.off('update', alActualizar);

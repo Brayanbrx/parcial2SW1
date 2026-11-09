@@ -298,8 +298,20 @@ describe('políticas que preservan el primer parcial', () => {
       solutionMode: 'ON_REQUEST',
       executionMode: 'AUTO_SAFE_VOICE',
       reviewMode: 'ON_ISSUES',
+      aiSource: 'PROVIDERS',
     });
     expect(aiSettingsValuesSchema.safeParse({ enabled: false }).success).toBe(false);
+    expect(
+      aiSettingsValuesSchema.safeParse({ ...DEFAULT_AI_SETTINGS, aiSource: 'OLLAMA' }).success,
+    ).toBe(false);
+    const { aiSource: _omitida, ...sinFuente } = DEFAULT_AI_SETTINGS;
+    expect(aiSettingsValuesSchema.safeParse(sinFuente).success).toBe(false);
+    expect(
+      aiSettingsValuesSchema.safeParse({ ...DEFAULT_AI_SETTINGS, localModel: 'x' }).success,
+    ).toBe(false);
+    expect(
+      aiSettingsValuesSchema.safeParse({ ...DEFAULT_AI_SETTINGS, localSpeechModel: 'x' }).success,
+    ).toBe(false);
     expect(
       aiSettingsValuesSchema.safeParse({ ...DEFAULT_AI_SETTINGS, approvalMode: 'ANYONE' }).success,
     ).toBe(false);
@@ -310,6 +322,20 @@ describe('políticas que preservan el primer parcial', () => {
         updatedAt: createdAt,
       }).success,
     ).toBe(true);
+    for (const [localModel, localSpeechModel] of [
+      [null, null],
+      ['gemma4:e4b', 'whisper-large-v3-turbo'],
+    ])
+      expect(
+        projectAiSettingsSchema.safeParse({
+          ...DEFAULT_AI_SETTINGS,
+          aiSource: 'LOCAL',
+          projectId: id(3),
+          updatedAt: createdAt,
+          localModel,
+          localSpeechModel,
+        }).success,
+      ).toBe(true);
   });
   it.each(AI_EXECUTION_MODES)('controles autoejecutables bajo %s', (mode) => {
     expect(allowsAutomaticTeamInput(mode, 'DICTATION')).toBe(false);

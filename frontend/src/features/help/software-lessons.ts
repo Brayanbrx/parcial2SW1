@@ -34,17 +34,17 @@ export const softwareLessons: readonly SoftwareLesson[] = [
     question: '¿Cómo dibujo una clase y añado sus campos?',
     keywords:
       'dibujar diagrama entidad tabla campo atributo clase nombre tipo clave primaria requerido unico',
-    where: 'Pizarra → Nueva clase → Propiedades',
+    where: 'Pizarra → Nueva clase → tarjeta de la clase / Propiedades',
     summary:
       'Una clase representa un concepto, como Cliente. Sus atributos describen los datos que guardarás, como nombre o correo.',
     steps: [
-      'Pulsa Nueva clase. En Propiedades cambia su nombre a Cliente.',
-      'En Nuevo atributo escribe nombre y pulsa Añadir. Selecciona el tipo String para texto, u otro tipo según el dato.',
+      'Pulsa Nueva clase. Haz doble clic en su nombre sobre el diagrama (o usa Propiedades) y cámbialo a Cliente.',
+      'Con la clase seleccionada pulsa + Atributo debajo de la tarjeta y escribe nombre: String. Doble clic sobre un atributo lo edita; ⠿ o Alt+↑/↓ cambian su orden.',
       'Revisa Clave primaria, Requerido y Único según tus necesidades. Selecciona cada clase para editarla y arrástrala para organizar el diagrama.',
     ],
     practice:
       'Crea Cliente con un atributo nombre de tipo String. Añade un identificador id de tipo UUID y márcalo como Clave primaria.',
-    tip: 'Herramientas y Propiedades muestran u ocultan los paneles. Tab y Enter permiten recorrer y seleccionar elementos. Los cambios se comparten automáticamente mientras estás conectado.',
+    tip: 'Herramientas y Panel muestran u ocultan las columnas laterales. Tab y Enter permiten recorrer y seleccionar elementos. Los cambios se comparten automáticamente mientras estás conectado.',
   },
   {
     id: 'relationships',
@@ -88,11 +88,11 @@ export const softwareLessons: readonly SoftwareLesson[] = [
     question: '¿Cómo le pido ayuda al asistente?',
     keywords:
       'ia inteligencia artificial asistente agente preguntar consultar instruir texto voz dictar microfono',
-    where: 'Pizarra → Asistente → Aprender a usar la IA',
+    where: 'Pizarra → Conversación → Aprender a usar la IA (icono del libro)',
     summary:
-      'Consultar responde preguntas sobre tu diagrama. Instruir prepara propuestas de cambios por texto o voz que tú revisas antes de aplicar.',
+      'Preguntar responde dudas sobre tu diagrama. Instruir prepara propuestas de cambios por texto o voz que tú revisas antes de aplicar.',
     steps: [
-      'En Asistente elige Consultar para entender el modelo, o Instruir para solicitar un cambio concreto.',
+      'En Conversación elige Preguntar para entender el modelo, o Instruir para solicitar un cambio concreto.',
       'Escribe la acción, la clase y sus detalles. Si usas Dictar, pulsa Parar y revisa el texto antes de Enviar.',
       'Lee la propuesta antes de Aplicar. Si no es lo que necesitas, déjala sin aplicar y corrige la solicitud. Responde a las aclaraciones cuando falte información.',
     ],
@@ -125,11 +125,11 @@ export const softwareLessons: readonly SoftwareLesson[] = [
     question: '¿Por qué no puedo generar el proyecto?',
     keywords:
       'errores error validacion revision bloqueado generar fallo advertencia aviso clave tipos',
-    where: 'Pizarra → Revisión del modelo / Propiedades',
+    where: 'Pizarra → barra inferior (revisión) / Propiedades',
     summary:
       'La revisión comprueba la estructura del diagrama. Los errores bloquean la generación hasta que se corrijan.',
     steps: [
-      'Lee los errores y avisos de Revisión del modelo.',
+      'Pulsa el resumen de la revisión en la barra inferior (por ejemplo «2 errores») y lee cada hallazgo.',
       'Selecciona la clase o relación afectada. Revisa nombres, tipos, claves y multiplicidades en Propiedades según el mensaje.',
       'Vuelve a Generar cuando no haya errores. Si el botón sigue deshabilitado, comprueba también tu rol y si hay una generación en curso.',
     ],

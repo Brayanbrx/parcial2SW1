@@ -50,7 +50,7 @@ export function xmiToBatch(
     } as Command);
     summary.push(text);
   };
-  if (options.mode === 'REPLACE')
+  if (options.mode === 'REPLACE' && imported.classes.length > 0)
     for (const c of options.current.classes)
       add(
         { type: 'DELETE_CLASS', payload: { classId: c.id } },

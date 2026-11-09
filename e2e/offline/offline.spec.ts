@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 import { createDecoder, readVarString, readVarUint } from 'lib0/decoding';
 
 const board = '/pizarras/00000000-0000-4000-8000-000000000010';
@@ -28,6 +28,207 @@ async function create(page: Page, name: string): Promise<void> {
 
 test.beforeEach(async ({ request }) => {
   await request.post('/test/reset');
+});
+
+test('Ctrl+C copia texto y C activa la herramienta de clase', async ({ page }) => {
+  await enter(page);
+  const classTool = page.getByTestId('tool-class');
+  await expect(classTool).toHaveAttribute('aria-pressed', 'false');
+  const text = await page.locator('#editor-toolbox h2').evaluate((heading) => {
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.addEventListener(
+      'copy',
+      () => {
+        document.body.dataset.copiedText = window.getSelection()?.toString();
+      },
+      { once: true },
+    );
+    return selection.toString();
+  });
+  expect(text).not.toBe('');
+  await page.keyboard.press('ControlOrMeta+c');
+  await expect(page.locator('body')).toHaveAttribute('data-copied-text', text);
+  await expect(classTool).toHaveAttribute('aria-pressed', 'false');
+
+  await page.keyboard.press('c');
+  await expect(classTool).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('solo permite generar después de que el servidor confirme la edición local', async ({
+  page,
+}) => {
+  let paused = false;
+  const pending: (() => void)[] = [];
+  await page.routeWebSocket('**/collab', (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      if (paused && typeof message !== 'string') {
+        const decoder = createDecoder(message);
+        readVarString(decoder);
+        if (readVarUint(decoder) === 0 && readVarUint(decoder) === 2) {
+          pending.push(() => server.send(message));
+          return;
+        }
+      }
+      server.send(message);
+    });
+  });
+  let generations = 0;
+  await page.route(`**/api${board.replace('/pizarras/', '/boards/')}/generations`, (route) => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: [] });
+    generations++;
+    return route.fulfill({
+      status: 201,
+      json: {
+        id: 'demo',
+        artifactName: 'demo.zip',
+        entities: 1,
+        snapshotVersion: 2,
+        basePackage: 'bo.edu.sw1',
+      },
+    });
+  });
+  await enter(page);
+  await page.getByTestId('pestana-generar').click();
+  const generate = page.getByTestId('generar');
+  await expect(generate).toBeEnabled();
+
+  paused = true;
+  await create(page, 'CambioPendiente');
+  await expect.poll(() => pending.length).toBeGreaterThan(0);
+  await expect(generate).toBeDisabled();
+  expect(generations).toBe(0);
+
+  paused = false;
+  for (const send of pending) send();
+  await expect(generate).toBeEnabled();
+  await generate.click();
+  await expect(page.getByTestId('estado-generacion')).toContainText('Generado demo.zip');
+  expect(generations).toBe(1);
+});
+
+test('actualizar el historial tras generar cancela la consulta anterior', async ({ page }) => {
+  const generation = {
+    id: 'generacion-historial',
+    artifactName: 'pizarra.zip',
+    entities: 1,
+    snapshotVersion: 2,
+    basePackage: 'bo.edu.sw1',
+    status: 'READY',
+    author: { id: 'ana', displayName: 'Ana' },
+    createdAt: new Date().toISOString(),
+    projectName: 'Proyecto',
+  };
+  let generated = false;
+  let initial: Request | null = null;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  await page.route(
+    `**/api${board.replace('/pizarras/', '/boards/')}/generations`,
+    async (route) => {
+      const request = route.request();
+      if (request.method() === 'POST') {
+        generated = true;
+        return route.fulfill({ status: 201, json: generation });
+      }
+      if (generated) return route.fulfill({ json: [generation] });
+      initial = request;
+      await pending;
+      await route.fulfill({ json: [] }).catch(() => undefined);
+    },
+  );
+
+  try {
+    await enter(page);
+    await page.getByTestId('pestana-generar').click();
+    await expect.poll(() => initial !== null).toBe(true);
+    const cancelled = page.waitForEvent('requestfailed', {
+      predicate: (request) => request === initial,
+      timeout: 10_000,
+    });
+    await Promise.all([cancelled, page.getByTestId('generar').click()]);
+    release();
+    await expect(page.getByTestId('historial-generaciones')).toContainText('v2');
+  } finally {
+    release();
+  }
+});
+
+test('permite seguir añadiendo atributos después de confirmar al salir del campo', async ({
+  page,
+}) => {
+  await enter(page);
+  await create(page, 'Persona');
+  await page.getByRole('button', { name: '+ Atributo', exact: true }).click();
+
+  const field = page.getByRole('textbox', { name: 'Nuevo atributo de Persona' });
+  const node = page.getByTestId('clase-Persona');
+  await field.fill('nombre: String');
+  await field.press('Tab');
+  await expect(node).toContainText('nombre: String');
+  await expect(field).toHaveValue('');
+
+  await field.fill('edad: Integer');
+  await field.press('Enter');
+  await expect(node).toContainText('edad: Integer');
+  await expect(node.getByText('nombre', { exact: false })).toHaveCount(1);
+});
+
+test('confirmar una edición en línea conserva los campos editados por otro colaborador', async ({
+  page,
+  browser,
+}) => {
+  const other = await browser.newContext();
+  try {
+    const remote = await other.newPage();
+    await enter(page);
+    await create(page, 'NombreInicial');
+    await enter(remote, 'beto');
+
+    const title = (editor: Page) =>
+      editor.getByRole('textbox', { name: 'Nombre de la clase', exact: true });
+    await page.getByTestId('clase-NombreInicial').locator('header .nombre').dblclick();
+    await remote.getByTestId('clase-NombreInicial').locator('header .nombre').dblclick();
+    await title(remote).fill('NombreRemoto');
+    await title(remote).press('Enter');
+    const localNode = page.getByTestId('clase-NombreRemoto');
+    await expect(localNode).toBeVisible();
+    await expect(title(page)).toHaveValue('NombreInicial');
+    await title(page).press('Tab');
+    await expect(title(page)).toHaveCount(0);
+    await expect(localNode).toBeVisible();
+
+    await localNode.locator('header .nombre').click();
+    await page.getByRole('button', { name: '+ Atributo', exact: true }).click();
+    const add = page.getByRole('textbox', { name: 'Nuevo atributo de NombreRemoto' });
+    await add.fill('nombre: String');
+    await add.press('Enter');
+    await add.press('Escape');
+
+    const remoteNode = remote.getByTestId('clase-NombreRemoto');
+    await localNode.locator('[data-atributo]').filter({ hasText: 'nombre: String' }).dblclick();
+    const localField = page.getByRole('textbox', { name: 'Atributo nombre', exact: true });
+    await localField.fill('nombreVisible: String');
+    await remoteNode.locator('[data-atributo]').filter({ hasText: 'nombre: String' }).dblclick();
+    const remoteField = remote.getByRole('textbox', { name: 'Atributo nombre', exact: true });
+    await remoteField.fill('nombre: Integer');
+    await remoteField.press('Enter');
+    await expect(
+      page.getByRole('combobox', { name: 'Tipo del atributo nombre', exact: true }),
+    ).toHaveValue('Integer');
+    await localField.press('Enter');
+    await expect(localNode).toContainText('nombreVisible: Integer');
+    await expect(remoteNode).toContainText('nombreVisible: Integer');
+  } finally {
+    await other.close();
+  }
 });
 
 test('al reconectar valida el acceso vigente sin rotar la cookie innecesariamente', async ({

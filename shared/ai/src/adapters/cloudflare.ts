@@ -1,5 +1,5 @@
 import { pedirJson } from '../http.js';
-import { ProviderContractError, type PortUsage, type SpeechPort } from '../ports.js';
+import { NoSpeechError, ProviderContractError, type PortUsage, type SpeechPort } from '../ports.js';
 import { comprobarAudio } from '../prompt.js';
 
 /**
@@ -95,7 +95,7 @@ export class CloudflareSpeechPort implements SpeechPort {
 
     const texto = (respuesta.result?.text ?? '').trim();
     if (texto.length === 0) {
-      throw new ProviderContractError(PROVIDER, 'No se reconocio ninguna palabra en el audio.');
+      throw new NoSpeechError(PROVIDER);
     }
 
     return {

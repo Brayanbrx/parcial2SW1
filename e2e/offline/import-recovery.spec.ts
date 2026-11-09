@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 
 const boardId = '00000000-0000-4000-8000-000000000010';
@@ -20,6 +21,59 @@ async function enter(page: Page) {
 
 test.beforeEach(async ({ request }) => {
   await request.post('/test/reset');
+});
+
+test('impide aplicar un reemplazo si se quita la última clase del candidato', async ({ page }) => {
+  await enter(page);
+  await page.getByTestId('crear-clase').click();
+  await page.getByTestId('nombre-clase').fill('Cliente');
+  await page.getByTestId('nombre-clase').press('Tab');
+  await expect(page.getByTestId('clase-Cliente')).toBeVisible();
+  await page.route(`**/api/boards/${boardId}/import/xmi`, (route) => {
+    const { model } = route.request().postDataJSON();
+    const meta = { origin: 'XMI', actorId: randomUUID(), issuedAt: new Date().toISOString() };
+    return route.fulfill({
+      json: {
+        kind: 'CONFIRMATION',
+        question: 'Confirma el reemplazo.',
+        summary: [],
+        rationale: null,
+        warnings: [],
+        batch: {
+          ...meta,
+          batchId: randomUUID(),
+          commands: [
+            {
+              ...meta,
+              commandId: randomUUID(),
+              type: 'DELETE_CLASS',
+              payload: { classId: model.classes[0].id },
+            },
+            {
+              ...meta,
+              commandId: randomUUID(),
+              type: 'CREATE_CLASS',
+              payload: { classId: randomUUID(), displayName: 'Pedido' },
+            },
+          ],
+        },
+      },
+    });
+  });
+  await page.getByTestId('modo-importacion').selectOption('REPLACE');
+  await page.getByTestId('archivo-xmi').setInputFiles({
+    name: 'modelo.xmi',
+    mimeType: 'application/xml',
+    buffer: Buffer.from('<xmi/>'),
+  });
+  const apply = page.getByTestId('aplicar-candidato');
+  await expect(apply).toBeEnabled();
+  await page.getByRole('button', { name: 'Quitar operación 2', exact: true }).click();
+  await expect(apply).toBeDisabled();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'El candidato no contiene clases' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('clase-Cliente')).toBeVisible();
 });
 
 for (const kind of ['xmi', 'imagen'] as const) {

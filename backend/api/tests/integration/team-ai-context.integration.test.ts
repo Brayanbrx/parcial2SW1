@@ -51,6 +51,27 @@ describe('paso 7: contexto persistido y aclaraciones autenticadas', () => {
       return mock.answer(options);
     },
   };
+  // Modelo local opcional: ventana propia y registro de llamadas aparte.
+  let localWindow: number | undefined;
+  const localCalls: string[] = [];
+  const local: LlmPort = {
+    name: 'local-test',
+    get capabilities() {
+      return createModelCapabilities({
+        contextWindow: localWindow ?? 32768,
+        timeoutMs: 60000,
+        jsonMode: true,
+      });
+    },
+    proposeCommands: async (options) => {
+      localCalls.push('INSTRUCT');
+      return mock.proposeCommands(options);
+    },
+    answer: async (options) => {
+      localCalls.push('ASK');
+      return mock.answer(options);
+    },
+  };
   const body = (text: string, change = {}) => ({
     clientRequestId: randomUUID(),
     mode: 'ASK',
@@ -89,6 +110,7 @@ describe('paso 7: contexto persistido y aclaraciones autenticadas', () => {
             {
               ...createAiPorts(loadAiConfig({})),
               llm: port,
+              ...(localWindow === undefined ? {} : { local }),
             },
             { prisma: api.app.prisma, limits: { groupLimit: 4, personalLimit: 4 }, maxInputTokens },
           )(job, signal),
@@ -121,6 +143,8 @@ describe('paso 7: contexto persistido y aclaraciones autenticadas', () => {
     questions.length = 0;
     maxInputTokens = 32768;
     contextWindow = 32768;
+    localWindow = undefined;
+    localCalls.length = 0;
     propose = (options) => mock.proposeCommands(options);
     boardId = (await api.app.prisma.board.create({ data: { projectId, displayName: 'Contexto' } }))
       .id;
@@ -134,6 +158,7 @@ describe('paso 7: contexto persistido y aclaraciones autenticadas', () => {
         solutionMode: 'ON_REQUEST',
         executionMode: 'PROPOSE_ONLY',
         reviewMode: 'ON_DEMAND',
+        aiSource: 'PROVIDERS',
         ...change,
       },
     });
@@ -572,6 +597,25 @@ describe('paso 7: contexto persistido y aclaraciones autenticadas', () => {
       expect(await api.app.prisma.aiProposal.count({ where: { boardId } })).toBe(0);
     },
   );
+  it('IA local: responde si la solicitud cabe y, si no cabe en su ventana, responden los proveedores', async () => {
+    await api.app.prisma.projectAiSettings.create({
+      data: { projectId, aiSource: 'LOCAL', executionMode: 'PROPOSE_ONLY' },
+    });
+    localWindow = 32768;
+    await ask('Explica UML');
+    expect(localCalls).toEqual(['ASK']);
+    expect(questions).toHaveLength(0);
+
+    // Ventana local menor que el prompt base: antes fallaba con team_ai_input_budget.
+    localWindow = 100;
+    await ask('Explica UML');
+    await ask('Crea la clase Factura', beto, { mode: 'INSTRUCT' });
+    await ask('Revisa', beto, { mode: 'REVIEW' });
+    expect(localCalls).toEqual(['ASK']);
+    expect(questions).toHaveLength(2);
+    expect(instructions).toHaveLength(1);
+    expect(instructions[0]!.team).toBeDefined();
+  });
   it('la referencia explícita se carga aunque salga de las ventanas y no consulta historial de otra pizarra', async () => {
     const reference = await ask('Explica herencia', ana);
     for (let i = 0; i < 4; i++) await ask(`Otro asunto ${i}`, ana);

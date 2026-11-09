@@ -27,7 +27,7 @@ export function isExpensiveRequest(request: FastifyRequest): boolean {
     (/\/assistant\//.test(path) ||
       /\/import\//.test(path) ||
       /\/generations$/.test(path) ||
-      /\/team-ai\/messages\/?$/.test(path))
+      /\/team-ai\/(messages|transcribe)\/?$/.test(path))
   );
 }
 

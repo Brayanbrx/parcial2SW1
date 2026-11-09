@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
-import { apiRequest, type ProjectMember } from '../../lib/api.js';
+import { apiRequest, ContractMismatchError, type ProjectMember } from '../../lib/api.js';
 import { connectTeamFeed } from './connect-feed.js';
 import type { TeamFeedSnapshot } from './transport.js';
 
-const empty: TeamFeedSnapshot = { messages: [], proposals: [], settings: null };
+const empty: TeamFeedSnapshot = {
+  messages: [],
+  proposals: [],
+  settings: null,
+  initialMessageIds: null,
+};
 export function useTeamFeed(
   boardId: string,
   projectId: string,
@@ -15,6 +20,7 @@ export function useTeamFeed(
   const [snapshot, setSnapshot] = useState(empty);
   const [members, setMembers] = useState<readonly ProjectMember[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(true);
   const connection = useRef<ReturnType<typeof connectTeamFeed> | null>(null);
   const visibility = useRef(visible);
@@ -41,6 +47,7 @@ export function useTeamFeed(
       }
     };
     setLoading(true);
+    setSnapshot(empty);
     const feed = connectTeamFeed({
       boardId,
       projectId,
@@ -50,6 +57,7 @@ export function useTeamFeed(
         setSnapshot(next);
         setLoading(false);
         setError(null);
+        setStale(false);
         if (
           next.messages.some((m) =>
             [m.authorId, m.addressedToId].some((id) => id && !known.has(id)),
@@ -60,6 +68,7 @@ export function useTeamFeed(
       onError(cause) {
         if (!alive) return;
         setLoading(false);
+        setStale(cause instanceof ContractMismatchError);
         setError(cause instanceof Error ? cause.message : 'No se pudo recuperar la actividad.');
       },
     });
@@ -92,7 +101,9 @@ export function useTeamFeed(
     snapshot,
     members,
     error,
+    stale,
     loading,
     refresh: () => connection.current?.refresh() ?? Promise.resolve(),
+    retry: () => connection.current?.retry() ?? Promise.resolve(),
   };
 }

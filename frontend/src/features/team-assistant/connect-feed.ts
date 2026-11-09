@@ -21,16 +21,20 @@ export function connectTeamFeed(options: {
     transport.setVisible(panelVisible && document.visibilityState === 'visible');
   const stateless = ({ payload }: { payload: string }) => transport.acceptEvent(payload);
   const reconnect = () => {
-    void transport.refresh();
+    void transport.refresh(true);
   };
   options.provider?.on('stateless', stateless);
   options.provider?.on('synced', reconnect);
   document.addEventListener('visibilitychange', visibility);
   window.addEventListener('online', reconnect);
   visibility();
+  // Con el panel oculto se carga una vez el historial: es la referencia para
+  // contar como nuevo solo lo que llegue después. No inicia ningún sondeo.
+  if (!panelVisible || document.visibilityState !== 'visible') void transport.refresh(true);
   return {
     acceptEvent: transport.acceptEvent,
     refresh: transport.refresh,
+    retry: transport.retry,
     setPanelVisible(value: boolean) {
       panelVisible = value;
       visibility();

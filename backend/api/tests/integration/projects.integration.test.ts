@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startHarness, type Harness } from '../support/harness.js';
 
 /**
@@ -67,6 +67,43 @@ describe('proyectos, membresias y pizarras', () => {
     expect(respuestas.map((r) => r.status)).toEqual([200, 200, 200, 200]);
     expect(respuestas.filter((r) => r.body.alreadyMember === false)).toHaveLength(1);
     expect(respuestas.every((r) => r.body.role === 'VIEWER')).toBe(true);
+  });
+
+  it('una revocación en curso impide crear una membresía con el enlace', async () => {
+    const projectId = await nuevoProyecto('Invitación revocada');
+    const invite = await api.request('POST', `/projects/${projectId}/invites`, {
+      token: duena.token,
+      body: { role: 'EDITOR' },
+    });
+    expect(invite.status).toBe(201);
+
+    const prisma = api.app.prisma;
+    let accepted: ReturnType<Harness['request']> | undefined;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.projectInvite.delete({ where: { id: invite.body.id } });
+        accepted = api.request('POST', `/invites/${invite.body.code}/accept`, {
+          token: invitado.token,
+        });
+        // El DELETE sigue sin confirmar. La aceptación debe esperar su resultado.
+        await vi.waitFor(async () => {
+          const [activity] = await prisma.$queryRaw<{ waiting: boolean }[]>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'
+                AND query LIKE '%project_invites%' AND query LIKE '%FOR SHARE%'
+            ) AS waiting
+          `;
+          expect(activity?.waiting).toBe(true);
+        });
+      });
+      expect((await accepted)?.status).toBe(404);
+      expect(
+        (await api.request('GET', `/projects/${projectId}`, { token: invitado.token })).status,
+      ).toBe(404);
+    } finally {
+      await accepted;
+    }
   });
 
   it('solo lista los proyectos de los que se es miembro', async () => {
@@ -261,6 +298,41 @@ describe('proyectos, membresias y pizarras', () => {
 
     const leida = await api.request('GET', `/boards/${pizarra.body.id}`, { token: duena.token });
     expect(leida.status).toBe(404);
+  });
+
+  it('renombrar una pizarra borrada en paralelo devuelve 404', async () => {
+    const projectId = await nuevoProyecto('Borrado durante el renombrado');
+    const board = await api.request('POST', `/projects/${projectId}/boards`, {
+      token: duena.token,
+      body: { displayName: 'Pizarra' },
+    });
+    expect(board.status).toBe(201);
+    const boardId = board.body.id as string;
+    const prisma = api.app.prisma;
+    let rename: ReturnType<Harness['request']> | undefined;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.board.delete({ where: { id: boardId } });
+        rename = api.request('PATCH', `/boards/${boardId}`, {
+          token: duena.token,
+          body: { displayName: 'Nombre nuevo' },
+        });
+        // El PATCH ya leyó la pizarra y espera el resultado del borrado.
+        await vi.waitFor(async () => {
+          const [activity] = await prisma.$queryRaw<{ waiting: boolean }[]>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'
+                AND query LIKE '%UPDATE%boards%'
+            ) AS waiting
+          `;
+          expect(activity?.waiting).toBe(true);
+        });
+      });
+      expect((await rename)?.status).toBe(404);
+    } finally {
+      await rename;
+    }
   });
 
   it('CA-A08.2 — un rol de solo lectura no puede modificar la pizarra', async () => {

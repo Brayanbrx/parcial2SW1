@@ -5,25 +5,29 @@ import {
 } from '../src/features/assistant/speech-session.js';
 import { prepareDictation } from '../src/features/assistant/prepare-dictation.js';
 
-function harness() {
+function harness(stopTimeoutMs?: number) {
   vi.useFakeTimers();
   const engines: SpeechRecognitionLike[] = [];
   const callbacks = { phase: vi.fn(), text: vi.fn(), error: vi.fn(), complete: vi.fn() };
-  const session = createSpeechSession(() => {
-    const engine: SpeechRecognitionLike = {
-      lang: '',
-      continuous: false,
-      interimResults: false,
-      onresult: null,
-      onerror: null,
-      onend: null,
-      start: vi.fn(),
-      stop: vi.fn(),
-      abort: vi.fn(),
-    };
-    engines.push(engine);
-    return engine;
-  }, callbacks);
+  const session = createSpeechSession(
+    () => {
+      const engine: SpeechRecognitionLike = {
+        lang: '',
+        continuous: false,
+        interimResults: false,
+        onresult: null,
+        onerror: null,
+        onend: null,
+        start: vi.fn(),
+        stop: vi.fn(),
+        abort: vi.fn(),
+      };
+      engines.push(engine);
+      return engine;
+    },
+    callbacks,
+    stopTimeoutMs === undefined ? {} : { stopTimeoutMs },
+  );
   const result = (engine: SpeechRecognitionLike, ...parts: string[]) =>
     engine.onresult?.({ results: parts.map((transcript) => [{ transcript }]) });
   return { engines, callbacks, session, result };
@@ -107,6 +111,34 @@ describe('dictado hasta parar explícitamente', () => {
     vi.advanceTimersByTime(3000);
     expect(h.engines).toHaveLength(1);
     expect(h.callbacks.complete).toHaveBeenCalledExactlyOnceWith('crea Cliente');
+    expect(h.callbacks.error).toHaveBeenLastCalledWith(expect.stringContaining('tardó demasiado'));
+  });
+  it('reports a timeout without completing an empty draft and ignores late results', () => {
+    const h = harness(150_000);
+    h.session.start();
+    const engine = h.engines[0]!;
+    const late = engine.onresult;
+    h.session.stop();
+    vi.advanceTimersByTime(150_000);
+    expect(h.callbacks.error).toHaveBeenLastCalledWith(expect.stringContaining('tardó demasiado'));
+    expect(h.callbacks.complete).not.toHaveBeenCalled();
+    expect(engine.abort).toHaveBeenCalledOnce();
+    late?.({ results: [[{ transcript: 'tardío' }]] });
+    expect(h.callbacks.text).toHaveBeenLastCalledWith('');
+    expect(h.callbacks.phase).toHaveBeenLastCalledWith('idle');
+  });
+  it('waits for server transcription longer than a minute within the configured deadline', () => {
+    const h = harness(210_000);
+    h.session.start();
+    h.session.stop();
+    vi.advanceTimersByTime(180_000);
+    expect(h.callbacks.complete).not.toHaveBeenCalled();
+    expect(h.engines[0]!.abort).not.toHaveBeenCalled();
+    h.result(h.engines[0]!, 'crea Cliente');
+    h.engines[0]!.onend?.();
+    expect(h.callbacks.complete).toHaveBeenCalledExactlyOnceWith('crea Cliente');
+    vi.runAllTimers();
+    expect(h.callbacks.error).toHaveBeenLastCalledWith(null);
   });
   it('un fallo de red conserva el borrador y no hace reintentos infinitos', () => {
     const h = harness();

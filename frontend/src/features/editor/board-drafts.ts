@@ -25,7 +25,7 @@ export class BoardDrafts {
    * available offline and must not claim that before the copy exists.
    */
   snapshot(doc: Y.Doc): void {
-    this.storage.setItem(this.snapshotKey, encode(doc));
+    this.storage.setItem(this.snapshotKey, encode(Y.encodeStateAsUpdate(doc)));
   }
 
   /** Offline replicas never go directly into a provider; reconnect starts clean. */
@@ -48,20 +48,28 @@ export class BoardDrafts {
     }
   }
 
-  /** On a live replica, call only after server write authorization and initial sync. */
+  /** Call after write authorization and acknowledgement of the replica's updates. */
   restore(doc: Y.Doc): boolean {
     const entries = this.entries();
     if (entries.length === 0) return false;
     const candidate = new Y.Doc();
     try {
-      Y.applyUpdate(candidate, Y.encodeStateAsUpdate(doc));
+      const confirmed = Y.encodeStateAsUpdate(doc);
+      Y.applyUpdate(candidate, confirmed);
       for (const [, value] of entries) {
         Y.applyUpdate(candidate, decode(value));
       }
       readBoardState(candidate);
+      const merged = Y.encodeStateAsUpdate(candidate);
+      // Compare the whole update: state vectors alone cannot detect deletions.
+      if (confirmed.length === merged.length && confirmed.every((byte, i) => byte === merged[i])) {
+        this.removeUnchanged(entries);
+        return false;
+      }
       // Persist the merged copy before deleting old slots or modifying the editor.
-      this.save(candidate, entries);
-      Y.applyUpdate(doc, Y.encodeStateAsUpdate(candidate));
+      this.storage.setItem(this.key, encode(merged));
+      this.removeUnchanged(entries.filter(([key]) => key !== this.key));
+      Y.applyUpdate(doc, merged);
       return true;
     } finally {
       candidate.destroy();
@@ -75,8 +83,9 @@ export class BoardDrafts {
       Y.applyUpdate(candidate, Y.encodeStateAsUpdate(doc));
       const result = applyBatchToDocument(candidate, batch);
       if (!result.applied) return result;
-      this.save(candidate, []);
-      Y.applyUpdate(doc, Y.encodeStateAsUpdate(candidate));
+      const update = Y.encodeStateAsUpdate(candidate);
+      this.storage.setItem(this.key, encode(update));
+      Y.applyUpdate(doc, update);
       return result;
     } finally {
       candidate.destroy();
@@ -95,17 +104,15 @@ export class BoardDrafts {
     return entries;
   }
 
-  private save(doc: Y.Doc, previous: [string, string][]): void {
-    this.storage.setItem(this.key, encode(doc));
+  private removeUnchanged(previous: [string, string][]): void {
     for (const [key, value] of previous) {
       // Another tab may have updated its slot since we read it.
-      if (key !== this.key && this.storage.getItem(key) === value) this.storage.removeItem(key);
+      if (this.storage.getItem(key) === value) this.storage.removeItem(key);
     }
   }
 }
 
-function encode(doc: Y.Doc): string {
-  const bytes = Y.encodeStateAsUpdate(doc);
+function encode(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);

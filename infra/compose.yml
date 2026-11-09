@@ -142,6 +142,20 @@ services:
       AI_VISION_FALLBACKS: ${AI_VISION_FALLBACKS:-}
       AI_SPEECH_FALLBACKS: ${AI_SPEECH_FALLBACKS:-}
       AI_LOG_USAGE: ${AI_LOG_USAGE:-true}
+      # Modelo local opcional (Ollama u otro compatible con OpenAI en el anfitrion).
+      # Vacio = el proyecto solo puede elegir proveedores en la nube.
+      AI_LOCAL_BASE_URL: ${AI_LOCAL_BASE_URL:-}
+      AI_LOCAL_MODEL: ${AI_LOCAL_MODEL:-}
+      AI_LOCAL_TIMEOUT_MS: ${AI_LOCAL_TIMEOUT_MS:-}
+      AI_LOCAL_CONTEXT_WINDOW: ${AI_LOCAL_CONTEXT_WINDOW:-}
+      AI_LOCAL_MAX_OUTPUT_TOKENS: ${AI_LOCAL_MAX_OUTPUT_TOKENS:-}
+      AI_LOCAL_REASONING: ${AI_LOCAL_REASONING:-}
+      AI_LOCAL_SPEECH_BASE_URL: ${AI_LOCAL_SPEECH_BASE_URL:-}
+      AI_LOCAL_SPEECH_MODEL: ${AI_LOCAL_SPEECH_MODEL:-}
+      AI_LOCAL_SPEECH_TIMEOUT_MS: ${AI_LOCAL_SPEECH_TIMEOUT_MS:-}
+    # Docker Desktop ya resuelve este nombre; en Linux hace falta declararlo.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - '${API_PORT:-3001}:3001'
     healthcheck:

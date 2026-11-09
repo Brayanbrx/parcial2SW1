@@ -12,6 +12,8 @@ import {
 import { ancestorsOf, buildInheritanceGraph } from '@uml/domain-core';
 import { useState } from 'react';
 import { gui, newId, type CommandBody } from './commands.js';
+import { IconoChevron } from '../../components/icons.js';
+import { reorderAttributes } from './attribute-order.js';
 
 export interface InspectorProps {
   readonly state: BoardState;
@@ -19,6 +21,9 @@ export interface InspectorProps {
   readonly canWrite: boolean;
   run(...commands: readonly CommandBody[]): void;
   onSelect(elementId: string | null): void;
+  /** Plegado, solo queda la cabecera: el espacio vuelve a la conversación. */
+  readonly collapsed?: boolean;
+  onToggleCollapsed?(): void;
 }
 
 /**
@@ -33,13 +38,18 @@ export function Inspector(props: InspectorProps): React.JSX.Element {
 
   if (selectedId === null) {
     return (
-      <aside className="inspector">
-        <InspectorHeader title="Propiedades" detail="Nada seleccionado" />
-        <div className="inspector-vacio">
-          <span aria-hidden="true">↖</span>
-          <p>Selecciona una clase o una relación para editar sus propiedades.</p>
-          <small>También puedes recorrer el diagrama con Tab y seleccionar con Enter.</small>
-        </div>
+      <aside className={clase('inspector inspector-sin-seleccion', props.collapsed)}>
+        <InspectorHeader
+          title="Propiedades"
+          detail="Nada seleccionado"
+          collapsed={props.collapsed}
+          onToggleCollapsed={props.onToggleCollapsed}
+        />
+        {/* Una línea y no un estado vacío a media columna: sin selección, el
+            espacio es para la conversación con el equipo. */}
+        <p className="inspector-pista">
+          Selecciona una clase o relación para editarla. Con teclado: Tab y Enter.
+        </p>
       </aside>
     );
   }
@@ -51,8 +61,13 @@ export function Inspector(props: InspectorProps): React.JSX.Element {
   if (relacion !== undefined) return <RelationshipInspector {...props} relationship={relacion} />;
 
   return (
-    <aside className="inspector">
-      <InspectorHeader title="Propiedades" detail="Elemento eliminado" />
+    <aside className={clase('inspector', props.collapsed)}>
+      <InspectorHeader
+        title="Propiedades"
+        detail="Elemento eliminado"
+        collapsed={props.collapsed}
+        onToggleCollapsed={props.onToggleCollapsed}
+      />
       <p className="pista">Ese elemento ya no existe.</p>
     </aside>
   );
@@ -64,12 +79,19 @@ function ClassInspector({
   canWrite,
   run,
   onSelect,
+  collapsed,
+  onToggleCollapsed,
 }: InspectorProps & { umlClass: UmlClass }): React.JSX.Element {
   const [nuevoAtributo, setNuevoAtributo] = useState('');
 
   return (
-    <aside className="inspector" data-testid="inspector-clase">
-      <InspectorHeader title="Propiedades" detail="Clase UML" />
+    <aside className={clase('inspector', collapsed)} data-testid="inspector-clase">
+      <InspectorHeader
+        title="Propiedades"
+        detail="Clase UML"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
       <label>
         <span>Nombre</span>
         <input
@@ -93,7 +115,7 @@ function ClassInspector({
         {umlClass.attributes.length === 0 && (
           <li className="atributos-vacios">Esta clase todavía no tiene atributos.</li>
         )}
-        {umlClass.attributes.map((atributo) => (
+        {umlClass.attributes.map((atributo, indice) => (
           <li key={atributo.id}>
             <input
               aria-label={`Nombre del atributo ${atributo.displayName}`}
@@ -175,6 +197,26 @@ function ClassInspector({
                 />
                 Único
               </label>
+              <span className="orden-atributo">
+                <button
+                  type="button"
+                  disabled={!canWrite || indice === 0}
+                  aria-label={`Subir ${atributo.displayName}`}
+                  title="Subir"
+                  onClick={() => run(...reorderAttributes(umlClass, indice, indice - 1))}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  disabled={!canWrite || indice === umlClass.attributes.length - 1}
+                  aria-label={`Bajar ${atributo.displayName}`}
+                  title="Bajar"
+                  onClick={() => run(...reorderAttributes(umlClass, indice, indice + 1))}
+                >
+                  ↓
+                </button>
+              </span>
             </span>
 
             <button
@@ -319,6 +361,8 @@ function RelationshipInspector({
   canWrite,
   run,
   onSelect,
+  collapsed,
+  onToggleCollapsed,
 }: InspectorProps & { relationship: UmlRelationship }): React.JSX.Element {
   const nombre = (classId: string): string =>
     state.semantic.classes.find((item) => item.id === classId)?.displayName ?? '?';
@@ -326,8 +370,13 @@ function RelationshipInspector({
   const esRecursiva = relationship.sourceClassId === relationship.targetClassId;
 
   return (
-    <aside className="inspector" data-testid="inspector-relacion">
-      <InspectorHeader title="Propiedades" detail="Relación UML" />
+    <aside className={clase('inspector', collapsed)} data-testid="inspector-relacion">
+      <InspectorHeader
+        title="Propiedades"
+        detail="Relación UML"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
       <p className="derivados">
         {nombre(relationship.sourceClassId)} → {nombre(relationship.targetClassId)}
       </p>
@@ -471,16 +520,39 @@ function RelationshipInspector({
 function InspectorHeader({
   title,
   detail,
+  collapsed,
+  onToggleCollapsed,
 }: {
   readonly title: string;
   readonly detail: string;
+  readonly collapsed?: boolean | undefined;
+  onToggleCollapsed?: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <header className="inspector-header">
-      <h2>{title}</h2>
+      <h2>
+        {onToggleCollapsed ? (
+          <button
+            type="button"
+            className="inspector-plegar"
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Mostrar propiedades' : 'Ocultar propiedades'}
+            onClick={onToggleCollapsed}
+          >
+            <IconoChevron size={14} className="inspector-chevron" />
+            {title}
+          </button>
+        ) : (
+          title
+        )}
+      </h2>
       <span>{detail}</span>
     </header>
   );
+}
+
+function clase(base: string, collapsed: boolean | undefined): string {
+  return collapsed ? `${base} plegado` : base;
 }
 
 const RELATIONSHIP_LABELS: Readonly<Record<RelationshipKind, string>> = {

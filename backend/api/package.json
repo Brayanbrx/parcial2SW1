@@ -23,10 +23,10 @@
     "@uml/generation-ir": "*",
     "@uml/generator-backend": "*",
     "@uml/xmi": "*",
-    "fastify": "^5.0.0",
+    "fastify": "^5.12.8",
     "fastify-plugin": "^6.0.0",
     "jose": "^6.2.10",
     "pg": "^8.23.0",
-    "zod": "^3.23.0"
+    "zod": "^4.6.7"
   }
 }

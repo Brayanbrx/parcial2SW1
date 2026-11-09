@@ -89,11 +89,13 @@ export async function boardRoutes(app: FastifyInstance): Promise<void> {
     const board = await findBoard(app, boardId);
     await requireWriteAccess(app.prisma, board.projectId, userId);
 
-    return app.prisma.board.update({
+    const [updated] = await app.prisma.board.updateManyAndReturn({
       where: { id: boardId },
       data: { displayName: body.displayName },
       select: { id: true, projectId: true, displayName: true, type: true, createdAt: true },
     });
+    if (updated === undefined) throw notFound('La pizarra no existe.');
+    return updated;
   });
 
   app.delete('/boards/:boardId', async (request, reply) => {

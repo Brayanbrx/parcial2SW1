@@ -90,18 +90,20 @@ export async function generationRoutes(
     try {
       huellas = await emitirHuellas(ir, body.includeMobile);
     } catch (error) {
-      await app.prisma.generation.update({
+      const failed = await app.prisma.generation.updateMany({
         where: { id: generation.id },
         // Solo el mensaje, nunca la traza: esto se muestra en la interfaz.
         data: { status: 'FAILED', error: mensajeDeError(error) },
       });
+      if (failed.count === 0) throw notFound('La generacion no existe.');
       throw error;
     }
 
-    await app.prisma.generation.update({
+    const ready = await app.prisma.generation.updateMany({
       where: { id: generation.id },
       data: { status: 'READY', springSha256: huellas.spring, mobileSha256: huellas.mobile ?? null },
     });
+    if (ready.count === 0) throw notFound('La generacion no existe.');
 
     reply.code(201);
     return {
@@ -245,7 +247,8 @@ export async function generationRoutes(
     await requireWriteAccess(app.prisma, generation.board.projectId, userId);
 
     await app.prisma.$transaction(async (tx) => {
-      await tx.generation.delete({ where: { id: generationId } });
+      const removed = await tx.generation.deleteMany({ where: { id: generationId } });
+      if (removed.count === 0) throw notFound('La generacion no existe.');
 
       // Cada generacion congela su propia copia, pero se comprueba igual
       const referencias = await tx.generation.count({

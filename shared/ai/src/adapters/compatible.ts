@@ -33,7 +33,8 @@ export interface CompatibleAdapterOptions {
   readonly jsonMode?: boolean;
   readonly thinking?: boolean;
   readonly chatTemplateThinking?: boolean;
-  readonly reasoningEffort?: 'low' | 'high' | 'max';
+  /** none/medium los usan servidores locales como Ollama; max, Kimi K3. */
+  readonly reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'max';
   readonly maxOutputTokens?: number;
   /** Obligatorio: OpenRouter sirve cientos de modelos y ninguno es el obvio. */
   readonly model: string;

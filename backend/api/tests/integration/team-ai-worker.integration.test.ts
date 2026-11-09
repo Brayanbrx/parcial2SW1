@@ -132,6 +132,7 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
         solutionMode: 'HINTS_ONLY',
         executionMode: 'PROPOSE_ONLY',
         reviewMode: 'ON_DEMAND',
+        aiSource: 'PROVIDERS',
       },
     });
     expect(changed.status).toBe(200);
@@ -154,6 +155,7 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
         solutionMode: 'ON_REQUEST',
         executionMode: 'PROPOSE_ONLY',
         reviewMode: 'OFF',
+        aiSource: 'PROVIDERS',
       },
     });
     calls[0]!.resolve({ kind: 'REVIEW', text: 'Respuesta tardía', solutionMode: 'ON_REQUEST' });

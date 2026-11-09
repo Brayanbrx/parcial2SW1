@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import type { ProjectRole } from '@prisma/client';
 import { SCHEMA_VERSION } from '@uml/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -250,43 +250,40 @@ export async function projectRoutes(
     const { code } = acceptParams.parse(request.params);
     const { userId } = currentUser(request);
 
-    const invite = await app.prisma.projectInvite.findUnique({
-      where: { code },
-      select: { projectId: true, role: true, expiresAt: true },
-    });
+    return app.prisma.$transaction(async (tx) => {
+      // Bloquear primero el proyecto respeta el orden de su borrado en cascada.
+      const [project] = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM projects
+        WHERE id = (SELECT "projectId" FROM project_invites WHERE code = ${code})
+        FOR KEY SHARE
+      `;
+      if (project === undefined) throw notFound('Esa invitacion no existe.');
 
-    if (invite === null) throw notFound('Esa invitacion no existe.');
-    if (invite.expiresAt <= new Date()) throw badRequest('invite_expired', 'La invitacion expiro.');
-
-    const existing = await app.prisma.projectMember.findUnique({
-      where: { projectId_userId: { projectId: invite.projectId, userId } },
-      select: { role: true },
-    });
-
-    // Aceptar dos veces no es un error: devuelve la membresia que ya hay
-    // Un enlace compartido se abre mas de una vez y fallar la segunda solo confunde
-    if (existing !== null) {
-      return { projectId: invite.projectId, role: existing.role, alreadyMember: true };
-    }
-
-    try {
-      const member = await app.prisma.projectMember.create({
-        data: { projectId: invite.projectId, userId, role: invite.role },
-        select: { projectId: true, role: true },
-      });
-      return { ...member, alreadyMember: false };
-    } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-        throw error;
+      // El borrado de la invitación espera hasta que termine la aceptación.
+      const [invite] = await tx.$queryRaw<{ role: ProjectRole; expiresAt: Date }[]>`
+        SELECT role, "expiresAt" FROM project_invites
+        WHERE code = ${code} AND "projectId" = ${project.id}::uuid
+        FOR SHARE
+      `;
+      if (invite === undefined) throw notFound('Esa invitacion no existe.');
+      if (invite.expiresAt <= new Date()) {
+        throw badRequest('invite_expired', 'La invitacion expiro.');
       }
-      // Dos pestañas pueden aceptar a la vez. Se conserva el rol que ya ganó,
-      // sin convertir la segunda aceptación en un 500 ni cambiar permisos.
-      const member = await app.prisma.projectMember.findUniqueOrThrow({
-        where: { projectId_userId: { projectId: invite.projectId, userId } },
-        select: { projectId: true, role: true },
+
+      const projectId = project.id;
+      const inserted = await tx.projectMember.createMany({
+        data: { projectId, userId, role: invite.role },
+        skipDuplicates: true,
       });
-      return { ...member, alreadyMember: true };
-    }
+      if (inserted.count > 0) return { projectId, role: invite.role, alreadyMember: false };
+
+      const member = await tx.projectMember.findUnique({
+        where: { projectId_userId: { projectId, userId } },
+        select: { role: true },
+      });
+      if (member === null) throw notFound('Ese usuario no es miembro del proyecto.');
+      return { projectId, role: member.role, alreadyMember: true };
+    });
   });
 
   app.delete('/projects/:projectId/invites/:inviteId', async (request, reply) => {

@@ -11,6 +11,8 @@ export function createVoiceCommandSession(
     error(value: string | null): void;
     complete(value: string): void;
   },
+  /** Espera tras soltar; la transcripción en el servidor necesita más que el navegador. */
+  options: { stopTimeoutMs?: number } = {},
 ) {
   let current: SpeechRecognitionLike | null = null;
   let phase: SpeechPhase = 'idle';
@@ -126,7 +128,7 @@ export function createVoiceCommandSession(
       }
       timer = setTimeout(
         () => fail('No llegó el cierre de la transcripción. No se envió el comando.'),
-        5000,
+        options.stopTimeoutMs ?? 5000,
       );
       try {
         current.stop();

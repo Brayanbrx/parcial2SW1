@@ -2,7 +2,6 @@ import type {
   Command,
   CommandBatch,
   SemanticModel,
-  UmlAttribute,
   UmlClass,
   UmlRelationship,
   ValidationIssue,
@@ -10,14 +9,16 @@ import type {
 import { applyBatch } from '@uml/domain-core';
 import type * as Y from 'yjs';
 import {
-  attributeNode,
+  appendAttribute,
   attributesArray,
   classesMap,
   deletePosition,
+  ensureAttributeRanks,
   findAttributeIndex,
   readBoardState,
   relationshipsMap,
   setPosition,
+  writeAttributeOrder,
   writeEmptyClass,
   writeRelationship,
 } from './document.js';
@@ -67,9 +68,29 @@ export function applyBatchToDocument(
     for (const command of batch.commands) {
       writeCommand(doc, command, outcome.state.semantic);
     }
+    writeAttributeMoves(doc, batch.commands, outcome.state.semantic);
   }, origin);
 
   return { applied: true, issues: outcome.issues };
+}
+
+function writeAttributeMoves(doc: Y.Doc, commands: readonly Command[], model: SemanticModel): void {
+  const movedByClass = new Map<string, Set<string>>();
+  for (const command of commands) {
+    if (command.type !== 'ADD_ATTRIBUTE' && command.type !== 'UPDATE_ATTRIBUTE') continue;
+    const { classId, attributeId, beforeAttributeId } = command.payload;
+    if (beforeAttributeId === undefined || beforeAttributeId === attributeId) continue;
+    const moved = movedByClass.get(classId) ?? new Set<string>();
+    moved.add(attributeId);
+    movedByClass.set(classId, moved);
+  }
+  for (const [classId, moved] of movedByClass) {
+    const node = classesMap(doc).get(classId);
+    const umlClass = findClass(model, classId);
+    if (node !== undefined && umlClass !== undefined) {
+      writeAttributeOrder(node, umlClass.attributes, moved);
+    }
+  }
 }
 
 /**
@@ -134,14 +155,10 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
       const node = classesMap(doc).get(command.payload.classId);
       if (node === undefined) return;
 
-      const attribute = findAttribute(
-        resultado,
-        command.payload.classId,
-        command.payload.attributeId,
+      const attribute = findClass(resultado, command.payload.classId)?.attributes.find(
+        (item) => item.id === command.payload.attributeId,
       );
-      if (attribute === undefined) return;
-
-      attributesArray(node).push([attributeNode(attribute)]);
+      if (attribute !== undefined) appendAttribute(node, attribute);
       return;
     }
 
@@ -152,12 +169,9 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
       const indice = findAttributeIndex(node, command.payload.attributeId);
       if (indice < 0) return;
 
-      const attribute = findAttribute(
-        resultado,
-        command.payload.classId,
-        command.payload.attributeId,
-      );
-      if (attribute === undefined) return;
+      const attributes = findClass(resultado, command.payload.classId)?.attributes;
+      const attribute = attributes?.find((item) => item.id === command.payload.attributeId);
+      if (attributes === undefined || attribute === undefined) return;
 
       // Se actualizan los campos del nodo existente en lugar de reemplazarlo:
       // sustituirlo lo moveria al final y perderia el orden que el usuario ve.
@@ -179,8 +193,12 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
       const node = classesMap(doc).get(command.payload.classId);
       if (node === undefined) return;
 
-      const indice = findAttributeIndex(node, command.payload.attributeId);
-      if (indice >= 0) attributesArray(node).delete(indice, 1);
+      ensureAttributeRanks(node);
+      const attributes = attributesArray(node);
+      const entries = attributes.toArray();
+      for (let index = entries.length - 1; index >= 0; index--) {
+        if (entries[index]?.get('id') === command.payload.attributeId) attributes.delete(index, 1);
+      }
       return;
     }
 
@@ -225,14 +243,6 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
 
 function findClass(model: SemanticModel, classId: string): UmlClass | undefined {
   return model.classes.find((item) => item.id === classId);
-}
-
-function findAttribute(
-  model: SemanticModel,
-  classId: string,
-  attributeId: string,
-): UmlAttribute | undefined {
-  return findClass(model, classId)?.attributes.find((item) => item.id === attributeId);
 }
 
 function findRelationship(

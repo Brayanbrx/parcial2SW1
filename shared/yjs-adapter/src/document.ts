@@ -25,9 +25,8 @@ import * as Y from 'yjs';
  * misma posicion de un array habria que desempatarlas, mientras que dos claves
  * distintas de un mapa conviven sin ambiguedad.
  *
- * Los atributos si van en Y.Array, porque su orden se ve: es el orden en que
- * aparecen en la tarjeta y en el codigo generado. El CRDT garantiza que ese
- * orden converge igual en todas las replicas.
+ * Los atributos viven en Y.Array. El orden explícito se guarda aparte para que
+ * mover una fila no sustituya su nodo ni compita con cambios a sus campos.
  */
 
 export const CLASSES_KEY = 'classes';
@@ -36,6 +35,9 @@ export const LAYOUT_KEY = 'layout';
 export const META_KEY = 'meta';
 export const POSITIONS_KEY = 'positions';
 export const ATTRIBUTES_KEY = 'attributes';
+const LEGACY_ATTRIBUTE_ORDER_KEY = 'attributeOrder';
+const INITIAL_ATTRIBUTE_RANK_KEY = 'initialOrderRank';
+const ATTRIBUTE_RANK_KEY = 'orderRank';
 
 type YMapAny = Y.Map<unknown>;
 
@@ -132,14 +134,12 @@ function readLayout(doc: Y.Doc): Layout {
 }
 
 function readClass(node: YMapAny): UmlClass {
-  const attributes = (node.get(ATTRIBUTES_KEY) as Y.Array<YMapAny> | undefined) ?? new Y.Array();
-
   return {
     id: node.get('id') as string,
     displayName: node.get('displayName') as string,
     codeName: node.get('codeName') as string,
     databaseName: node.get('databaseName') as string,
-    attributes: attributes.toArray().map(readAttribute),
+    attributes: orderedAttributes(node).map(({ attribute }) => readAttribute(attribute)),
   };
 }
 
@@ -284,6 +284,106 @@ export function findAttributeIndex(node: YMapAny, attributeId: string): number {
 
 export function attributesArray(node: YMapAny): Y.Array<YMapAny> {
   return node.get(ATTRIBUTES_KEY) as Y.Array<YMapAny>;
+}
+
+type OrderedAttribute = { id: string; attribute: YMapAny; rank?: string };
+
+function orderedAttributes(node: YMapAny): OrderedAttribute[] {
+  const attributes = new Map<string, YMapAny>();
+  for (const attribute of attributesArray(node)?.toArray() ?? []) {
+    const id = attribute.get('id') as string;
+    // Las versiones anteriores podían insertar dos nodos para un mismo ID.
+    if (!attributes.has(id)) attributes.set(id, attribute);
+  }
+
+  const ranked: (OrderedAttribute & { rank: string })[] = [];
+  for (const [id, attribute] of attributes) {
+    const rank = attribute.get(ATTRIBUTE_RANK_KEY) ?? attribute.get(INITIAL_ATTRIBUTE_RANK_KEY);
+    if (typeof rank !== 'string') continue;
+    ranked.push({ id, attribute, rank });
+    attributes.delete(id);
+  }
+  ranked.sort((left, right) => compareIds(left.rank, right.rank) || compareIds(left.id, right.id));
+
+  const ordered: OrderedAttribute[] = ranked;
+  const legacyOrder = node.get(LEGACY_ATTRIBUTE_ORDER_KEY);
+  const fallbackOrder = Array.isArray(legacyOrder)
+    ? [...legacyOrder, ...attributes.keys()]
+    : attributes.keys();
+  for (const id of fallbackOrder) {
+    const attribute = attributes.get(id);
+    if (attribute === undefined) continue;
+    ordered.push({ id, attribute });
+    attributes.delete(id);
+  }
+  return ordered;
+}
+
+// Cada posición cabe entre dos claves lexicográficas. El ID distingue las
+// inserciones concurrentes en el mismo hueco sin renumerar las demás filas.
+const rankDigits = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+function rankBetween(lower: string | undefined, upper: string | undefined, id: string): string {
+  let prefix = '';
+  for (let index = 0; ; index++) {
+    const left = rankDigits.indexOf(lower?.[index] ?? '-');
+    const right =
+      upper === undefined ? rankDigits.length - 1 : rankDigits.indexOf(upper[index] ?? '-');
+    if (right - left > 1) {
+      const digit = rankDigits[Math.floor((left + right) / 2)];
+      return `${prefix}${digit}${id}V`;
+    }
+    prefix += rankDigits[left];
+    if (left < right) upper = undefined;
+  }
+}
+
+export function ensureAttributeRanks(node: YMapAny) {
+  let previous: string | undefined;
+  return orderedAttributes(node).map((entry) => {
+    const rank = entry.rank ?? rankBetween(previous, undefined, entry.id);
+    // La posición inicial se guarda aparte del movimiento de una fila.
+    if (entry.rank === undefined) entry.attribute.set(INITIAL_ATTRIBUTE_RANK_KEY, rank);
+    previous = rank;
+    return { ...entry, rank };
+  });
+}
+
+export function appendAttribute(node: YMapAny, attribute: UmlAttribute): void {
+  const item = attributeNode(attribute);
+  const legacyOrder = node.get(LEGACY_ATTRIBUTE_ORDER_KEY);
+  if (Array.isArray(legacyOrder) && legacyOrder.includes(attribute.id)) {
+    // Un ID restaurado no debe heredar su posición antigua si se añade al final.
+    const previous = ensureAttributeRanks(node).at(-1);
+    item.set(ATTRIBUTE_RANK_KEY, rankBetween(previous?.rank, undefined, attribute.id));
+  }
+  attributesArray(node).push([item]);
+}
+
+export function writeAttributeOrder(
+  node: YMapAny,
+  attributes: readonly UmlAttribute[],
+  movedIds: ReadonlySet<string>,
+): void {
+  const ranked = new Map(ensureAttributeRanks(node).map((entry) => [entry.id, entry]));
+  const ordered = attributes.flatMap(({ id }) => {
+    const entry = ranked.get(id);
+    return entry === undefined ? [] : [entry];
+  });
+  let lower: string | undefined;
+  let nextFixed = 0;
+  for (const [index, entry] of ordered.entries()) {
+    if (!movedIds.has(entry.id)) {
+      lower = entry.rank;
+      continue;
+    }
+    if (nextFixed <= index) {
+      nextFixed = index + 1;
+      while (nextFixed < ordered.length && movedIds.has(ordered[nextFixed]!.id)) nextFixed++;
+    }
+    lower = rankBetween(lower, ordered[nextFixed]?.rank, entry.id);
+    entry.attribute.set(ATTRIBUTE_RANK_KEY, lower);
+  }
 }
 
 /**

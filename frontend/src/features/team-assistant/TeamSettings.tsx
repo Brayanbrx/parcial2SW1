@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { AiSettingsValues, ProjectAiSettings } from '@uml/contracts';
 import { teamAiApi } from '../../lib/api.js';
+import { IconoAjustes } from '../../components/icons.js';
 
 export function TeamSettings({
   settings,
@@ -18,12 +19,13 @@ export function TeamSettings({
     setBusy(true);
     setError(null);
     try {
-      const { enabled, solutionMode, executionMode, reviewMode } = draft;
+      const { enabled, solutionMode, executionMode, reviewMode, aiSource } = draft;
       await teamAiApi.saveSettings(settings.projectId, {
         enabled,
         solutionMode,
         executionMode,
         reviewMode,
+        aiSource,
       });
       await refresh();
       dialog.current?.close();
@@ -37,13 +39,16 @@ export function TeamSettings({
     <>
       <button
         type="button"
+        className="boton-icono"
+        aria-label="Configurar IA"
+        title="Configurar IA del proyecto"
         onClick={() => {
           setDraft(settings);
           setError(null);
           dialog.current?.showModal();
         }}
       >
-        Configurar IA
+        <IconoAjustes size={18} />
       </button>
       <dialog ref={dialog} className="team-settings" aria-label="IA del proyecto">
         <form
@@ -63,6 +68,32 @@ export function TeamSettings({
             />{' '}
             Habilitar nuevas solicitudes
           </label>
+          <label>
+            Motor de IA
+            <select
+              data-testid="motor-ia"
+              value={draft.aiSource}
+              disabled={busy}
+              onChange={(e) =>
+                setDraft({ ...draft, aiSource: e.target.value as AiSettingsValues['aiSource'] })
+              }
+            >
+              <option value="PROVIDERS">Proveedores en la nube</option>
+              <option value="LOCAL" disabled={!settings.localModel}>
+                {settings.localModel
+                  ? `Modelo local (${settings.localModel})`
+                  : 'Modelo local (no instalado en el servidor)'}
+              </option>
+            </select>
+          </label>
+          <p data-testid="ayuda-motor-ia">
+            El modelo local responde Preguntar, Instruir y Revisar. Si está apagado o falla, se usan
+            los proveedores.{' '}
+            {settings.localSpeechModel
+              ? `Dictar y Comando de voz se transcriben con Whisper local (${settings.localSpeechModel}), sin depender de internet. `
+              : 'La voz sigue con el reconocimiento del navegador. '}
+            Leer fotos sigue con los proveedores.
+          </p>
           <label>
             Respuestas
             <select

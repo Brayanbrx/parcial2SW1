@@ -1,79 +1,744 @@
+/* ================================================================== */
+/* IA del equipo                                                      */
+/*                                                                    */
+/* La IA es una integrante más: tiene avatar, nombre, rol y estado,    */
+/* habla en el mismo hilo que las personas y se distingue por su color */
+/* propio (--ia), nunca por recuadros que compitan con el diagrama.    */
+/* ================================================================== */
+
 .team-assistant {
   min-width: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 0;
 }
-.team-voice-command {
-  padding: var(--e-2) var(--e-3);
-  border-top: 1px solid var(--borde);
+
+/* ---------- Avatares ---------- */
+.team-avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.team-avatar.ia {
+  background: var(--ia);
+  color: var(--ia-sobre);
+  position: relative;
+}
+.team-avatar.grande {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+/* Anillo de estado: la IA «respira» mientras piensa. */
+.team-avatar.ia.estado-pensando::after,
+.team-avatar.ia.estado-en-cola::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--ia);
+  opacity: 0.6;
+  animation: team-pulso 1.6s ease-out infinite;
+}
+.team-avatar.ia.estado-pausada,
+.team-avatar.ia.estado-sin-conexion {
+  background: var(--superficie-3);
+  color: var(--texto-tenue);
+}
+@keyframes team-pulso {
+  from {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+/* ---------- Cabecera: perfil de la IA ---------- */
+.team-perfil {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-4) var(--e-4) var(--e-3);
+}
+.team-perfil .team-avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.team-perfil-texto {
+  flex: 1;
+  min-width: 0;
+}
+.team-perfil h3 {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--e-2);
+  font-size: var(--t-base);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.team-rol {
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--texto-tenue);
+}
+.team-estado {
+  margin: 0.125rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--t-sm);
+  color: var(--texto-suave);
   overflow-wrap: anywhere;
 }
-.team-voice-command p {
-  margin: var(--e-1) 0;
+.team-estado::before {
+  content: '';
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: var(--ok);
 }
-.team-voice-command [data-testid='comando-voz'] {
-  touch-action: none;
-  user-select: none;
-  min-height: 2.75rem;
+.team-estado.estado-pensando::before,
+.team-estado.estado-en-cola::before {
+  background: var(--ia);
+  animation: team-parpadeo 1.2s ease-in-out infinite;
+}
+.team-estado.estado-pausada::before,
+.team-estado.estado-sin-conexion::before {
+  background: var(--texto-tenue);
+}
+@keyframes team-parpadeo {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+button.boton-icono {
+  flex: none;
+  width: var(--alto-control);
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--texto-suave);
+}
+button.boton-icono:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  border-color: transparent;
+  color: var(--texto);
+}
+
+/* ---------- Barra: filtro y política ---------- */
+.team-barra {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  flex-wrap: wrap;
+  padding: 0 var(--e-4) var(--e-3);
+  border-bottom: 1px solid var(--borde);
+}
+.team-filtro {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--e-2);
+  font-size: var(--t-sm);
+  color: var(--texto-suave);
+  cursor: pointer;
+}
+.team-filtro input {
+  width: 0.9375rem;
+  height: 0.9375rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ia);
+}
+.team-politica-contenedor {
+  display: contents;
+}
+button.team-politica {
+  min-height: 1.5rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ia-suave);
+  color: var(--ia-texto);
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+button.team-politica:hover:not(:disabled) {
+  background: var(--ia-suave);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--ia);
+}
+.team-politica-detalle {
+  flex-basis: 100%;
+  font-size: var(--t-sm);
+  line-height: 1.45;
+  color: var(--texto-suave);
+}
+
+/* ---------- Avisos compactos ---------- */
+.team-aviso {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  margin: var(--e-3) var(--e-4) 0;
+  padding: var(--e-2) var(--e-3);
+  border-radius: var(--r-md);
+  font-size: var(--t-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.team-aviso.error {
+  background: var(--error-suave);
+  color: var(--error-texto);
+}
+.team-aviso.advertencia {
+  background: var(--aviso-suave);
+  color: var(--aviso-texto);
+}
+.team-aviso-acciones {
+  display: inline-flex;
+  gap: var(--e-1);
+}
+.team-aviso button {
+  min-height: 1.75rem;
+  padding-inline: var(--e-2);
+  font-size: var(--t-sm);
+  color: inherit;
+}
+.team-cargando {
+  margin: var(--e-3) var(--e-4) 0;
+  font-size: var(--t-sm);
+  color: var(--texto-tenue);
+}
+
+/* ---------- Conversación ---------- */
+.team-assistant .conversacion {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 5rem;
+  padding: var(--e-3) var(--e-4);
+  gap: var(--e-4);
+  overscroll-behavior: contain;
+}
+.team-assistant .conversacion > li {
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+}
+.team-msg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--e-3);
+  align-items: start;
+  border-radius: var(--r-lg);
+  scroll-margin: var(--e-3);
+}
+.team-msg:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+.team-msg-cuerpo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--e-1);
+}
+.team-msg-cuerpo > * {
+  max-width: 100%;
+}
+.team-message-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.125rem var(--e-2);
+  font-size: var(--t-sm);
+  line-height: 1.35;
+}
+.team-message-meta strong {
+  font-weight: 600;
+  color: var(--texto);
+}
+.team-message-meta time {
+  margin-left: auto;
+  font-size: var(--t-xs);
+  color: var(--texto-tenue);
+  font-variant-numeric: tabular-nums;
+}
+.team-etiqueta {
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--suave-fuerte);
+  color: var(--texto-suave);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+}
+.asistente-mensaje .team-message-meta strong {
+  color: var(--ia-texto);
+}
+.asistente-mensaje .team-etiqueta {
+  background: var(--ia-suave);
+  color: var(--ia-texto);
+}
+
+/* El texto: sin burbujas pesadas. La IA lleva un filete de su color;
+   lo propio, un fondo apenas más claro. */
+.team-assistant .conversacion .team-texto {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-size: var(--t-md);
+  line-height: 1.55;
+  color: var(--texto);
+  overflow-wrap: anywhere;
+}
+.team-assistant .conversacion p.team-texto {
+  white-space: pre-wrap;
+  align-self: flex-start;
+}
+/* Todos los mensajes a la izquierda, como un hilo de equipo (no un chat a dos). */
+.team-assistant .conversacion li.usuario p.team-texto {
+  border: 0;
+}
+.team-assistant .conversacion div.team-texto p {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  white-space: pre-line;
+}
+.team-texto > * + * {
+  margin-top: var(--e-2) !important;
+}
+.team-texto ol,
+.team-texto ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+}
+.team-texto li::marker {
+  color: var(--texto-tenue);
+}
+.team-texto code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--suave-fuerte);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.92em;
+}
+.team-texto strong {
+  font-weight: 600;
+}
+.team-assistant .conversacion .asistente-mensaje .team-texto {
+  padding: var(--e-2) var(--e-3);
+  border-left: 2px solid var(--ia);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: var(--ia-fondo);
+}
+.team-assistant .conversacion .asistente-mensaje.moderacion .team-texto {
+  border-left-color: var(--aviso);
+  background: var(--aviso-suave);
+}
+.team-assistant .conversacion .usuario.propio .team-texto {
+  padding: var(--e-2) var(--e-3);
+  border-radius: var(--r-md);
+  background: var(--suave-fuerte);
+}
+/* Notas del sistema bajo un mensaje propio (límites, errores). */
+.team-assistant .conversacion .team-msg-cuerpo > p:not(.team-texto) {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  color: var(--texto-suave);
+}
+
+.team-assistant .team-reply-link {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--texto-tenue);
+}
+.team-assistant .team-reply-link:hover:not(:disabled) {
+  background: transparent;
+  color: var(--acento-texto);
+  text-decoration: underline;
+}
+.team-status {
+  color: var(--texto-tenue);
+  font-size: var(--t-xs);
+}
+.team-msg .team-status {
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--suave-fuerte);
+}
+.team-msg .team-status.estado-failed,
+.team-msg .team-status.estado-interrupted {
+  background: var(--error-suave);
+  color: var(--error-texto);
+}
+.team-msg-cuerpo > button:not(.team-reply-link) {
+  min-height: 1.875rem;
+  font-size: var(--t-sm);
+}
+
+/* Indicador «escribiendo»: tres puntos y a quién responde. */
+.team-assistant .conversacion .team-pensando .team-msg-cuerpo > p {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  color: var(--texto-suave);
+  font-size: var(--t-sm);
+}
+.team-puntos {
+  display: inline-flex;
+  gap: 3px;
+}
+.team-puntos i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ia);
+  animation: team-salto 1.1s ease-in-out infinite;
+}
+.team-puntos i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.team-puntos i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes team-salto {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* Estado vacío: la IA se presenta. */
+.team-assistant .conversacion > li.team-vacio {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-4) var(--e-2);
+  text-align: center;
+}
+.team-vacio strong {
+  font-size: var(--t-base);
+}
+.team-vacio > p {
+  margin: 0;
+  max-width: 21rem;
+  font-size: var(--t-md);
+  line-height: 1.55;
+  color: var(--texto-suave);
+}
+.team-sugerencias {
+  list-style: none;
+  margin: var(--e-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+  width: 100%;
+  max-width: 21rem;
+  text-align: left;
+}
+.team-sugerencias button {
+  width: 100%;
+  min-height: 0;
+  padding: var(--e-2) var(--e-3);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0 var(--e-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+  background: transparent;
+  white-space: normal;
+  text-align: left;
+  font-size: var(--t-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--texto-suave);
+}
+.team-sugerencias button:hover:not(:disabled) {
+  border-color: var(--ia);
+  background: var(--ia-fondo);
+  color: var(--texto);
+}
+.team-sugerencias b {
+  font-weight: 600;
+  color: var(--texto);
+}
+
+/* ---------- Propuestas dentro del hilo ---------- */
+.team-assistant .propuesta {
+  width: 100%;
+  margin-top: var(--e-1);
+  border: 1px solid var(--borde);
+  border-left: 2px solid var(--ok);
+  border-radius: var(--r-md);
+  background: var(--superficie);
+  font-size: var(--t-sm);
+}
+.team-assistant .propuesta .team-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--superficie);
 }
 .team-heading,
-.team-message-meta,
 .team-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  flex-wrap: wrap;
+}
+
+/* ---------- Compositor ---------- */
+.team-composer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-3) var(--e-4) var(--e-4);
+  border-top: 1px solid var(--borde);
+  background: var(--superficie);
+}
+.team-composer-cabecera {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--e-2);
   flex-wrap: wrap;
 }
-.team-heading {
-  padding: var(--e-3);
-  border-bottom: 1px solid var(--borde);
+.team-composer-cabecera {
+  flex-wrap: nowrap;
 }
-.team-heading h3 {
-  margin: 0;
-  font-size: var(--t-md);
+.team-composer-cabecera .segmentado {
+  flex: 1;
+  min-width: 0;
 }
-.team-heading small,
-.team-message-meta time,
-.team-status {
+.team-composer-cabecera .segmentado button {
+  flex: 1;
+  min-width: 0;
+  padding-inline: var(--e-1);
+}
+.segmentado {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--r-md);
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+}
+.segmentado button {
+  min-height: 1.75rem;
+  padding: 0 var(--e-3);
+  border: 0;
+  border-radius: calc(var(--r-md) - 2px);
+  background: transparent;
   color: var(--texto-suave);
-  font-size: 0.75rem;
+  font-size: var(--t-sm);
+  font-weight: 500;
 }
-.team-filter {
+.segmentado button:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+.segmentado button.activa {
+  background: var(--superficie);
+  color: var(--texto);
+  font-weight: 600;
+  box-shadow: var(--sombra-1);
+}
+:root[data-theme='dark'] .segmentado button.activa {
+  background: var(--superficie-3);
+}
+button.team-guia {
+  flex: none;
+  width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: var(--t-sm);
+  font-weight: 400;
+}
+button.team-guia:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  border-color: transparent;
+  color: var(--texto);
+}
+
+/* La caja de escritura agrupa el texto y sus acciones, como un solo control. */
+.team-assistant .team-entrada {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--e-2);
-  padding: var(--e-2) var(--e-3);
-  font-size: 0.8rem;
-}
-.team-filter input,
-.team-settings input[type='checkbox'] {
-  width: auto;
-}
-.team-assistant > .team-status {
-  margin: 0;
-  padding: 0 var(--e-3) var(--e-2);
-}
-.team-assistant .conversacion > li {
-  display: flex;
-  flex-shrink: 0;
   flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--r-lg);
+  background: var(--fondo);
+  transition:
+    border-color var(--transicion),
+    box-shadow var(--transicion);
+}
+.team-assistant .team-entrada:focus-within {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 18%, transparent);
+}
+.team-assistant .team-entrada.escuchando {
+  border-color: var(--error);
+}
+.team-assistant .team-entrada textarea {
+  flex: none;
+  width: 100%;
+  min-height: 3.25rem;
+  max-height: 11rem;
+  padding: var(--e-3) var(--e-3) var(--e-1);
+  border: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: transparent;
+  resize: vertical;
+  font-size: var(--t-md);
+  line-height: 1.5;
+  box-shadow: none;
+  outline: none;
+}
+.team-entrada-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  flex-wrap: wrap;
+  padding: var(--e-1) var(--e-2) var(--e-2);
+}
+.team-entrada-voz,
+.team-entrada-envio {
+  display: flex;
+  align-items: center;
   gap: var(--e-1);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.team-entrada-envio {
+  margin-left: auto;
+}
+.team-entrada-acciones button {
+  min-height: 2rem;
+  padding: 0 var(--e-3);
+  font-size: var(--t-sm);
+}
+.team-entrada-acciones button.team-dictar,
+.team-entrada-acciones button.team-voz {
+  background: transparent;
+  border-color: var(--borde);
+  color: var(--texto-suave);
+}
+.team-entrada-acciones button.team-dictar:hover:not(:disabled),
+.team-entrada-acciones button.team-voz:hover:not(:disabled) {
+  background: var(--suave-fuerte);
+  color: var(--texto);
+}
+.team-entrada-acciones button.escuchando {
+  border-color: var(--error);
+  color: var(--error-texto);
+  background: var(--error-suave);
+}
+.team-entrada-acciones button.team-voz {
+  touch-action: none;
+  user-select: none;
+}
+.team-contador {
+  font-size: var(--t-xs);
+  color: var(--texto-tenue);
+  font-variant-numeric: tabular-nums;
+}
+.team-contador.excedido {
+  color: var(--error-texto);
+  font-weight: 600;
+}
+.team-transcripcion {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--texto-suave);
   overflow-wrap: anywhere;
 }
-.team-assistant .team-message-meta {
-  font-size: 0.75rem;
+.team-transcripcion.vacia {
+  display: none;
 }
-.team-assistant .team-reply-link {
-  align-self: flex-start;
-  font-size: 0.7rem;
-  padding: var(--e-1);
+.team-nota {
+  margin: 0;
+  font-size: var(--t-xs);
+  color: var(--texto-tenue);
 }
-.team-actions {
-  justify-content: flex-start;
+.team-composer > .error,
+.team-composer > .estado-dictado,
+.team-composer > .revision-dictado {
+  margin: 0;
+  padding: 0;
+  font-size: var(--t-sm);
 }
-.team-modes {
-  padding: var(--e-2) var(--e-3);
+.team-composer > .revision-dictado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  flex-wrap: wrap;
 }
+.team-composer > .revision-dictado p {
+  margin: 0;
+}
+.team-assistant .contexto-asistente {
+  margin: 0;
+  flex-wrap: wrap;
+  font-size: var(--t-sm);
+  line-height: 1.4;
+}
+.team-assistant .contexto-asistente button {
+  min-height: 1.75rem;
+  font-size: var(--t-xs);
+}
+
+/* ---------- Configuración (OWNER) ---------- */
 .team-settings {
   width: min(30rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
@@ -81,7 +746,8 @@
   background: var(--fondo-panel);
   color: var(--texto);
   border: 1px solid var(--borde);
-  border-radius: var(--e-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sombra-2);
 }
 .team-settings form,
 .team-settings label {
@@ -90,7 +756,10 @@
   gap: var(--e-2);
 }
 .team-settings form {
-  gap: var(--e-3);
+  gap: var(--e-4);
+}
+.team-settings input[type='checkbox'] {
+  width: auto;
 }
 .team-settings label:has(input[type='checkbox']) {
   flex-direction: row;
@@ -103,11 +772,20 @@
 .team-settings::backdrop {
   background: rgb(0 0 0 / 0.45);
 }
-.team-assistant .contexto-asistente {
-  flex-wrap: wrap;
+
+@media (prefers-reduced-motion: reduce) {
+  .team-avatar.ia::after,
+  .team-estado::before,
+  .team-puntos i {
+    animation: none !important;
+  }
 }
-.team-assistant .propuesta .team-actions {
-  position: sticky;
-  bottom: 0;
-  background: var(--fondo-panel);
+
+@media (max-height: 820px) {
+  .team-sugerencias {
+    display: none;
+  }
+  .team-assistant .conversacion > li.team-vacio {
+    padding-block: var(--e-2);
+  }
 }

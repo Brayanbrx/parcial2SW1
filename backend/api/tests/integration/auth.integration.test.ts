@@ -189,6 +189,38 @@ describe('sesion', () => {
     expect(renovacion.status).toBe(401);
   });
 
+  it.each([1, 2])(
+    'cerrar sesión con una cookie anterior revoca su cadena tras %i rotaciones',
+    async (rotations) => {
+      const email = `cierra-rotada-${rotations}@example.com`;
+      const sesion = await api.signUp(email);
+      const otra = await api.request('POST', '/auth/login', {
+        body: { email, password: 'contrasena-de-prueba' },
+      });
+      expect(otra.status).toBe(200);
+      const cookies = [sesion.cookie];
+      for (let index = 0; index < rotations; index++) {
+        const rotated = await api.request('POST', '/auth/refresh', { cookie: cookies.at(-1)! });
+        expect(rotated.status).toBe(200);
+        const next = rotated.cookies.find((item) => item.name === 'uml_refresh');
+        expect(next).toBeDefined();
+        cookies.push(`uml_refresh=${next?.value}`);
+      }
+
+      expect((await api.request('POST', '/auth/logout', { cookie: sesion.cookie })).status).toBe(
+        204,
+      );
+      for (const cookie of cookies) {
+        expect((await api.request('POST', '/auth/refresh', { cookie })).status).toBe(401);
+      }
+      const otraCookie = otra.cookies.find((item) => item.name === 'uml_refresh');
+      expect(
+        (await api.request('POST', '/auth/refresh', { cookie: `uml_refresh=${otraCookie?.value}` }))
+          .status,
+      ).toBe(200);
+    },
+  );
+
   it('protege las rutas que necesitan sesion', async () => {
     expect((await api.request('GET', '/auth/me')).status).toBe(401);
     expect((await api.request('GET', '/auth/me', { token: 'no-es-un-token' })).status).toBe(401);

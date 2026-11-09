@@ -327,12 +327,19 @@ enum AiReviewMode {
   ON_ISSUES
 }
 
+// PROVIDERS usa la cadena de nube; LOCAL prueba primero el modelo local del servidor.
+enum AiSource {
+  PROVIDERS
+  LOCAL
+}
+
 model ProjectAiSettings {
   projectId     String          @id @db.Uuid
   enabled       Boolean         @default(true)
   solutionMode  AiSolutionMode  @default(ON_REQUEST)
   executionMode AiExecutionMode @default(AUTO_SAFE_VOICE)
   reviewMode    AiReviewMode    @default(ON_ISSUES)
+  aiSource      AiSource        @default(PROVIDERS)
   updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

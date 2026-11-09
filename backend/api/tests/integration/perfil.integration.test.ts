@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startHarness, type Harness } from '../support/harness.js';
 
 /**
@@ -288,6 +288,58 @@ describe('perfil y contrasena', () => {
 
       return testigo;
     }
+
+    it('un cambio pendiente no sobrescribe una recuperación confirmada', async () => {
+      const email = 'recupera-cambio-pendiente@example.com';
+      const currentPassword = 'contrasena-original';
+      const recoveredPassword = 'contrasena-recuperada';
+      const account = await api.signUp(email, currentPassword);
+      const token = await sembrarEnlace(account.userId);
+      const prisma = api.app.prisma;
+      let reset: ReturnType<Harness['request']> | undefined;
+      let change: ReturnType<Harness['request']> | undefined;
+
+      async function waitForUserUpdates(count: number): Promise<void> {
+        await vi.waitFor(
+          async () => {
+            const [activity] = await prisma.$queryRaw<{ waiting: number }[]>`
+            SELECT count(*)::int AS waiting FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'
+              AND query LIKE '%UPDATE%users%'
+          `;
+            expect(activity?.waiting).toBe(count);
+          },
+          { timeout: 5_000 },
+        );
+      }
+
+      try {
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.$queryRaw`SELECT id FROM users WHERE id = ${account.userId}::uuid FOR UPDATE`;
+            reset = api.request('POST', '/auth/password/reset', {
+              body: { token, newPassword: recoveredPassword },
+            });
+            await waitForUserUpdates(1);
+            change = api.request('POST', '/auth/me/password', {
+              token: account.token,
+              cookie: account.cookie,
+              body: { currentPassword, newPassword: 'contrasena-solicitud-antigua' },
+            });
+            await waitForUserUpdates(2);
+          },
+          { timeout: 12_000 },
+        );
+        expect((await reset)?.status).toBe(200);
+        expect((await change)?.status).toBe(401);
+      } finally {
+        await Promise.all([reset, change]);
+      }
+      const login = await api.request('POST', '/auth/login', {
+        body: { email, password: recoveredPassword },
+      });
+      expect(login.status).toBe(200);
+    });
 
     it('responde igual exista o no la cuenta', async () => {
       await api.signUp('recupera-existe@example.com');

@@ -8,6 +8,7 @@ import { SessionProvider, useSession } from './features/auth/session.js';
 import { ProjectPage, ProjectsPage } from './features/projects/ProjectsPage.js';
 import { InteractiveTourProvider } from './features/help/InteractiveTour.js';
 import { OfflineBoardsPage } from './features/editor/OfflineBoardsPage.js';
+import { AppUpdateNotice } from './components/AppUpdateNotice.js';
 
 const BoardPage = lazy(async () => {
   const { BoardPage } = await import('./features/editor/BoardPage.js');
@@ -30,6 +31,7 @@ export function App(): React.JSX.Element {
           </Suspense>
         </InteractiveTourProvider>
       </BrowserRouter>
+      <AppUpdateNotice />
     </SessionProvider>
   );
 }

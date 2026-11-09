@@ -4,8 +4,8 @@ package {{project.packageName}}.repository;
 import {{this}};
 {{/each}}
 
-public interface {{entity.repositoryName}} extends JpaRepository<{{entity.className}}, {{primaryKey.javaType}}> {
+public interface {{entity.repositoryName}} extends JpaRepository<{{entityType}}, {{primaryKey.javaType}}> {
 {{#each entity.relationships}}
-    List<{{../entity.className}}> {{finderMethodName}}({{targetPrimaryKeyJavaType}} {{queryParameterName}});
+    List<{{../entityType}}> {{finderMethodName}}({{targetPrimaryKeyJavaType}} {{queryParameterName}});
 {{/each}}
 }

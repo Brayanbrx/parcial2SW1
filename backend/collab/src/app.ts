@@ -74,7 +74,8 @@ async function atenderVolcado(options: {
     return;
   }
 
-  await storeBoardDocument(prisma, boardId, document);
+  // El guardado automático usa el mismo bloqueo. Se captura Yjs dentro de él.
+  await document.saveMutex.runExclusive(() => storeBoardDocument(prisma, boardId, document));
   responder(200, { stored: true });
 }
 

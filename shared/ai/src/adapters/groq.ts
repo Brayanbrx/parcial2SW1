@@ -1,5 +1,5 @@
 import { pedirJson } from '../http.js';
-import { ProviderContractError, type PortUsage, type SpeechPort } from '../ports.js';
+import { NoSpeechError, type PortUsage, type SpeechPort } from '../ports.js';
 import { comprobarAudio, extensionDeAudio } from '../prompt.js';
 
 /**
@@ -21,7 +21,7 @@ const BASE = 'https://api.groq.com/openai/v1';
 const MODELO_POR_DEFECTO = 'whisper-large-v3-turbo';
 
 export interface GroqSpeechOptions {
-  readonly provider?: 'groq' | 'mistral';
+  readonly provider?: 'groq' | 'mistral' | 'local';
   readonly apiKey: string;
   readonly model?: string;
   readonly timeoutMs?: number;
@@ -39,6 +39,32 @@ export interface GroqSpeechOptions {
 
 interface RespuestaGroq {
   readonly text?: string;
+}
+
+/**
+ * Ventana del codificador de Whisper para un WAV: 50 cuadros por segundo más
+ * margen, con un mínimo para frases muy cortas. Sin cabecera legible o con 30 s
+ * o más se usa la ventana completa (undefined).
+ */
+export function contextoDeAudio(audio: Uint8Array, mediaType: string): number | undefined {
+  if (mediaType !== 'audio/wav' || audio.length < 44) return undefined;
+  const view = new DataView(audio.buffer, audio.byteOffset, audio.byteLength);
+  const id = (at: number) => String.fromCharCode(...audio.subarray(at, at + 4));
+  if (id(0) !== 'RIFF' || id(8) !== 'WAVE') return undefined;
+  let bytesPorSegundo = 0;
+  for (let at = 12; at + 8 <= audio.length;) {
+    const size = view.getUint32(at + 4, true);
+    if (id(at) === 'fmt ' && at + 20 <= audio.length)
+      bytesPorSegundo = view.getUint32(at + 16, true);
+    if (id(at) === 'data') {
+      if (bytesPorSegundo <= 0) return undefined;
+      const segundos = Math.min(size, audio.length - at - 8) / bytesPorSegundo;
+      const cuadros = Math.max(128, Math.ceil(segundos * 50) + 64);
+      return cuadros >= 1500 ? undefined : cuadros;
+    }
+    at += 8 + size + (size % 2);
+  }
+  return undefined;
 }
 
 export class GroqSpeechPort implements SpeechPort {
@@ -82,6 +108,12 @@ export class GroqSpeechPort implements SpeechPort {
     formulario.append('language', this.language);
     formulario.append('response_format', 'json');
     if (this.name === 'groq') formulario.append('temperature', '0');
+    if (this.name === 'local') {
+      // whisper.cpp codifica siempre 30 s; limitar la ventana al audio real
+      // baja un comando corto de ~3 s a ~0,6 s en CPU (medido con whisper-small).
+      const contexto = contextoDeAudio(options.audio, options.mediaType);
+      if (contexto !== undefined) formulario.append('audio_ctx', String(contexto));
+    }
 
     const respuesta = await pedirJson<RespuestaGroq>({
       provider: this.name,
@@ -98,11 +130,12 @@ export class GroqSpeechPort implements SpeechPort {
       },
     });
 
-    const texto = (respuesta.text ?? '').trim();
+    // whisper.cpp marca el silencio o el ruido con etiquetas como [BLANK_AUDIO].
+    const texto = (respuesta.text ?? '').replace(/\[[A-Z_ ]+\]/g, ' ').trim();
     if (texto.length === 0) {
       // Un audio sin voz devuelve cadena vacia. Es un resultado legitimo del
       // servicio y un fallo para quien dicto: se dice, no se devuelve vacio.
-      throw new ProviderContractError(this.name, 'No se reconocio ninguna palabra en el audio.');
+      throw new NoSpeechError(this.name);
     }
 
     return {

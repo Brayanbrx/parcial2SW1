@@ -160,7 +160,16 @@ export async function buildApp(
         });
   if (moderator) app.addHook('onClose', () => moderator.close());
   await app.register(auditRoutes, { publish: events.publish, moderator });
-  await app.register(teamAiRoutes, { config, publish: events.publish, worker });
+  await app.register(teamAiRoutes, {
+    config,
+    publish: events.publish,
+    worker,
+    localModel: aiPorts.localModel ?? null,
+    speech: aiPorts.speech,
+    localSpeech: aiPorts.localSpeech,
+    localSpeechModel: aiPorts.localSpeechModel ?? null,
+    speechTimeoutMs: aiConfig.AI_SPEECH_CHAIN_TIMEOUT_MS,
+  });
 
   return app;
 }

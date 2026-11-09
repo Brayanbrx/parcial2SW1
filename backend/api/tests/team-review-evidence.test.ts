@@ -124,6 +124,15 @@ describe('prueba de contenido del moderador', () => {
     expect(hasBatchEvidence(base, [...create, move])).toBe(true);
     expect(touchedElements([create[3]!])).toEqual(new Set([relationshipId]));
   });
+  it('reordenar no atribuye errores y editar junto con el orden sigue siendo evidencia', () => {
+    const payload = { classId: a, attributeId, beforeAttributeId: null };
+    const move = command('UPDATE_ATTRIBUTE', payload);
+    const edit = command('UPDATE_ATTRIBUTE', { ...payload, nullable: false });
+    expect(hasBatchEvidence(base, [move])).toBe(false);
+    expect(touchedElements([move]).size).toBe(0);
+    expect(hasBatchEvidence(base, [edit])).toBe(false);
+    expect(hasBatchEvidence(apply([edit], base), [edit])).toBe(true);
+  });
   it('claves estables no dependen de redacción/orden y las plantillas respetan pistas', () => {
     const invalid = apply(
       [command('CHANGE_MULTIPLICITY', { relationshipId, sourceMultiplicity: '0..*' })],

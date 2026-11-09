@@ -1,7 +1,7 @@
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { collaborationRoomName } from '@uml/contracts';
 import { applyBatchToDocument, readBoardState } from '@uml/yjs-adapter';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { SignJWT } from 'jose';
 import { buildCollabServer, type CollabServer } from '../../src/app.js';
@@ -462,6 +462,68 @@ describe('sesion colaborativa', () => {
     expect(rehidratada?.attributes.map((a) => a.codeName)).toEqual(['nombre']);
 
     segunda.provider.destroy();
+  });
+
+  it('dos volcados simultáneos conservan la última edición en binario y en el snapshot', async () => {
+    const board = await seedProject(collab.prisma, JWT_SECRET);
+    const client = await conectar(board.room, board.duenaToken);
+    const live = collab.server.hocuspocus.documents.get(board.room)!;
+    const flush = () =>
+      fetch(`http://127.0.0.1:${collab.port()}/flush`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ room: board.room, token: board.duenaToken }),
+      });
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const prisma = collab.prisma;
+    const transaction = prisma.$transaction.bind(prisma);
+    const store = vi.spyOn(prisma, '$transaction').mockImplementationOnce(async (...args) => {
+      await paused;
+      return Reflect.apply(transaction, undefined, args);
+    });
+    const lock = vi.spyOn(live.saveMutex, 'runExclusive');
+    let first: ReturnType<typeof flush> | undefined;
+    let second: ReturnType<typeof flush> | undefined;
+    try {
+      // Aísla los dos volcados HTTP del guardado automático del escenario.
+      const origin = { source: 'local', skipStoreHooks: true };
+      applyBatchToDocument(live, batch(cmd.createClass(nextId(), 'Primera')), origin);
+      first = flush();
+      await vi.waitFor(() => expect(store).toHaveBeenCalledTimes(1));
+
+      applyBatchToDocument(live, batch(cmd.createClass(nextId(), 'Segunda')), origin);
+      second = flush();
+      await vi.waitFor(() => expect(lock).toHaveBeenCalledTimes(2));
+      expect(store).toHaveBeenCalledTimes(1);
+      release();
+      expect((await first).status).toBe(200);
+      expect((await second).status).toBe(200);
+
+      const snapshot = await prisma.boardSnapshot.findUniqueOrThrow({
+        where: { boardId_version: { boardId: board.boardId, version: 1 } },
+      });
+      expect(snapshot.canonicalJson).toEqual(readBoardState(live).semantic);
+      const stored = await prisma.boardDocument.findUniqueOrThrow({
+        where: { boardId: board.boardId },
+      });
+      const reopened = new Y.Doc();
+      Y.applyUpdate(reopened, stored.state);
+      expect(readBoardState(reopened).semantic.classes.map((item) => item.displayName)).toEqual([
+        'Primera',
+        'Segunda',
+      ]);
+      reopened.destroy();
+    } finally {
+      release();
+      await Promise.all([first, second]);
+      lock.mockRestore();
+      store.mockRestore();
+      client.provider.destroy();
+      client.doc.destroy();
+    }
   });
 
   it('un miembro retirado no recibe nuevas ediciones aunque permanezca pasivo', async () => {

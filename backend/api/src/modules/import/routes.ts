@@ -1,4 +1,9 @@
-import { layoutSchema, semanticModelSchema, type SemanticModel } from '@uml/contracts';
+import {
+  layoutSchema,
+  semanticModelSchema,
+  type CommandBatch,
+  type SemanticModel,
+} from '@uml/contracts';
 import {
   MAX_PROPOSAL_OPERATIONS,
   ProviderContractError,
@@ -21,6 +26,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError } from '../../lib/http-error.js';
+import { withRequestCancellation } from '../../lib/request-cancellation.js';
 import { currentUser } from '../../plugins/auth.js';
 import { requireMembership, requireWriteAccess } from '../projects/membership.js';
 
@@ -55,61 +61,77 @@ export async function importRoutes(
   app.addHook('preHandler', app.authenticate);
 
   // Fotografia a candidato editable
-  app.post('/boards/:boardId/import/image', { bodyLimit: IMAGE_BODY_LIMIT }, async (request) => {
-    const { boardId } = boardParams.parse(request.params);
-    const body = imageBody.parse(request.body);
-    const { userId } = currentUser(request);
+  app.post(
+    '/boards/:boardId/import/image',
+    { bodyLimit: IMAGE_BODY_LIMIT },
+    async (request, reply) => {
+      const { boardId } = boardParams.parse(request.params);
+      const body = imageBody.parse(request.body);
+      const { userId } = currentUser(request);
 
-    const board = await findBoard(app, boardId);
-    await requireWriteAccess(app.prisma, board.projectId, userId);
+      const board = await findBoard(app, boardId);
+      await requireWriteAccess(app.prisma, board.projectId, userId);
 
-    const { proposal, usage } = await conProveedor(() =>
-      ports.vision.extractModel({
-        image: Buffer.from(body.image, 'base64'),
-        mediaType: body.mediaType,
-      }),
-    );
+      const { proposal, usage } = await withRequestCancellation(request, reply, (signal) =>
+        conProveedor(() =>
+          ports.vision.extractModel({
+            image: Buffer.from(body.image, 'base64'),
+            mediaType: body.mediaType,
+            signal,
+          }),
+        ),
+      );
 
-    const { skipped = [], ...outcome } = resolveProposal({
-      proposal: conBorradoPrevio(proposal, body.mode, body.model),
-      model: body.model,
-      actorId: userId,
-      origin: 'IMAGE',
-      tolerante: true,
-    });
-
-    request.log.info(
-      {
-        boardId,
+      const { skipped = [], ...candidate } = resolveProposal({
+        proposal: conBorradoPrevio(proposal, body.mode, body.model),
+        model: body.model,
+        actorId: userId,
         origin: 'IMAGE',
-        provider: usage?.provider,
-        latencyMs: usage?.latencyMs,
-        outcome: outcome.kind,
-        operations: proposal.operations.length,
-        skipped: skipped.length,
-      },
-      'importacion por imagen',
-    );
+        tolerante: true,
+      });
+      const outcome =
+        body.mode === 'REPLACE' &&
+        'batch' in candidate &&
+        !contieneClasesImportadas(candidate.batch)
+          ? {
+              kind: 'QUESTION' as const,
+              question: 'No se pudo preparar ninguna clase de la foto para reemplazar la pizarra.',
+            }
+          : candidate;
 
-    // Si la lectura llego al tope, lo mas probable es que la
-    // fotografia tuviera mas de lo que cabe en una propuesta
-    const warnings = [
-      ...skipped,
-      ...(pareceTruncada(proposal)
-        ? [
-            {
-              element: 'la fotografia',
-              reason:
-                `La lectura alcanzo el maximo de ${MAX_PROPOSAL_OPERATIONS} operaciones, ` +
-                'asi que puede faltar contenido. Revisa el candidato antes de aplicarlo, y si ' +
-                'el diagrama es muy grande, importalo por partes.',
-            },
-          ]
-        : []),
-    ];
+      request.log.info(
+        {
+          boardId,
+          origin: 'IMAGE',
+          provider: usage?.provider,
+          latencyMs: usage?.latencyMs,
+          outcome: outcome.kind,
+          operations: proposal.operations.length,
+          skipped: skipped.length,
+        },
+        'importacion por imagen',
+      );
 
-    return { ...outcome, rationale: proposal.rationale ?? null, warnings };
-  });
+      // Si la lectura llego al tope, lo mas probable es que la
+      // fotografia tuviera mas de lo que cabe en una propuesta
+      const warnings = [
+        ...skipped,
+        ...(pareceTruncada(proposal)
+          ? [
+              {
+                element: 'la fotografia',
+                reason:
+                  `La lectura alcanzo el maximo de ${MAX_PROPOSAL_OPERATIONS} operaciones, ` +
+                  'asi que puede faltar contenido. Revisa el candidato antes de aplicarlo, y si ' +
+                  'el diagrama es muy grande, importalo por partes.',
+              },
+            ]
+          : []),
+      ];
+
+      return { ...outcome, rationale: proposal.rationale ?? null, warnings };
+    },
+  );
 
   // XMI a candidato editable, validado contra el dominio
   app.post('/boards/:boardId/import/xmi', { bodyLimit: XMI_BODY_LIMIT }, async (request) => {
@@ -128,6 +150,15 @@ export async function importRoutes(
         throw new HttpError(400, 'xmi_invalido', error.message);
       }
       throw error;
+    }
+
+    if (importado.classes.length === 0) {
+      return {
+        kind: 'QUESTION' as const,
+        question: 'El archivo XMI no contiene clases que se puedan importar.',
+        rationale: null,
+        warnings: importado.warnings,
+      };
     }
 
     const propuesta = xmiToBatch(importado, {
@@ -217,7 +248,9 @@ function conBorradoPrevio(
   mode: 'ADD' | 'REPLACE',
   current: SemanticModel,
 ): BatchProposal {
-  if (mode === 'ADD') return proposal;
+  if (mode === 'ADD' || !proposal.operations.some((operation) => operation.op === 'CREATE_CLASS')) {
+    return proposal;
+  }
 
   return {
     ...proposal,
@@ -229,6 +262,15 @@ function conBorradoPrevio(
       ...proposal.operations,
     ],
   };
+}
+
+function contieneClasesImportadas(batch: CommandBatch): boolean {
+  const creadas = new Set<string>();
+  for (const command of batch.commands) {
+    if (command.type === 'CREATE_CLASS') creadas.add(command.payload.classId);
+    if (command.type === 'DELETE_CLASS') creadas.delete(command.payload.classId);
+  }
+  return creadas.size > 0;
 }
 
 async function conProveedor<T>(llamar: () => Promise<T>): Promise<T> {

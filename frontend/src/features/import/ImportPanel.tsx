@@ -118,11 +118,20 @@ export function ImportPanel({
   const preview = useMemo(() => {
     if (candidato === null || !('batch' in candidato)) return null;
     const plan = planBatch(state, candidato.batch);
+    const missingReplacementClass =
+      baseCandidato?.modo === 'REPLACE' &&
+      plan.applied &&
+      !candidato.batch.commands.some(
+        (command) =>
+          command.type === 'CREATE_CLASS' &&
+          plan.state.semantic.classes.some((item) => item.id === command.payload.classId),
+      );
     return {
       applied: plan.applied,
       issues: plan.applied ? validateModel(plan.state.semantic) : plan.issues,
+      missingReplacementClass,
     };
-  }, [candidato, state]);
+  }, [baseCandidato, candidato, state]);
   const nombres = new Map(state.semantic.classes.map((c) => [c.id, c.displayName]));
   if (candidato !== null && 'batch' in candidato)
     for (const c of candidato.batch.commands) {
@@ -227,7 +236,7 @@ export function ImportPanel({
   }
 
   function aplicar(batch: CommandBatch, resumen: readonly string[]): void {
-    if (baseCandidato === null || obsoleto) return;
+    if (baseCandidato === null || obsoleto || preview?.missingReplacementClass) return;
     const rechazo = apply(
       batch,
       baseCandidato.model,
@@ -494,12 +503,22 @@ export function ImportPanel({
                 </ul>
               </details>
 
+              {preview?.missingReplacementClass && (
+                <p className="error" role="alert">
+                  El candidato no contiene clases para reemplazar la pizarra. Prepara otra
+                  importación.
+                </p>
+              )}
               <div className="acciones">
                 <button
                   type="button"
                   className="principal"
                   disabled={
-                    !canWrite || obsoleto || preview?.applied === false || resumen.length === 0
+                    !canWrite ||
+                    obsoleto ||
+                    preview?.applied === false ||
+                    preview?.missingReplacementClass ||
+                    resumen.length === 0
                   }
                   data-testid="aplicar-candidato"
                   onClick={() => aplicar(candidato.batch, resumen)}

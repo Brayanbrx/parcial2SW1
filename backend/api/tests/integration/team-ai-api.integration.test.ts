@@ -209,13 +209,19 @@ describe('paso 3: API colectiva autenticada', () => {
     expect(results.map((r) => r.status).sort()).toEqual([202, 409]);
   });
   it('configuración solo OWNER, PUT completo, defaults y lectura con IA deshabilitada', async () => {
-    expect((await api.request('GET', settings(), { token: viewer.token })).body).toMatchObject(
-      DEFAULT_AI_SETTINGS,
-    );
+    expect((await api.request('GET', settings(), { token: viewer.token })).body).toMatchObject({
+      ...DEFAULT_AI_SETTINGS,
+      localModel: null,
+    });
     expect(
       (await api.request('PUT', settings(), { token: editor.token, body: DEFAULT_AI_SETTINGS }))
         .status,
     ).toBe(403);
+    const sinLocal = await api.request('PUT', settings(), {
+      token: owner.token,
+      body: { ...DEFAULT_AI_SETTINGS, aiSource: 'LOCAL' },
+    });
+    expect([sinLocal.status, sinLocal.body.error.code]).toEqual([400, 'local_ai_unavailable']);
     expect(
       (await api.request('PUT', settings(), { token: owner.token, body: { enabled: false } }))
         .status,

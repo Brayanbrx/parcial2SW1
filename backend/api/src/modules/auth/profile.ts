@@ -140,7 +140,7 @@ export async function profileRoutes(
 
   app.post('/auth/me/password', { preHandler: app.authenticate }, async (request) => {
     const body = cambioBody.parse(request.body);
-    const { userId } = currentUser(request);
+    const { userId, sessionVersion } = currentUser(request);
 
     const user = await app.prisma.user.findUniqueOrThrow({
       where: { id: userId },
@@ -158,29 +158,33 @@ export async function profileRoutes(
     }
 
     const presented = request.cookies[REFRESH_COOKIE];
+    const passwordHash = await hashPassword(body.newPassword);
 
-    await app.prisma.$transaction([
-      app.prisma.user.update({
-        where: { id: userId },
+    await app.prisma.$transaction(async (tx) => {
+      // La contraseña y la sesión verificadas deben seguir vigentes al escribir.
+      const changed = await tx.user.updateMany({
+        where: { id: userId, sessionVersion: sessionVersion ?? 0, passwordHash: user.passwordHash },
         data: {
-          passwordHash: await hashPassword(body.newPassword),
+          passwordHash,
           sessionVersion: { increment: 1 },
         },
-      }),
+      });
+      if (changed.count !== 1) throw unauthorized('La sesión fue revocada.');
+
       // Las demas sesiones se cierran; la actual sobrevive
-      app.prisma.refreshToken.updateMany({
+      await tx.refreshToken.updateMany({
         where: {
           userId,
           revokedAt: null,
           ...(presented === undefined ? {} : { NOT: { tokenHash: hashRefreshToken(presented) } }),
         },
         data: { revokedAt: new Date() },
-      }),
-      app.prisma.passwordReset.updateMany({
+      });
+      await tx.passwordReset.updateMany({
         where: { userId, usedAt: null },
         data: { usedAt: new Date() },
-      }),
-    ]);
+      });
+    });
 
     return { changed: true };
   });

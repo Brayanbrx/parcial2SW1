@@ -111,16 +111,15 @@ export const tours: Record<TourKind, { title: string; steps: readonly TourStep[]
       },
       {
         id: 'validation',
-        target: 'panel-validacion',
+        target: 'abrir-validacion',
         title: 'Revisa el modelo antes de generar',
-        text: 'Aquí aparecen errores y avisos del diagrama. Selecciona el elemento afectado y corrige sus propiedades. Los errores bloquean la generación.',
-        reveal: ['alternar-panel'],
+        text: 'En la barra inferior está la revisión del modelo. Púlsala para ver errores y avisos; al elegir uno se selecciona el elemento afectado. Los errores bloquean la generación.',
       },
       {
         id: 'assistant',
         target: 'entrada-asistente',
         title: 'Pide ayuda con tus palabras',
-        text: 'En Consultar puedes preguntar sobre el diagrama. En Instruir, escribe un cambio concreto; Enviar prepara una propuesta que debes revisar antes de Aplicar.',
+        text: 'En Preguntar puedes consultar sobre el diagrama. En Instruir, escribe un cambio concreto; Enviar prepara una propuesta que debes revisar antes de Aplicar.',
         reveal: ['alternar-panel', 'pestana-asistente'],
       },
       {

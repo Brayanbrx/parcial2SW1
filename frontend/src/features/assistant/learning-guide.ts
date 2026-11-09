@@ -4,8 +4,8 @@ export type AssistantMode = 'instruir' | 'preguntar';
 export const learningSteps = [
   {
     title: 'Elige lo que necesitas',
-    text: 'Consultar sirve para entender el diagrama o revisar si está listo para generar código. Instruir sirve para proponer cambios en clases, atributos y relaciones. Una consulta no modifica tu pizarra.',
-    tip: 'Empieza consultando qué contiene tu diagrama.',
+    text: 'Preguntar sirve para entender el diagrama o revisar si está listo para generar código. Instruir sirve para proponer cambios en clases, atributos y relaciones. Una pregunta no modifica tu pizarra.',
+    tip: 'Empieza preguntando qué contiene tu diagrama.',
   },
   {
     title: 'Escribe una instrucción concreta',

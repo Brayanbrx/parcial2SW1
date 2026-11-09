@@ -104,10 +104,38 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return requestWithSession(path, options, leer<T>);
 }
 
+/**
+ * Una respuesta que no cumple el contrato casi siempre significa que la página
+ * quedó desfasada respecto de la API (p. ej. una copia vieja en caché tras
+ * desplegar). Se sigue rechazando —los contratos son estrictos—, pero la
+ * persona ve qué hacer en lugar del volcado JSON de Zod.
+ */
+export class ContractMismatchError extends Error {
+  constructor(readonly details: unknown) {
+    super(
+      'Esta pestaña usa una versión anterior de la aplicación. Recarga la página para actualizarla.',
+    );
+    this.name = 'ContractMismatchError';
+  }
+}
+
+function conforme<T>(schema: { parse(data: unknown): T }, data: unknown): T {
+  try {
+    return schema.parse(data);
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === 'ZodError') {
+      console.warn('Respuesta fuera de contrato', cause);
+      throw new ContractMismatchError(cause);
+    }
+    throw cause;
+  }
+}
+
 /** Recuperación del feed con la misma sesión Bearer y renovación que el editor. */
 export const teamAiApi = {
   async send(boardId: string, body: TeamRequestBody, signal: AbortSignal) {
-    return teamMessageSchema.parse(
+    return conforme(
+      teamMessageSchema,
       await apiRequest(`/boards/${boardId}/team-ai/messages`, { method: 'POST', body, signal }),
     );
   },
@@ -117,22 +145,25 @@ export const teamAiApi = {
       signal ? { signal } : {},
     );
     return {
-      message: teamMessageSchema.parse(result.message),
-      proposal: result.proposal === null ? null : aiProposalSchema.parse(result.proposal),
+      message: conforme(teamMessageSchema, result.message),
+      proposal: result.proposal === null ? null : conforme(aiProposalSchema, result.proposal),
     };
   },
   async cancel(boardId: string, id: string) {
-    return teamMessageSchema.parse(
+    return conforme(
+      teamMessageSchema,
       await apiRequest(`/boards/${boardId}/team-ai/messages/${id}/cancel`, { method: 'POST' }),
     );
   },
   async confirm(boardId: string, id: string) {
-    return aiProposalSchema.parse(
+    return conforme(
+      aiProposalSchema,
       await apiRequest(`/boards/${boardId}/team-ai/proposals/${id}/confirm`, { method: 'POST' }),
     );
   },
   async reject(boardId: string, id: string, reason: AiRejectReason) {
-    return aiProposalSchema.parse(
+    return conforme(
+      aiProposalSchema,
       await apiRequest(`/boards/${boardId}/team-ai/proposals/${id}/reject`, {
         method: 'POST',
         body: { reason },
@@ -140,22 +171,36 @@ export const teamAiApi = {
     );
   },
   async saveSettings(projectId: string, body: AiSettingsValues) {
-    return projectAiSettingsSchema.parse(
+    return conforme(
+      projectAiSettingsSchema,
       await apiRequest(`/projects/${projectId}/ai-settings`, { method: 'PUT', body }),
     );
   },
   async changes(boardId: string, cursor: string, signal: AbortSignal) {
     const query = new URLSearchParams({ changedSince: cursor, limit: '100' });
-    return teamFeedPageSchema.parse(
+    return conforme(
+      teamFeedPageSchema,
       await apiRequest(`/boards/${encodeURIComponent(boardId)}/team-ai/messages?${query}`, {
         signal,
       }),
     );
   },
   async settings(projectId: string, signal: AbortSignal) {
-    return projectAiSettingsSchema.parse(
+    return conforme(
+      projectAiSettingsSchema,
       await apiRequest(`/projects/${encodeURIComponent(projectId)}/ai-settings`, { signal }),
     );
+  },
+  /** Grabación del panel → texto. Con «Modelo local» la transcribe Whisper local. */
+  async transcribe(boardId: string, wav: Uint8Array, signal: AbortSignal): Promise<string> {
+    let binary = '';
+    for (let i = 0; i < wav.length; i += 0x8000)
+      binary += String.fromCharCode(...wav.subarray(i, i + 0x8000));
+    const result = await apiRequest<{ text: string }>(
+      `/boards/${encodeURIComponent(boardId)}/team-ai/transcribe`,
+      { method: 'POST', body: { audio: btoa(binary), mediaType: 'audio/wav' }, signal },
+    );
+    return result.text;
   },
 };
 
@@ -594,8 +639,8 @@ export const api = {
       },
     }),
 
-  listGenerations: (boardId: string) =>
-    apiRequest<GenerationSummary[]>(`/boards/${boardId}/generations`),
+  listGenerations: (boardId: string, signal?: AbortSignal) =>
+    apiRequest<GenerationSummary[]>(`/boards/${boardId}/generations`, signal ? { signal } : {}),
 
   /**
    * Quita una generacion del historial y libera su version congelada en el
