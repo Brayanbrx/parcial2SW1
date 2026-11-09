@@ -10,6 +10,7 @@ import {
   refreshSession,
   flushAuditQueue,
   pendingAuditCount,
+  subscribeAuditQueue,
   sessionRefreshUnavailable,
   downloadGeneration,
   downloadXmi,
@@ -443,6 +444,99 @@ describe('cliente HTTP', () => {
     expect(pendingAuditCount()).toBe(0);
   });
 
+  it('envía la cola de la nueva cuenta aunque todavía haya un envío de la anterior', async () => {
+    const ana = { boardId: crypto.randomUUID(), batch: auditBatch(crypto.randomUUID()) };
+    const beto = { boardId: crypto.randomUUID(), batch: auditBatch(crypto.randomUUID()) };
+    const storage = storePendingAudits([ana, beto]);
+    let account = ana.batch.actorId;
+    let confirmAna!: (response: Response) => void;
+    let confirmBeto!: (response: Response) => void;
+    const betoResponse = new Promise<Response>((resolve) => {
+      confirmBeto = resolve;
+    });
+    const fetchMock = vi.fn(async (input: string, options?: RequestInit) => {
+      if (input.endsWith('/login')) return jsonResponse(200, session(account));
+      if (input.includes(ana.boardId)) {
+        return new Promise<Response>((resolve) => {
+          confirmAna = resolve;
+        });
+      }
+      expect(options?.headers).toMatchObject({ authorization: `Bearer token-${account}` });
+      return betoResponse;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await login('ana@example.com', 'password');
+    const oldFlush = expect(flushAuditQueue()).rejects.toMatchObject({ code: 'session_changed' });
+    account = beto.batch.actorId;
+    await login('beto@example.com', 'password');
+    const newFlush = flushAuditQueue();
+    const checkedFlush = expect(newFlush).resolves.toBeUndefined();
+
+    confirmAna(jsonResponse(202, { batchId: ana.batch.batchId }));
+    await oldFlush;
+    const repeatedFlush = flushAuditQueue();
+    confirmBeto(jsonResponse(202, { batchId: beto.batch.batchId }));
+    await checkedFlush;
+    expect(repeatedFlush).toBe(newFlush);
+    expect(JSON.parse(storage.get('uml_audit_queue_v1')!)).toEqual([ana]);
+  });
+
+  it('actualiza el contador cuando otra pestaña sincroniza la auditoría', async () => {
+    const userId = crypto.randomUUID();
+    const pending = { boardId: crypto.randomUUID(), batch: auditBatch(userId) };
+    const storage = storePendingAudits([pending]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, session(userId))),
+    );
+    await login('ana@example.com', 'password');
+    const browser = new EventTarget();
+    vi.stubGlobal('window', browser);
+    const onCount = vi.fn();
+    const unsubscribe = subscribeAuditQueue(onCount);
+    const event = Object.assign(new Event('storage'), { key: 'uml_audit_queue_v1' });
+
+    expect(pendingAuditCount()).toBe(1);
+    storage.set('uml_audit_queue_v1', '[]');
+    browser.dispatchEvent(event);
+    unsubscribe();
+    browser.dispatchEvent(event);
+
+    expect(onCount.mock.calls).toEqual([[0]]);
+  });
+
+  it('deja reintentar la cola si el envío de un lote no responde', async () => {
+    const userId = crypto.randomUUID();
+    const pending = { boardId: crypto.randomUUID(), batch: auditBatch(userId) };
+    storePendingAudits([pending]);
+    const deadline = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const fetchMock = vi.fn(async (input: string, options?: RequestInit) => {
+      if (input.endsWith('/login')) return jsonResponse(200, session(userId));
+      expect(options?.signal).toBe(deadline.signal);
+      return new Promise<Response>((_resolve, reject) => {
+        deadline.signal.addEventListener('abort', () => reject(deadline.signal.reason), {
+          once: true,
+        });
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await login('ana@example.com', 'password');
+      const failed = expect(flushAuditQueue()).rejects.toMatchObject({ name: 'TimeoutError' });
+      deadline.abort(new DOMException('Se agotó el tiempo', 'TimeoutError'));
+      await failed;
+      expect(pendingAuditCount()).toBe(1);
+    } finally {
+      timeout.mockRestore();
+    }
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(202, { batchId: pending.batch.batchId }));
+    await flushAuditQueue();
+    expect(pendingAuditCount()).toBe(0);
+  });
+
   it('un lote de una pizarra eliminada no bloquea los de las otras pizarras', async () => {
     const userId = crypto.randomUUID();
     const pending = [
@@ -468,6 +562,15 @@ describe('cliente HTTP', () => {
     expect(JSON.parse(storage.get('uml_audit_queue_v1')!)).toEqual([pending[0]]);
   });
 });
+
+function storePendingAudits(pending: readonly { boardId: string; batch: CommandBatch }[]) {
+  const storage = new Map([['uml_audit_queue_v1', JSON.stringify(pending)]]);
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+  });
+  return storage;
+}
 
 function session(id: string) {
   return { accessToken: `token-${id}`, user: { id, email: `${id}@example.com`, displayName: id } };

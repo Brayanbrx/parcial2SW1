@@ -3,6 +3,7 @@ import {
   emptyBoardState,
   type BoardState,
   type CommandBatch,
+  type Position,
   type SemanticModel,
   type ValidationIssue,
 } from '@uml/contracts';
@@ -219,8 +220,8 @@ export function useBoardDocument(
      */
     let recuperacionPendiente = false;
     let avisoTimer: number | undefined;
-    const alConfirmarEnvio = ({ number }: { number: number }): void => {
-      if (disposed || !recuperacionPendiente || number > 0) return;
+    const alConfirmarEnvio = (): void => {
+      if (!recuperacionPendiente) return;
       recuperacionPendiente = false;
       setAccessNotice((previo) => (previo === AVISO_RECUPERADA ? AVISO_ENVIADA : previo));
       window.clearTimeout(avisoTimer);
@@ -246,7 +247,7 @@ export function useBoardDocument(
           setAccessNotice(AVISO_RECUPERADA);
           recuperacionPendiente = true;
           // Si no había nada nuevo que enviar, la copia ya coincide con el servidor.
-          if (!provider.hasUnsyncedChanges) alConfirmarEnvio({ number: 0 });
+          if (!provider.hasUnsyncedChanges) alConfirmarEnvio();
         }
       } catch {
         writeAllowed.current = false;
@@ -256,17 +257,21 @@ export function useBoardDocument(
         );
       }
     };
-    provider.on('unsyncedChanges', ({ number }: { number: number }) => {
-      alConfirmarEnvio({ number });
-      if (number === 0) restoreDrafts();
-    });
     let snapshotTimer: number | undefined;
+    let snapshotAwaitingAck = false;
     const saveSnapshot = (): void => {
       if (snapshotTimer !== undefined) {
         window.clearTimeout(snapshotTimer);
         snapshotTimer = undefined;
       }
       if (!serverSynced || !provider.isAuthenticated || board === null) return;
+      if (provider.hasUnsyncedChanges) {
+        // Los cambios pendientes ya están en un borrador aparte. Un lector
+        // debe poder abrir la última instantánea confirmada sin esos cambios.
+        snapshotAwaitingAck = true;
+        return;
+      }
+      snapshotAwaitingAck = false;
       try {
         if (draftsRef.current === null) return;
         draftsRef.current.snapshot(doc);
@@ -282,6 +287,12 @@ export function useBoardDocument(
         );
       }
     };
+    provider.on('unsyncedChanges', ({ number }: { number: number }) => {
+      if (disposed || number !== 0) return;
+      alConfirmarEnvio();
+      restoreDrafts();
+      if (snapshotAwaitingAck) saveSnapshot();
+    });
     /**
      * Guardar en cada actualizacion del documento codificaba el modelo completo
      * y lo escribia en `localStorage` de forma sincrona por cada pulsacion de
@@ -651,12 +662,20 @@ function mismaPresencia(izq: readonly Participant[], der: readonly Participant[]
  * participantes ven la misma disposicion en lugar de calcular cada uno la suya.
  */
 function conPosiciones(doc: Y.Doc, batch: CommandBatch): CommandBatch {
-  const nuevas = batch.commands.filter(
-    (comando) => comando.type === 'CREATE_CLASS' && comando.payload.position === undefined,
-  );
-  if (nuevas.length === 0) return batch;
+  if (
+    !batch.commands.some(
+      (comando) => comando.type === 'CREATE_CLASS' && comando.payload.position === undefined,
+    )
+  )
+    return batch;
 
-  let ocupadas = readBoardState(doc).semantic.classes.length;
+  const clave = ({ x, y }: Position) => `${x}:${y}`;
+  const ocupadas = new Set(Object.values(readBoardState(doc).layout.positions).map(clave));
+  for (const comando of batch.commands) {
+    if (comando.type !== 'CREATE_CLASS' && comando.type !== 'MOVE_CLASS') continue;
+    if (comando.payload.position !== undefined) ocupadas.add(clave(comando.payload.position));
+  }
+  let siguiente = 0;
 
   return {
     ...batch,
@@ -665,11 +684,11 @@ function conPosiciones(doc: Y.Doc, batch: CommandBatch): CommandBatch {
         return comando;
       }
 
-      const posicion = {
-        x: 80 + (ocupadas % 4) * 300,
-        y: 80 + Math.floor(ocupadas / 4) * 240,
-      };
-      ocupadas += 1;
+      let posicion: Position;
+      do {
+        posicion = { x: 80 + (siguiente % 4) * 300, y: 80 + Math.floor(siguiente / 4) * 240 };
+        siguiente++;
+      } while (ocupadas.has(clave(posicion)));
 
       return { ...comando, payload: { ...comando.payload, position: posicion } };
     }),

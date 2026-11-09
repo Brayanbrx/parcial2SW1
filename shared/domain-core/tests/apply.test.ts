@@ -341,6 +341,23 @@ describe('relaciones', () => {
     expect(resultado.issues.map((i) => i.code)).toContain('SELF_RELATIONSHIP');
   });
 
+  it('rechaza convertir una asociación recursiva en una generalización', () => {
+    const { estado, clienteId } = conCliente();
+    const relationId = nextId();
+    const montaje = applyBatch(
+      estado,
+      batch(cmd.createRelationship(relationId, clienteId, clienteId)),
+    );
+    if (!montaje.applied) throw new Error('No se pudo crear la asociación recursiva');
+
+    const resultado = applyBatch(
+      montaje.state,
+      batch(cmd.updateRelationshipKind(relationId, 'GENERALIZATION')),
+    );
+    expect(resultado.applied).toBe(false);
+    expect(resultado.issues.map((i) => i.code)).toContain('SELF_RELATIONSHIP');
+  });
+
   it('permite convertir una relacion en muchos a muchos, y la marca (RM-01)', () => {
     const clienteId = nextId();
     const ventaId = nextId();

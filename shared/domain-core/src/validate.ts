@@ -4,6 +4,7 @@ import {
   isCollectionMultiplicity,
   severityOf,
   type SemanticModel,
+  type UmlAttribute,
   type UmlClass,
   type UmlRelationship,
   type ValidationCode,
@@ -11,6 +12,7 @@ import {
 } from '@uml/contracts';
 import { InvalidIdentifierError, normalizeName, toWords } from './naming.js';
 import { resolvePrimaryKey } from './primary-key.js';
+import { isJavaReserved } from './reserved-words.js';
 import {
   ancestorsOf,
   buildInheritanceGraph,
@@ -57,7 +59,7 @@ export function validateModel(model: SemanticModel): ValidationIssue[] {
     ...validateClasses(model, inheritance),
     ...validateClassNameCollisions(model),
     ...validateInheritance(model, inheritance),
-    ...validateRelationships(model),
+    ...validateRelationships(model, inheritance),
     ...validateOrphanClasses(model),
   ];
 }
@@ -448,24 +450,27 @@ function validateInheritedMemberCollisions(
   const issues: ValidationIssue[] = [];
   const porClasePropietaria = relationshipsByOwner(model);
 
-  const miembrosDe = (classId: string): { clave: string; id: string; etiqueta: string }[] => {
+  const miembrosDe = (classId: string): { claves: string[]; id: string; etiqueta: string }[] => {
     const umlClass = classesById.get(classId);
     if (umlClass === undefined) return [];
 
     return [
-      ...umlClass.attributes.map((atributo) => ({
-        clave: toWords(atributo.codeName).join('_'),
+      ...declaredGenerationAttributes(umlClass, inheritance).map((atributo) => ({
+        claves: [`campo:${toWords(atributo.codeName).join('_')}`, `dto:${atributo.codeName}`],
         id: atributo.id,
         etiqueta: `el atributo "${atributo.displayName}"`,
       })),
       ...(porClasePropietaria.get(classId) ?? []).flatMap((relationship) => {
-        const campo = fieldNameFor(relationship, classesById);
-        if (campo === undefined) return [];
+        const names = relationshipNamesFor(relationship, classesById);
+        if (names === undefined) return [];
         return [
           {
-            clave: campo,
+            claves: [
+              `campo:${toWords(names.fieldName).join('_')}`,
+              `dto:${names.queryParameterName}`,
+            ],
             id: relationship.id,
-            etiqueta: `la clave foranea "${campo}"`,
+            etiqueta: `la clave foranea "${names.fieldName}"`,
           },
         ];
       }),
@@ -481,12 +486,14 @@ function validateInheritedMemberCollisions(
     // hallazgo es de ellos y el mas cercano es el que esta tapando aqui.
     for (const ancestroId of [...ancestros].reverse()) {
       for (const miembro of miembrosDe(ancestroId)) {
-        heredados.set(miembro.clave, { ...miembro, claseId: ancestroId });
+        for (const clave of miembro.claves) {
+          heredados.set(clave, { ...miembro, claseId: ancestroId });
+        }
       }
     }
 
     for (const propio of miembrosDe(umlClass.id)) {
-      const heredado = heredados.get(propio.clave);
+      const heredado = propio.claves.map((clave) => heredados.get(clave)).find(Boolean);
       if (heredado === undefined) continue;
 
       issues.push(
@@ -530,12 +537,15 @@ function relationshipsByOwner(model: SemanticModel): Map<string, UmlRelationship
 // Relaciones
 // ---------------------------------------------------------------------------
 
-function validateRelationships(model: SemanticModel): ValidationIssue[] {
+function validateRelationships(
+  model: SemanticModel,
+  inheritance: InheritanceGraph,
+): ValidationIssue[] {
   const porId = new Map(model.classes.map((c) => [c.id, c]));
 
   return [
     ...model.relationships.flatMap((rel) => validateRelationship(rel, porId)),
-    ...validateRelationshipFieldCollisions(model, porId),
+    ...validateRelationshipFieldCollisions(model, porId, inheritance),
   ];
 }
 
@@ -574,6 +584,15 @@ function validateRelationship(
         }),
       );
     }
+  }
+
+  const rol = roleFor(relationship);
+  if (isStructuralRelationship(relationship) && rol !== undefined) {
+    issues.push(
+      ...normalizationIssues(rol, 'ATTRIBUTE', relationship.id, 'El rol de la relación').filter(
+        (item) => item.severity === 'ERROR',
+      ),
+    );
   }
 
   // RM-01: la N:M no llega al generador. La herramienta ofrece crear la clase
@@ -615,6 +634,7 @@ function validateRelationship(
 function validateRelationshipFieldCollisions(
   model: SemanticModel,
   classesById: ReadonlyMap<string, UmlClass>,
+  inheritance: InheritanceGraph,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
@@ -625,42 +645,77 @@ function validateRelationshipFieldCollisions(
   const porClasePropietaria = relationshipsByOwner(model);
 
   for (const [ownerId, relaciones] of porClasePropietaria) {
-    if (relaciones.length < 2) continue;
+    const owner = classesById.get(ownerId);
+    if (owner === undefined) continue;
+    const atributos = declaredGenerationAttributes(owner, inheritance);
+    const campos = relaciones.flatMap((relationship) => {
+      const names = relationshipNamesFor(relationship, classesById);
+      if (names === undefined) return [];
+      const atributo = atributos.find(
+        (item) =>
+          item.codeName === names.fieldName ||
+          item.codeName === names.queryParameterName ||
+          item.databaseName === names.columnName,
+      );
+      if (atributo !== undefined) {
+        issues.push(
+          issue({
+            code: 'ROLE_NAME_COLLISION',
+            message: `Una relación de «${owner.displayName}» entra en conflicto con «${atributo.displayName}».`,
+            elementIds: [...new Set([ownerId, relationship.id, atributo.id])],
+            suggestion: 'Cambia el rol de la relación o renombra el atributo.',
+          }),
+        );
+      }
+      return [
+        { id: relationship.id, names: [`campo:${names.fieldName}`, `columna:${names.columnName}`] },
+      ];
+    });
 
-    const porCampo = new Map<string, UmlRelationship[]>();
-
-    for (const relationship of relaciones) {
-      const campo = fieldNameFor(relationship, classesById);
-      if (campo === undefined) continue;
-      const existentes = porCampo.get(campo) ?? [];
-      existentes.push(relationship);
-      porCampo.set(campo, existentes);
-    }
-
-    for (const [campo, chocantes] of porCampo) {
-      if (chocantes.length < 2) continue;
-
-      const sinRol = chocantes.every((rel) => roleFor(rel) === undefined);
-      const owner = classesById.get(ownerId)?.displayName ?? ownerId;
+    for (const { technicalName, ids } of findTechnicalNameCollisions(campos)) {
+      const campo = technicalName.slice(technicalName.indexOf(':') + 1);
+      const chocantes = relaciones.filter((rel) => ids.includes(rel.id));
+      const sinRolMismoDestino =
+        chocantes.every((rel) => roleFor(rel) === undefined) &&
+        new Set(chocantes.map(referencedClassId)).size === 1;
 
       issues.push(
         issue({
-          code: sinRol ? 'DUPLICATE_RELATIONSHIP_WITHOUT_ROLE' : 'ROLE_NAME_COLLISION',
-          message: sinRol
-            ? `"${owner}" tiene ${chocantes.length} relaciones sin rol hacia la misma clase; ` +
+          code: sinRolMismoDestino ? 'DUPLICATE_RELATIONSHIP_WITHOUT_ROLE' : 'ROLE_NAME_COLLISION',
+          message: sinRolMismoDestino
+            ? `"${owner.displayName}" tiene ${ids.length} relaciones sin rol hacia la misma clase; ` +
               `todas producirian el campo "${campo}".`
-            : `"${owner}" tiene ${chocantes.length} relaciones cuyos roles producen el mismo ` +
-              `campo "${campo}".`,
-          elementIds: [ownerId, ...chocantes.map((rel) => rel.id)],
-          suggestion: sinRol
+            : `"${owner.displayName}" tiene ${ids.length} relaciones que producen el mismo nombre "${campo}".`,
+          elementIds: [ownerId, ...ids],
+          suggestion: sinRolMismoDestino
             ? 'Dale un nombre de rol distinto a cada relacion, por ejemplo "facturacion" y "envio".'
-            : 'Cambia uno de los nombres de rol.',
+            : 'Asigna o cambia un nombre de rol para distinguir las relaciones.',
         }),
       );
     }
   }
 
   return issues;
+}
+
+function declaredGenerationAttributes(
+  umlClass: UmlClass,
+  inheritance: InheritanceGraph,
+): readonly Pick<UmlAttribute, 'id' | 'displayName' | 'codeName' | 'databaseName'>[] {
+  if (
+    inheritance.superclassById.has(umlClass.id) ||
+    resolvePrimaryKey(umlClass).kind !== 'GENERATED'
+  )
+    return umlClass.attributes;
+  return [
+    ...umlClass.attributes,
+    {
+      id: umlClass.id,
+      displayName: 'id (clave primaria automática)',
+      codeName: 'id',
+      databaseName: 'id',
+    },
+  ];
 }
 
 /**
@@ -705,17 +760,38 @@ export function ownerIsTargetEnd(relationship: UmlRelationship): boolean {
   return true;
 }
 
-/** RTM-05: si hay rol se usa el rol; si no, se deriva de la clase referenciada. */
-function fieldNameFor(
+/** RTM-05: nombres de la relación en la entidad, el DTO y la base de datos. */
+export function relationshipMemberNames(relationship: UmlRelationship, referenced: UmlClass) {
+  const role = roleFor(relationship);
+  const names =
+    role === undefined
+      ? {
+          codeName: referenced.codeName.charAt(0).toLowerCase() + referenced.codeName.slice(1),
+          databaseName: referenced.databaseName,
+        }
+      : normalizeName(role, 'ATTRIBUTE');
+  const fieldName = isJavaReserved(names.codeName)
+    ? normalizeName(names.codeName, 'ATTRIBUTE').codeName
+    : names.codeName;
+  return {
+    fieldName,
+    queryParameterName: `${fieldName}Id`,
+    columnName: `${names.databaseName}_id`,
+  };
+}
+
+function relationshipNamesFor(
   relationship: UmlRelationship,
   classesById: ReadonlyMap<string, UmlClass>,
-): string | undefined {
-  const rol = roleFor(relationship);
-  if (rol !== undefined) return toWords(rol).join('_');
-
-  const referenciada = classesById.get(referencedClassId(relationship));
-  if (referenciada === undefined) return undefined;
-  return toWords(referenciada.codeName).join('_');
+): ReturnType<typeof relationshipMemberNames> | undefined {
+  const referenced = classesById.get(referencedClassId(relationship));
+  if (referenced === undefined) return undefined;
+  try {
+    return relationshipMemberNames(relationship, referenced);
+  } catch (error) {
+    if (error instanceof InvalidIdentifierError) return undefined;
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------

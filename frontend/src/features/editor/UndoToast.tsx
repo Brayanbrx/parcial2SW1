@@ -23,8 +23,9 @@ export function UndoToast({
   const clave = aviso?.clave ?? null;
   // La pausa pertenece a un aviso: si el puntero estaba encima cuando se fue,
   // el siguiente no hereda la pausa y se cierra a su tiempo.
-  const [pausadoEn, setPausadoEn] = useState<number | null>(null);
-  const pausado = clave !== null && pausadoEn === clave;
+  const [punteroEn, setPunteroEn] = useState<number | null>(null);
+  const [focoEn, setFocoEn] = useState<number | null>(null);
+  const pausado = clave !== null && (punteroEn === clave || focoEn === clave);
 
   useEffect(() => {
     if (clave === null || pausado) return;
@@ -40,11 +41,11 @@ export function UndoToast({
           key={aviso.clave}
           className="aviso-flotante aviso-deshacer"
           data-testid="aviso-deshacer"
-          onPointerEnter={() => setPausadoEn(aviso.clave)}
-          onPointerLeave={() => setPausadoEn(null)}
-          onFocus={() => setPausadoEn(aviso.clave)}
+          onPointerEnter={() => setPunteroEn(aviso.clave)}
+          onPointerLeave={() => setPunteroEn(null)}
+          onFocus={() => setFocoEn(aviso.clave)}
           onBlur={(evento) => {
-            if (!evento.currentTarget.contains(evento.relatedTarget)) setPausadoEn(null);
+            if (!evento.currentTarget.contains(evento.relatedTarget)) setFocoEn(null);
           }}
         >
           <span>{aviso.message}</span>

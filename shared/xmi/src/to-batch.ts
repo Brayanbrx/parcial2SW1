@@ -56,16 +56,21 @@ export function xmiToBatch(
         { type: 'DELETE_CLASS', payload: { classId: c.id } },
         `Eliminar clase «${c.displayName}»`,
       );
-  const classes = new Map<string, string>();
+  const currentClasses = options.mode === 'ADD' ? options.current.classes : [];
+  const namesInBoard = uniqueByName(currentClasses, (item) => item.displayName);
+  const namesInFile = uniqueByName(imported.classes, (item) => item.name);
+  const classesById = new Map<string, string | null>();
+  const classesByName = new Map<string, string | null>();
   for (const c of imported.classes) {
+    const name = key(c.name);
+    const uniqueName = namesInFile.get(name) === c;
     const existing =
-      options.mode === 'ADD'
-        ? (options.current.classes.find((item) => item.id === c.xmiId) ??
-          options.current.classes.find((item) => key(item.displayName) === key(c.name)))
-        : undefined;
+      currentClasses.find((item) => item.id === c.xmiId) ??
+      (uniqueName ? namesInBoard.get(name) : undefined);
     const classId = existing?.id ?? allocate(c.xmiId, c.name);
-    classes.set(c.name, classId);
-    if (existing === undefined) {
+    if (c.xmiId !== null) classesById.set(c.xmiId, classesById.has(c.xmiId) ? null : classId);
+    classesByName.set(c.name, classesByName.has(c.name) ? null : classId);
+    if (!existing) {
       add(
         {
           type: 'CREATE_CLASS',
@@ -123,9 +128,21 @@ export function xmiToBatch(
     }
   }
   for (const r of imported.relationships) {
-    const sourceClassId = classes.get(r.sourceName),
-      targetClassId = classes.get(r.targetName);
-    if (sourceClassId === undefined || targetClassId === undefined) continue;
+    const sourceClassId =
+      r.sourceXmiId === undefined
+        ? classesByName.get(r.sourceName)
+        : classesById.get(r.sourceXmiId);
+    const targetClassId =
+      r.targetXmiId === undefined
+        ? classesByName.get(r.targetName)
+        : classesById.get(r.targetXmiId);
+    if (!sourceClassId || !targetClassId) {
+      skipped.push({
+        element: `${r.sourceName} → ${r.targetName}`,
+        reason: 'Se omitió la relación porque no se pudieron identificar ambos extremos.',
+      });
+      continue;
+    }
     const value = {
       sourceClassId,
       targetClassId,
@@ -179,6 +196,15 @@ export function xmiToBatch(
 
 function key(name: string): string {
   return name.trim().toLocaleLowerCase('es');
+}
+
+function uniqueByName<T>(items: readonly T[], nameOf: (item: T) => string): Map<string, T | null> {
+  const result = new Map<string, T | null>();
+  for (const item of items) {
+    const name = key(nameOf(item));
+    result.set(name, result.has(name) ? null : item);
+  }
+  return result;
 }
 function equivalent(a: UmlRelationship, b: Omit<UmlRelationship, 'id'>): boolean {
   const kind = a.kind ?? 'ASSOCIATION';

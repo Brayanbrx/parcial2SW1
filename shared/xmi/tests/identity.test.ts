@@ -65,6 +65,76 @@ it('añadir reconoce elementos renombrados por su identidad y no los duplica', (
   expect(result.skipped.length).toBeGreaterThan(0);
 });
 
+it.each(['ADD', 'REPLACE'] as const)(
+  'conserva los extremos por identidad si dos clases del XMI tienen el mismo nombre (%s)',
+  (mode) => {
+    const first = '20000000-0000-4000-8000-000000000001';
+    const second = '20000000-0000-4000-8000-000000000002';
+    const order = '20000000-0000-4000-8000-000000000003';
+    const imported = parseXmi(`<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model name="Ventas">
+      <packagedElement xmi:type="uml:Package" name="Norte">
+        <packagedElement xmi:type="uml:Class" xmi:id="${first}" name="Cliente">
+          <generalization xmi:id="herencia" general="${second}"/>
+        </packagedElement>
+      </packagedElement>
+      <packagedElement xmi:type="uml:Package" name="Sur">
+        <packagedElement xmi:type="uml:Class" xmi:id="${second}" name="Cliente"/>
+      </packagedElement>
+      <packagedElement xmi:type="uml:Class" xmi:id="${order}" name="Pedido"/>
+      <packagedElement xmi:type="uml:Association" xmi:id="asociacion">
+        <ownedEnd xmi:type="uml:Property" xmi:id="extremo1"><type xmi:idref="${first}"/></ownedEnd>
+        <ownedEnd xmi:type="uml:Property" xmi:id="extremo2"><type xmi:idref="${order}"/></ownedEnd>
+      </packagedElement>
+      <packagedElement xmi:type="uml:Association" xmi:id="ambigua">
+        <ownedEnd xmi:type="uml:Property" xmi:id="extremo3" type="Cliente"/>
+        <ownedEnd xmi:type="uml:Property" xmi:id="extremo4" type="Pedido"/>
+      </packagedElement>
+    </uml:Model></xmi:XMI>`);
+    const existing = {
+      id: '20000000-0000-4000-8000-000000000004',
+      displayName: 'Cliente',
+      codeName: 'Cliente',
+      databaseName: 'cliente',
+      attributes: [],
+    };
+    const state = { ...emptyBoardState(), semantic: { classes: [existing], relationships: [] } };
+    const { batch, skipped } = xmiToBatch(imported, { mode, current: state.semantic, actorId });
+    const result = applyBatch(state, batch);
+    expect(result.applied).toBe(true);
+    if (!result.applied) return;
+    expect(result.state.semantic.classes.map((item) => item.id)).toEqual(
+      expect.arrayContaining([first, second, order]),
+    );
+    expect(result.state.semantic.relationships).toEqual([
+      expect.objectContaining({ sourceClassId: first, targetClassId: order }),
+      expect.objectContaining({
+        kind: 'GENERALIZATION',
+        sourceClassId: first,
+        targetClassId: second,
+      }),
+    ]);
+    expect(skipped).toContainEqual({
+      element: 'Cliente → Pedido',
+      reason: 'Se omitió la relación porque no se pudieron identificar ambos extremos.',
+    });
+  },
+);
+
+it.each(['constructor', '__proto__'])('importa el tipo desconocido %s como String', (type) => {
+  const imported = parseXmi(`<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model name="Ventas">
+    <packagedElement xmi:type="uml:Class" xmi:id="Cliente" name="Cliente">
+      <ownedAttribute xmi:type="uml:Property" name="Nombre" type="${type}"/>
+    </packagedElement>
+  </uml:Model></xmi:XMI>`);
+  const state = emptyBoardState();
+  const { batch } = xmiToBatch(imported, { mode: 'ADD', current: state.semantic, actorId });
+  const result = applyBatch(state, batch);
+  expect(result.applied).toBe(true);
+  if (!result.applied) return;
+  expect(result.state.semantic.classes[0]?.attributes[0]?.type).toBe('String');
+  expect(imported.warnings[0]?.reason).toContain('se importa como String');
+});
+
 it('reasigna UUID repetidos sin perder los dos atributos del archivo', () => {
   const model = fixture('T01').model;
   const imported = parseXmi(serializeToXmi(model, { modelName: 'Prueba' }));

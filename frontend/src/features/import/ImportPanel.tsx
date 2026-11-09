@@ -85,17 +85,21 @@ export function ImportPanel({
   }, [visible, canWrite]);
   const [nombreExport, setNombreExport] = useState<string | null>(null);
   const [formatoExport, setFormatoExport] = useState<'EA_21' | 'UML_251'>('EA_21');
+  const [exportando, setExportando] = useState(false);
   const imagenRef = useRef<HTMLInputElement>(null);
   const xmiRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLFormElement>(null);
   const candidateRef = useRef<HTMLDivElement>(null);
   const solicitud = useRef<AbortController | null>(null);
+  const solicitudExport = useRef<AbortController | null>(null);
   const permisoActual = useRef(canWrite);
   permisoActual.current = canWrite;
   useEffect(
     () => () => {
       solicitud.current?.abort();
       solicitud.current = null;
+      solicitudExport.current?.abort();
+      solicitudExport.current = null;
     },
     [],
   );
@@ -221,18 +225,43 @@ export function ImportPanel({
   }
 
   async function exportar(): Promise<void> {
+    if (nombreExport === null || solicitudExport.current !== null) return;
+    const controller = new AbortController();
+    solicitudExport.current = controller;
+    setExportando(true);
     setError(null);
+    setAplicado(null);
 
     try {
-      const { blob } = await downloadXmi(boardId, state.semantic, state.layout, formatoExport);
-      const nombre = nombreDeArchivo(nombreExport ?? boardName, '.xmi');
+      const { blob } = await downloadXmi(
+        boardId,
+        state.semantic,
+        state.layout,
+        formatoExport,
+        controller.signal,
+      );
+      controller.signal.throwIfAborted();
+      const nombre = nombreDeArchivo(nombreExport, '.xmi');
 
       descargarBlob(blob, nombre);
       setNombreExport(null);
       setAplicado(`Exportado como ${nombre}`);
     } catch (causa) {
-      setError(causa instanceof Error ? causa.message : 'La exportación falló.');
+      if (!controller.signal.aborted)
+        setError(causa instanceof Error ? causa.message : 'La exportación falló.');
+    } finally {
+      if (solicitudExport.current === controller) {
+        solicitudExport.current = null;
+        setExportando(false);
+      }
     }
+  }
+
+  function cancelarExportacion(): void {
+    solicitudExport.current?.abort();
+    solicitudExport.current = null;
+    setExportando(false);
+    setNombreExport(null);
   }
 
   function aplicar(batch: CommandBatch, resumen: readonly string[]): void {
@@ -323,7 +352,12 @@ export function ImportPanel({
           Importar XMI
         </button>
 
-        <button type="button" data-testid="exportar-xmi" onClick={() => setNombreExport(boardName)}>
+        <button
+          type="button"
+          data-testid="exportar-xmi"
+          disabled={exportando}
+          onClick={() => setNombreExport(boardName)}
+        >
           Exportar XMI
         </button>
       </div>
@@ -363,6 +397,7 @@ export function ImportPanel({
           ref={exportRef}
           className="nombre-export"
           data-testid="nombre-export"
+          aria-busy={exportando}
           onSubmit={(evento) => {
             evento.preventDefault();
             void exportar();
@@ -374,6 +409,7 @@ export function ImportPanel({
               value={nombreExport}
               autoFocus
               data-testid="campo-nombre-export"
+              disabled={exportando}
               onChange={(evento) => setNombreExport(evento.target.value)}
             />
           </label>
@@ -381,6 +417,7 @@ export function ImportPanel({
             <span>Formato XMI</span>
             <select
               value={formatoExport}
+              disabled={exportando}
               onChange={(evento) =>
                 setFormatoExport(evento.target.value === 'UML_251' ? 'UML_251' : 'EA_21')
               }
@@ -393,10 +430,10 @@ export function ImportPanel({
             Se guardará como <code>{nombreDeArchivo(nombreExport, '.xmi')}</code>
           </p>
           <div className="acciones">
-            <button type="submit" data-testid="confirmar-export">
-              Guardar
+            <button type="submit" data-testid="confirmar-export" disabled={exportando}>
+              {exportando ? 'Exportando…' : 'Guardar'}
             </button>
-            <button type="button" className="secundario" onClick={() => setNombreExport(null)}>
+            <button type="button" className="secundario" onClick={cancelarExportacion}>
               Cancelar
             </button>
           </div>

@@ -150,6 +150,58 @@ describe('CA-017.1 — errores que bloquean la generacion', () => {
     expect(errores(model)).toContain('DUPLICATE_RELATIONSHIP_WITHOUT_ROLE');
   });
 
+  it.each(['cliente', 'clienteId'])('detecta la colisión de una relación con %s', (name) => {
+    const cliente = clase('Cliente');
+    const venta = clase('Venta', [{ name }]);
+    const link = relacion(cliente, venta);
+    expect(validateModel(modelo([cliente, venta], [link]))).toContainEqual(
+      expect.objectContaining({
+        code: 'ROLE_NAME_COLLISION',
+        elementIds: [venta.id, link.id, venta.attributes[0]?.id],
+      }),
+    );
+  });
+
+  it('detecta el rol que pisa la clave primaria automática', () => {
+    const cliente = clase('Cliente');
+    const venta = clase('Venta');
+    const link = relacion(cliente, venta, { fromRole: 'id' });
+    expect(errores(modelo([cliente, venta], [link]))).toContain('ROLE_NAME_COLLISION');
+  });
+
+  it('detecta el nombre de DTO que la subclase hereda de una relación', () => {
+    const cliente = clase('Cliente');
+    const venta = clase('Venta');
+    const ventaEspecial = clase('Venta Especial', [{ name: 'clienteId' }]);
+    const model = modelo(
+      [cliente, venta, ventaEspecial],
+      [relacion(cliente, venta), relacion(ventaEspecial, venta, { kind: 'GENERALIZATION' })],
+    );
+    expect(errores(model)).toContain('INHERITED_MEMBER_COLLISION');
+  });
+
+  it('rechaza un rol que no produce un identificador válido', () => {
+    const cliente = clase('Cliente');
+    const venta = clase('Venta');
+    const link = relacion(cliente, venta, { fromRole: '123' });
+    expect(validateModel(modelo([cliente, venta], [link]))).toContainEqual(
+      expect.objectContaining({ code: 'INVALID_IDENTIFIER', elementIds: [link.id] }),
+    );
+  });
+
+  it('detecta roles distintos que terminan en la misma columna SQL', () => {
+    const cliente = clase('Cliente');
+    const venta = clase('Venta');
+    const model = modelo(
+      [cliente, venta],
+      [
+        relacion(cliente, venta, { fromRole: 'order' }),
+        relacion(cliente, venta, { fromRole: 'app order' }),
+      ],
+    );
+    expect(errores(model)).toContain('ROLE_NAME_COLLISION');
+  });
+
   it('muchos a muchos directo, con sugerencia de como modelarlo (RM-01)', () => {
     const alumno = clase('Alumno', [{ name: 'id', primaryKey: true }]);
     const materia = clase('Materia', [{ name: 'id', primaryKey: true }]);

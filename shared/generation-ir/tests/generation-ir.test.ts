@@ -78,6 +78,21 @@ describe('representacion intermedia de generacion', () => {
     expect(detalle.relationships.map((item) => item.fieldName)).toEqual(['producto', 'venta']);
   });
 
+  it('escapa una palabra reservada de Java en una relación sin rol', () => {
+    const model = structuredClone(fixture('T01').model);
+    const cliente = model.classes.find((item) => item.codeName === 'Cliente')!;
+    Object.assign(cliente, { displayName: 'Class', codeName: 'Class', databaseName: 'app_class' });
+    const ir = buildGenerationIr({ projectName: 'Ventas', snapshotVersion: 1, model });
+    expect(entity(ir, 'Venta').relationships).toContainEqual(
+      expect.objectContaining({
+        targetClassName: 'Class',
+        fieldName: 'appClass',
+        columnName: 'app_class_id',
+        queryParameterName: 'appClassId',
+      }),
+    );
+  });
+
   it('toma una copia del snapshot y congela la IR (RA-08)', () => {
     const model = structuredClone(fixture('T01').model);
     const ir = buildGenerationIr({ projectName: 'Ventas', snapshotVersion: 1, model });

@@ -350,14 +350,7 @@ function createRelationship(
   // recursivas (por ejemplo Empleado.jefe -> Empleado) y el generador las
   // traduce a una clave foranea que referencia la misma tabla.
   if (payload.sourceClassId === payload.targetClassId && payload.kind === 'GENERALIZATION') {
-    return [
-      issue(
-        'SELF_RELATIONSHIP',
-        'Una clase no puede generalizarse a si misma.',
-        [payload.relationshipId, payload.sourceClassId],
-        'Usa una asociacion recursiva si una instancia debe apuntar a otra de la misma clase.',
-      ),
-    ];
+    return [invalidSelfGeneralization(payload.relationshipId, payload.sourceClassId)];
   }
 
   const relationship: UmlRelationship = {
@@ -379,13 +372,13 @@ function updateRelationship(
   draft: BoardState,
   command: CommandOf<'UPDATE_RELATIONSHIP'>,
 ): ValidationIssue[] {
-  const { relationshipId } = command.payload;
+  const { relationshipId, kind } = command.payload;
   const relationship = findRelationship(draft, relationshipId);
   if (relationship === undefined) return [unknownRelationship(relationshipId)];
 
-  if (command.payload.kind !== undefined) {
-    relationship.kind = command.payload.kind;
-  }
+  if (kind === 'GENERALIZATION' && relationship.sourceClassId === relationship.targetClassId)
+    return [invalidSelfGeneralization(relationshipId, relationship.sourceClassId)];
+  if (kind !== undefined) relationship.kind = kind;
 
   // `null` borra el rol; `undefined` lo deja como estaba. Sin esa distincion no
   // habria forma de quitar un rol ya asignado.
@@ -402,6 +395,15 @@ function updateRelationship(
   }
 
   return [];
+}
+
+function invalidSelfGeneralization(relationshipId: string, classId: string): ValidationIssue {
+  return issue(
+    'SELF_RELATIONSHIP',
+    'Una clase no puede generalizarse a si misma.',
+    [relationshipId, classId],
+    'Usa una asociacion recursiva si una instancia debe apuntar a otra de la misma clase.',
+  );
 }
 
 function deleteRelationship(

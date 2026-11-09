@@ -29,13 +29,13 @@ export function GenerationPanel({
 }): React.JSX.Element {
   const [historial, setHistorial] = useState<readonly GenerationSummary[]>([]);
   const consultaHistorial = useRef<AbortController | null>(null);
-  const [ultima, setUltima] = useState<string | null>(null);
+  const [ultima, setUltima] = useState<{ id: string; includeMobile: boolean } | null>(null);
   const [estado, setEstado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorHistorial, setErrorHistorial] = useState<string | null>(null);
   const [trabajando, setTrabajando] = useState(false);
   const [basePackage, setBasePackage] = useState('');
   const [includeMobile, setIncludeMobile] = useState(false);
-  const [ultimoMobile, setUltimoMobile] = useState(false);
 
   const bloqueado = hasErrors(issues);
   const estaSincronizado = useCallback(
@@ -63,11 +63,13 @@ export function GenerationPanel({
     api
       .listGenerations(boardId, consulta.signal)
       .then((generaciones) => {
-        if (!consulta.signal.aborted) setHistorial(generaciones);
+        if (consulta.signal.aborted) return;
+        setHistorial(generaciones);
+        setErrorHistorial(null);
       })
       .catch((causa: unknown) => {
         if (consulta.signal.aborted) return;
-        setError(
+        setErrorHistorial(
           causa instanceof Error
             ? `No se pudo cargar el historial: ${causa.message}`
             : 'No se pudo cargar el historial.',
@@ -77,7 +79,11 @@ export function GenerationPanel({
 
   useEffect(() => {
     refrescar();
-    return () => consultaHistorial.current?.abort();
+    window.addEventListener('online', refrescar);
+    return () => {
+      window.removeEventListener('online', refrescar);
+      consultaHistorial.current?.abort();
+    };
   }, [refrescar]);
 
   const generar = useCallback(async () => {
@@ -89,8 +95,7 @@ export function GenerationPanel({
 
     try {
       const resultado = await api.generate(boardId, basePackage, includeMobile);
-      setUltima(resultado.id);
-      setUltimoMobile(includeMobile);
+      setUltima({ id: resultado.id, includeMobile });
       setEstado(
         `Generado ${resultado.artifactName} · ${resultado.entities} entidades · ` +
           `versión ${resultado.snapshotVersion} del modelo · paquete ${resultado.basePackage}`,
@@ -154,19 +159,17 @@ export function GenerationPanel({
       setError(null);
       try {
         await api.deleteGeneration(generacion.id);
-        if (ultima === generacion.id) {
-          setUltima(null);
-          setUltimoMobile(false);
-        }
+        setUltima((actual) => (actual?.id === generacion.id ? null : actual));
         setEstado(`Eliminada la generación v${generacion.snapshotVersion}.`);
         refrescar();
       } catch (causa) {
         setError(causa instanceof Error ? causa.message : 'No se pudo eliminar.');
       }
     },
-    [refrescar, ultima],
+    [refrescar],
   );
 
+  const mensajeError = error ?? errorHistorial;
   return (
     <section className="generacion" data-testid="panel-generacion">
       <h3>Generación</h3>
@@ -231,15 +234,15 @@ export function GenerationPanel({
           <button
             type="button"
             data-testid="descargar-spring"
-            onClick={() => void descargar(ultima)}
+            onClick={() => void descargar(ultima.id)}
           >
             Descargar backend
           </button>
-          {ultimoMobile && (
+          {ultima.includeMobile && (
             <button
               type="button"
               data-testid="descargar-mobile"
-              onClick={() => void descargar(ultima, 'mobile')}
+              onClick={() => void descargar(ultima.id, 'mobile')}
             >
               Descargar Android + backend
             </button>
@@ -252,7 +255,7 @@ export function GenerationPanel({
           {estado}
         </p>
       )}
-      {(includeMobile || ultimoMobile || historial.some((g) => g.mobileSha256)) && (
+      {(includeMobile || ultima?.includeMobile || historial.some((g) => g.mobileSha256)) && (
         <details className="aviso" data-testid="comandos-android">
           <summary>Compilar APK y probar en el celular</summary>
           <p>
@@ -284,9 +287,9 @@ export function GenerationPanel({
           </p>
         </details>
       )}
-      {error !== null && (
+      {mensajeError !== null && (
         <p className="error" data-testid="error-generacion">
-          {error}
+          {mensajeError}
         </p>
       )}
 

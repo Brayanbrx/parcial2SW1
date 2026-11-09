@@ -18,6 +18,7 @@ import {
   owningClassId,
   ownerIsTargetEnd,
   referencedClassId,
+  relationshipMemberNames,
   resolvePrimaryKey,
   toArtifactId,
   toPackageSegment,
@@ -408,18 +409,14 @@ function addRelationship(
   // En una autorrelacion los ids de ambos extremos son iguales. La
   // cardinalidad, no la identidad de la clase, determina el lado propietario.
   const ownerAtTarget = ownerIsTargetEnd(relationship);
-  const role = roleForReferencedEnd(relationship, ownerAtTarget);
-  const names =
-    role === undefined
-      ? { codeName: lowerFirst(targetClass.codeName), databaseName: targetClass.databaseName }
-      : normalizeName(role, 'ATTRIBUTE');
+  const names = relationshipMemberNames(relationship, targetClass);
 
   if (
-    owner.attributes.some((attribute) => attribute.fieldName === names.codeName) ||
-    owner.declaredRelationships.some((item) => item.fieldName === names.codeName)
+    owner.attributes.some((attribute) => attribute.fieldName === names.fieldName) ||
+    owner.declaredRelationships.some((item) => item.fieldName === names.fieldName)
   ) {
     throw new Error(
-      `La relacion ${relationship.id} produce el campo duplicado "${names.codeName}" en ${owner.className}.`,
+      `La relacion ${relationship.id} produce el campo duplicado "${names.fieldName}" en ${owner.className}.`,
     );
   }
 
@@ -435,8 +432,7 @@ function addRelationship(
   const irRelationship: IrRelationship = {
     sourceRelationshipId: relationship.id,
     kind,
-    fieldName: names.codeName,
-    columnName: `${names.databaseName}_id`,
+    ...names,
     optional,
     unique: kind === 'ONE_TO_ONE',
     targetEntityId: target.sourceClassId,
@@ -445,19 +441,11 @@ function addRelationship(
     targetPrimaryKeyFieldName: target.primaryKey.fieldName,
     targetPrimaryKeyJavaType: target.primaryKey.javaType,
     targetPrimaryKeyJavaImport: target.primaryKey.javaImport,
-    finderMethodName: `findBy${upperFirst(names.codeName)}_${upperFirst(target.primaryKey.fieldName)}`,
-    queryParameterName: `${names.codeName}Id`,
+    finderMethodName: `findBy${upperFirst(names.fieldName)}_${upperFirst(target.primaryKey.fieldName)}`,
   };
 
   owner.declaredRelationships.push(irRelationship);
   owner.relationships.push(irRelationship);
-}
-
-function roleForReferencedEnd(
-  relationship: UmlRelationship,
-  ownerAtTarget: boolean,
-): string | undefined {
-  return ownerAtTarget ? relationship.sourceRoleName : relationship.targetRoleName;
 }
 
 function isMany(multiplicity: Multiplicity): boolean {

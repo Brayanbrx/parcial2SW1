@@ -38,9 +38,9 @@ export function makeBatch(actorId: string, ...commands: readonly CommandBody[]):
 }
 
 export const gui = {
-  createClass: (classId: string, displayName: string, position: Position): CommandBody => ({
+  createClass: (classId: string, displayName: string, position?: Position): CommandBody => ({
     type: 'CREATE_CLASS',
-    payload: { classId, displayName, position },
+    payload: { classId, displayName, ...(position === undefined ? {} : { position }) },
   }),
 
   renameClass: (classId: string, displayName: string): CommandBody => ({

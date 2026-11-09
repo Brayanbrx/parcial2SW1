@@ -78,7 +78,7 @@ export function isConnectionUnavailable(error: unknown): boolean {
   );
 }
 const AUDIT_QUEUE_KEY = 'uml_audit_queue_v1';
-let auditFlushInFlight: Promise<void> | null = null;
+let auditFlushInFlight: { revision: number; promise: Promise<void> } | null = null;
 
 export function currentAccessToken(): string | null {
   return accessToken;
@@ -699,6 +699,7 @@ async function sendBatchAudit(boardId: string, batch: CommandBatch): Promise<{ b
     method: 'POST',
     body: batch,
     expectedUserId: batch.actorId,
+    signal: AbortSignal.timeout(10_000),
   });
   if (
     typeof result !== 'object' ||
@@ -716,10 +717,16 @@ async function sendBatchAudit(boardId: string, batch: CommandBatch): Promise<{ b
 }
 
 export function flushAuditQueue(): Promise<void> {
-  auditFlushInFlight ??= performAuditFlush().finally(() => {
-    auditFlushInFlight = null;
+  const actorId = sessionUserId;
+  if (actorId === null) return Promise.resolve();
+  const revision = sessionRevision;
+  if (auditFlushInFlight?.revision === revision) return auditFlushInFlight.promise;
+
+  const promise = performAuditFlush(actorId, revision).finally(() => {
+    if (auditFlushInFlight?.promise === promise) auditFlushInFlight = null;
   });
-  return auditFlushInFlight;
+  auditFlushInFlight = { revision, promise };
+  return promise;
 }
 
 export function pendingAuditCount(userId: string | null = sessionUserId): number {
@@ -736,17 +743,25 @@ export function hasPendingBatchAudit(userId: string, boardId: string, batchId: s
 
 export function subscribeAuditQueue(listener: (count: number) => void): () => void {
   auditQueueListeners.add(listener);
-  return () => auditQueueListeners.delete(listener);
+  const browser = typeof window === 'undefined' ? undefined : window;
+  const onStorage = ({ key }: StorageEvent): void => {
+    if (key === AUDIT_QUEUE_KEY || key === null) listener(pendingAuditCount());
+  };
+  browser?.addEventListener('storage', onStorage);
+  return () => {
+    auditQueueListeners.delete(listener);
+    browser?.removeEventListener('storage', onStorage);
+  };
 }
 
-async function performAuditFlush(): Promise<void> {
+async function performAuditFlush(actorId: string, revision: number): Promise<void> {
   // Conservamos lotes rechazados para recuperarlos, pero no bloquean las otras
   // pizarras. Cada pasada intenta cada lote como maximo una vez.
   const attempted = new Set<string>();
-  for (;;) {
+  while (revision === sessionRevision) {
     const item = readAuditQueue().find(
       (pending) =>
-        pending.batch.actorId === sessionUserId &&
+        pending.batch.actorId === actorId &&
         !attempted.has(`${pending.boardId}:${pending.batch.batchId}`),
     );
     if (item === undefined) return;
@@ -803,10 +818,15 @@ export async function downloadXmi(
   model: unknown,
   layout?: unknown,
   format: 'EA_21' | 'UML_251' = 'EA_21',
+  signal?: AbortSignal,
 ): Promise<{ blob: Blob; fileName: string }> {
   return requestWithSession(
     `/boards/${boardId}/export/xmi`,
-    { method: 'POST', body: { model, format, ...(layout === undefined ? {} : { layout }) } },
+    {
+      method: 'POST',
+      body: { model, format, ...(layout === undefined ? {} : { layout }) },
+      ...(signal === undefined ? {} : { signal }),
+    },
     (respuesta) => readDownload(respuesta, 'pizarra.xmi'),
   );
 }

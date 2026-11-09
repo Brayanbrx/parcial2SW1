@@ -10,6 +10,7 @@ import {
   getViewportForBounds,
   type Connection,
   type NodeChange,
+  type Rect,
   useReactFlow,
   useStore,
 } from '@xyflow/react';
@@ -66,7 +67,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     relationshipSourceId,
     canWrite,
   } = props;
-  const { screenToFlowPosition, setViewport } = useReactFlow<ClassNodeType, AsociacionEdgeType>();
+  const { getViewport, screenToFlowPosition, setViewport } = useReactFlow<
+    ClassNodeType,
+    AsociacionEdgeType
+  >();
   const canvasWidth = useStore((store) => store.width);
   const canvasHeight = useStore((store) => store.height);
   const ultimaClaseRevelada = useRef<string | null>(null);
@@ -186,30 +190,46 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     if (nueva === undefined || canvasWidth === 0 || canvasHeight === 0) return;
     ultimaClaseRevelada.current = revealClassId;
 
-    // La accion rapida de la barra crea en coordenadas del modelo. Si la vista
-    // estaba centrada en otra clase, la nueva podia quedar debajo del panel
-    // lateral. Solo se centra cuando es una creacion local (queda seleccionada),
-    // para no moverle la camara a los demas colaboradores.
-    // Sin animacion ni un frame diferido: el siguiente gesto suele ser
-    // arrastrar un conector y la camara no debe moverse debajo del puntero.
-    // El nodo puede no estar aun en el registro interno de React Flow. Usar
-    // sus dimensiones conocidas evita que fitView omita la clase recien creada.
-    void setViewport(
-      getViewportForBounds(
-        {
-          ...nueva.position,
-          width: nueva.width ?? ANCHO_NODO,
-          height: nueva.height ?? altoDeNodo(nueva.data.umlClass.attributes.length),
-        },
-        canvasWidth,
-        canvasHeight,
-        0.2,
-        1,
-        0.25,
-      ),
-      { duration: 0 },
+    const actual = getViewport();
+    const enVista = (rect: Rect, vista = actual): boolean =>
+      rect.x * vista.zoom + vista.x >= 0 &&
+      rect.y * vista.zoom + vista.y >= 0 &&
+      (rect.x + rect.width) * vista.zoom + vista.x <= canvasWidth &&
+      (rect.y + rect.height) * vista.zoom + vista.y <= canvasHeight;
+    const nuevaCaja = cajaDeNodo(nueva);
+    if (nodes.length > 1 && enVista(nuevaCaja)) return;
+
+    // Conserva las clases que ya estaban a la vista para poder conectarlas
+    // con la nueva. Las dimensiones calculadas también incluyen nodos que
+    // React Flow todavía no ha registrado.
+    let contexto = nuevaCaja;
+    for (const nodo of nodes) {
+      const caja = cajaDeNodo(nodo);
+      if (!enVista(caja)) continue;
+      const x = Math.min(contexto.x, caja.x);
+      const y = Math.min(contexto.y, caja.y);
+      contexto = {
+        x,
+        y,
+        width: Math.max(contexto.x + contexto.width, caja.x + caja.width) - x,
+        height: Math.max(contexto.y + contexto.height, caja.y + caja.height) - y,
+      };
+    }
+    const zoom = Math.min(actual.zoom, 1);
+    const conContexto = getViewportForBounds(
+      contexto,
+      canvasWidth,
+      canvasHeight,
+      Math.max(0.2, zoom / 2),
+      zoom,
+      0.25,
     );
-  }, [canvasWidth, canvasHeight, setViewport, nodes, revealClassId]);
+    // Si la nueva clase queda muy lejos, acercarse a ella conserva la lectura.
+    const destino = enVista(contexto, conContexto)
+      ? conContexto
+      : getViewportForBounds(nuevaCaja, canvasWidth, canvasHeight, 0.2, 1, 0.25);
+    void setViewport(destino, { duration: 0 });
+  }, [canvasWidth, canvasHeight, getViewport, setViewport, nodes, revealClassId]);
 
   return (
     <ReactFlow
@@ -417,6 +437,14 @@ const RELLENO_LISTA = 10;
  */
 function altoDeNodo(atributos: number): number {
   return ALTO_CABECERA + RELLENO_LISTA + Math.max(atributos, 1) * ALTO_FILA;
+}
+
+function cajaDeNodo(nodo: ClassNodeType): Rect {
+  return {
+    ...nodo.position,
+    width: nodo.width ?? ANCHO_NODO,
+    height: nodo.height ?? altoDeNodo(nodo.data.umlClass.attributes.length),
+  };
 }
 
 /**

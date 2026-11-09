@@ -111,6 +111,93 @@ test('solo permite generar después de que el servidor confirme la edición loca
   expect(generations).toBe(1);
 });
 
+test('la instantánea offline espera la confirmación de las ediciones locales', async ({ page }) => {
+  let paused = false;
+  const pending: (() => void)[] = [];
+  await page.routeWebSocket('**/collab', (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      if (paused && typeof message !== 'string') {
+        const decoder = createDecoder(message);
+        readVarString(decoder);
+        if (readVarUint(decoder) === 0 && readVarUint(decoder) === 2) {
+          pending.push(() => server.send(message));
+          return;
+        }
+      }
+      server.send(message);
+    });
+  });
+  const snapshot = () =>
+    page.evaluate(() => {
+      const key = Object.keys(localStorage).find((item) =>
+        item.startsWith('uml_board_snapshot_v1:'),
+      );
+      return key === undefined ? null : localStorage.getItem(key);
+    });
+  await enter(page);
+  const confirmed = await snapshot();
+  expect(confirmed).not.toBeNull();
+  paused = true;
+  await create(page, 'Pendiente');
+  await expect.poll(() => pending.length).toBeGreaterThan(0);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  expect(await snapshot()).toBe(confirmed);
+
+  paused = false;
+  for (const send of pending) send();
+  await expect.poll(snapshot).not.toBe(confirmed);
+});
+
+test('crear una clase después de borrar otra evita ocupar una posición usada', async ({ page }) => {
+  const position = (name: string) =>
+    page.getByTestId(`clase-${name}`).evaluate((card) => {
+      const node = card.closest('.react-flow__node')!;
+      const transform = new DOMMatrixReadOnly(getComputedStyle(node).transform);
+      return { x: transform.e, y: transform.f };
+    });
+  await enter(page);
+  await create(page, 'Primera');
+  await create(page, 'Segunda');
+  await page.getByTestId('clase-Primera').click();
+  await page.getByRole('button', { name: 'Eliminar clase', exact: true }).click();
+  await expect(page.getByTestId('clase-Primera')).toHaveCount(0);
+  await create(page, 'Tercera');
+
+  expect(await position('Tercera')).not.toEqual(await position('Segunda'));
+});
+
+test('las clases que estaban visibles siguen accesibles al añadir otra en la misma fila', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await enter(page);
+  await create(page, 'Alumno');
+  await create(page, 'Materia');
+  await create(page, 'Inscripcion');
+
+  await page.getByTestId('tool-association').click();
+  await page.getByTestId('clase-Alumno').click({ timeout: 3000 });
+  await page.getByTestId('clase-Inscripcion').click({ timeout: 3000 });
+  await expect(page.getByTestId('inspector-relacion')).toContainText('Alumno → Inscripcion');
+});
+
+test('deshacer sigue disponible con foco aunque el puntero salga del aviso', async ({ page }) => {
+  await enter(page);
+  await create(page, 'Cliente');
+  await page.clock.install();
+  await page.getByRole('button', { name: 'Eliminar clase', exact: true }).click();
+  const undo = page.getByTestId('deshacer');
+  await undo.hover();
+  await undo.focus();
+  await page.getByTestId('crear-clase').hover();
+  await page.clock.fastForward(9000);
+  await expect(undo).toBeFocused();
+
+  await undo.press('Enter');
+  await expect(page.getByTestId('clase-Cliente')).toBeVisible();
+});
+
 test('actualizar el historial tras generar cancela la consulta anterior', async ({ page }) => {
   const generation = {
     id: 'generacion-historial',
@@ -156,6 +243,88 @@ test('actualizar el historial tras generar cancela la consulta anterior', async 
     await Promise.all([cancelled, page.getByTestId('generar').click()]);
     release();
     await expect(page.getByTestId('historial-generaciones')).toContainText('v2');
+  } finally {
+    release();
+  }
+});
+
+test('recupera el historial de generaciones al volver la conexión', async ({ page }) => {
+  let reachable = false;
+  await page.route(`**/api${board.replace('/pizarras/', '/boards/')}/generations`, (route) =>
+    reachable
+      ? route.fulfill({
+          json: [
+            {
+              id: 'generacion-guardada',
+              snapshotVersion: 3,
+              status: 'READY',
+              author: { id: 'ana', displayName: 'Ana' },
+              createdAt: new Date().toISOString(),
+              projectName: 'Proyecto guardado',
+              basePackage: 'bo.edu.sw1',
+            },
+          ],
+        })
+      : route.fulfill({ status: 503, json: { error: { message: 'Sin conexión' } } }),
+  );
+
+  await enter(page);
+  await page.getByTestId('pestana-generar').click();
+  await expect(page.getByTestId('error-generacion')).toContainText(
+    'No se pudo cargar el historial',
+  );
+  reachable = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+
+  await expect(page.getByTestId('historial-generaciones')).toContainText('Proyecto guardado');
+  await expect(page.getByTestId('error-generacion')).toBeHidden();
+});
+
+test('terminar un borrado conserva los enlaces de la generación posterior', async ({ page }) => {
+  let version = 0;
+  const generation = (n: number) => ({
+    id: `generacion-${n}`,
+    artifactName: `proyecto-${n}.zip`,
+    entities: 1,
+    snapshotVersion: n,
+    basePackage: 'bo.edu.sw1',
+    status: 'READY',
+    author: { id: 'ana', displayName: 'Ana' },
+    createdAt: new Date().toISOString(),
+    projectName: 'Proyecto',
+  });
+  await page.route(`**/api${board.replace('/pizarras/', '/boards/')}/generations`, (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 201, json: generation(++version) })
+      : route.fulfill({ json: version === 0 ? [] : [generation(version)] }),
+  );
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/generations/generacion-1', async (route) => {
+    await pending;
+    await route.fulfill({ status: 204 });
+  });
+
+  try {
+    await enter(page);
+    await page.getByTestId('pestana-generar').click();
+    const generate = page.getByTestId('generar');
+    await generate.click();
+    await expect(page.getByTestId('historial-generaciones')).toContainText('v1');
+    page.once('dialog', (dialog) => dialog.accept());
+    await Promise.all([
+      page.waitForRequest((request) => request.method() === 'DELETE'),
+      page.getByTestId('eliminar-generacion-1').click(),
+    ]);
+    await generate.click();
+    const status = page.getByTestId('estado-generacion');
+    await expect(status).toContainText('proyecto-2.zip');
+    release();
+
+    await expect(status).toContainText('Eliminada la generación v1');
+    await expect(page.getByTestId('descargar-spring')).toBeVisible();
   } finally {
     release();
   }

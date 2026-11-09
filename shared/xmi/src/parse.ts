@@ -58,6 +58,8 @@ export interface XmiRelationship {
   readonly kind?: RelationshipKind;
   readonly sourceName: string;
   readonly targetName: string;
+  readonly sourceXmiId?: string;
+  readonly targetXmiId?: string;
   readonly sourceMultiplicity: Multiplicity;
   readonly targetMultiplicity: Multiplicity;
   readonly sourceRole: string | null;
@@ -484,16 +486,18 @@ function leerAsociaciones(
     // Nuestro modelo coloca el todo en el origen, que es tambien donde se
     // dibuja el diamante. Algunos exportadores escriben ese extremo segundo.
     const [origen, destino] = aggregateIndex === 1 ? [segundo, primero] : [primero, segundo];
-    const nombreOrigen = nombreDeExtremo(origen, nombrePorId);
-    const nombreDestino = nombreDeExtremo(destino, nombrePorId);
+    const claseOrigen = resolverExtremo(origen, nombrePorId);
+    const claseDestino = resolverExtremo(destino, nombrePorId);
 
-    if (nombreOrigen === null || nombreDestino === null) {
+    if (claseOrigen === null || claseDestino === null) {
       warnings.push({
         element: 'asociacion',
         reason: 'Una asociacion apunta a una clase que no esta en el archivo y se omitio.',
       });
       continue;
     }
+    const nombreOrigen = claseOrigen.name;
+    const nombreDestino = claseDestino.name;
 
     const id = texto(elemento['@xmi:id']);
     const aggregation = texto(origen['@aggregation']);
@@ -510,6 +514,8 @@ function leerAsociaciones(
       ...(kind === undefined ? {} : { kind }),
       sourceName: nombreOrigen,
       targetName: nombreDestino,
+      ...(claseOrigen.xmiId === undefined ? {} : { sourceXmiId: claseOrigen.xmiId }),
+      ...(claseDestino.xmiId === undefined ? {} : { targetXmiId: claseDestino.xmiId }),
       sourceMultiplicity: multiplicidad(
         origen,
         warnings,
@@ -539,11 +545,12 @@ function leerGeneralizaciones(
     if (tipoXmi(clase) !== 'uml:Class') continue;
     const sourceName = texto(clase['@name']);
     if (sourceName === null) continue;
+    const sourceId = texto(clase['@xmi:id']);
 
     for (const generalization of comoLista(clase['generalization'])) {
       const targetId = texto(generalization['@general']);
       const targetName = targetId === null ? undefined : nombrePorId.get(targetId);
-      if (targetName === undefined) {
+      if (targetId === null || targetName === undefined) {
         warnings.push({
           element: sourceName,
           reason:
@@ -558,6 +565,8 @@ function leerGeneralizaciones(
         kind: 'GENERALIZATION',
         sourceName,
         targetName,
+        ...(sourceId === null ? {} : { sourceXmiId: fromXmiId(sourceId) }),
+        targetXmiId: fromXmiId(targetId),
         sourceMultiplicity: '1',
         targetMultiplicity: '1',
         sourceRole: null,
@@ -569,13 +578,17 @@ function leerGeneralizaciones(
   return relaciones;
 }
 
-function nombreDeExtremo(extremo: Nodo, nombrePorId: ReadonlyMap<string, string>): string | null {
+function resolverExtremo(
+  extremo: Nodo,
+  nombrePorId: ReadonlyMap<string, string>,
+): { name: string; xmiId?: string } | null {
   const referencia = extremo['type'] as Nodo | undefined;
-  const idref = referencia === undefined ? null : texto(referencia['@xmi:idref']);
-  if (idref !== null) return nombrePorId.get(idref) ?? null;
-
-  const literal = texto(extremo['@type']);
-  return literal === null ? null : (nombrePorId.get(literal) ?? literal);
+  const idref = texto(referencia?.['@xmi:idref']);
+  const id = idref ?? texto(extremo['@type']);
+  if (id === null) return null;
+  const name = nombrePorId.get(id);
+  if (name !== undefined) return { name, xmiId: fromXmiId(id) };
+  return idref === null ? { name: id } : null;
 }
 
 function indexarExtremos(elementos: readonly Nodo[]): ReadonlyMap<string, Nodo> {
@@ -946,7 +959,7 @@ function tipoConceptual(nombre: string): ConceptualType | null {
     guid: 'UUID',
   };
 
-  return equivalencias[buscado] ?? null;
+  return Object.hasOwn(equivalencias, buscado) ? (equivalencias[buscado] ?? null) : null;
 }
 
 function texto(valor: unknown): string | null {

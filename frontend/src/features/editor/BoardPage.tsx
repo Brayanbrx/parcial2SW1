@@ -485,14 +485,7 @@ function BoardSession({
             const classId = newId();
             setSelectedId(classId);
             setClassToRevealId(classId);
-            // Se coloca escalonada para que las nuevas no se apilen encima.
-            const total = documento.state.semantic.classes.length;
-            run(
-              gui.createClass(classId, 'Clase nueva', {
-                x: 80 + (total % 4) * 300,
-                y: 80 + Math.floor(total / 4) * 240,
-              }),
-            );
+            run(gui.createClass(classId, 'Clase nueva'));
             chooseTool('SELECT');
           }}
         >

@@ -23,6 +23,54 @@ test.beforeEach(async ({ request }) => {
   await request.post('/test/reset');
 });
 
+test('cancelar una exportación XMI en curso permite iniciar otra sin descargas duplicadas', async ({
+  page,
+}) => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let exports = 0;
+  await page.route(`**/api/boards/${boardId}/export/xmi`, async (route) => {
+    exports++;
+    const response = { contentType: 'application/xml', body: '<xmi/>' };
+    if (exports === 1) {
+      await pending;
+      return route.fulfill(response).catch(() => undefined);
+    }
+    return route.fulfill(response);
+  });
+
+  try {
+    await enter(page);
+    await page.getByTestId('exportar-xmi').click();
+    const submit = page.getByTestId('confirmar-export');
+    const [request] = await Promise.all([
+      page.waitForRequest(`**/api/boards/${boardId}/export/xmi`),
+      submit.click(),
+    ]);
+    await expect(submit).toBeDisabled();
+    const form = page.getByTestId('nombre-export');
+    await Promise.all([
+      page.waitForEvent('requestfailed', {
+        predicate: (failed) => failed === request,
+        timeout: 5000,
+      }),
+      form.getByRole('button', { name: 'Cancelar' }).click(),
+    ]);
+    release();
+
+    await page.getByTestId('exportar-xmi').click();
+    await page.getByTestId('campo-nombre-export').fill('nuevo');
+    const [download] = await Promise.all([page.waitForEvent('download'), submit.click()]);
+    expect(download.suggestedFilename()).toBe('nuevo.xmi');
+    await expect(page.getByTestId('importacion-aplicada')).toHaveText('Exportado como nuevo.xmi');
+    expect(exports).toBe(2);
+  } finally {
+    release();
+  }
+});
+
 test('impide aplicar un reemplazo si se quita la última clase del candidato', async ({ page }) => {
   await enter(page);
   await page.getByTestId('crear-clase').click();
