@@ -26,6 +26,13 @@ const schema = z.object({
 
   DATABASE_URL: z.string().min(1),
 
+  // Notificaciones push (app movil). JSON de la cuenta de servicio de Firebase,
+  // en claro o en base64. Sin valor, las notificaciones quedan desactivadas.
+  FIREBASE_SERVICE_ACCOUNT_JSON: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+
   // Sin valor por defecto a proposito. Un secreto con valor por defecto acaba
   // desplegado, y nadie se entera hasta que alguien firma sus propios tokens
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),

@@ -54,6 +54,7 @@ model User {
   ownedProjects  Project[]       @relation("ProjectOwner")
   createdInvites ProjectInvite[]
   generations    Generation[]
+  deviceTokens   DeviceToken[]
 
   @@map("users")
 }
@@ -423,4 +424,19 @@ model AiReviewState {
   board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@map("ai_review_states")
+}
+
+/// Dispositivo movil registrado para recibir notificaciones push (FCM).
+model DeviceToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique
+  platform  String   @default("android")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
 }

@@ -8,6 +8,7 @@ import { recordAudit } from '../team-ai/audit-ack.js';
 import type { PublishTeamEvent } from '../team-ai/events.js';
 import type { TeamModerator } from '../team-ai/moderator.js';
 import { isSemanticBatch } from '../team-ai/review-evidence.js';
+import type { PushNotifier } from '../push/push.js';
 
 const boardParams = z.object({ boardId: z.string().uuid() });
 const historyQuery = z.object({
@@ -23,7 +24,15 @@ const historyQuery = z.object({
  */
 export async function auditRoutes(
   app: FastifyInstance,
-  { publish, moderator }: { publish: PublishTeamEvent; moderator?: TeamModerator | undefined },
+  {
+    publish,
+    moderator,
+    push,
+  }: {
+    publish: PublishTeamEvent;
+    moderator?: TeamModerator | undefined;
+    push?: PushNotifier | undefined;
+  },
 ): Promise<void> {
   app.addHook('preHandler', app.authenticate);
 
@@ -38,6 +47,7 @@ export async function auditRoutes(
       ...result
     } = await recordAudit(app.prisma, boardId, userId, batch, request.body, publish);
     if (created && isSemanticBatch(batch.commands)) moderator?.notify(boardId);
+    if (created) push?.notifyBatch(boardId, userId, batch);
     reply.code(202);
     return result;
   });

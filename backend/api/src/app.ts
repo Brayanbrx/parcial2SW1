@@ -20,6 +20,9 @@ import { profileRoutes } from './modules/auth/profile.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { InvalidTokenError } from './modules/auth/tokens.js';
 import { boardRoutes } from './modules/boards/routes.js';
+import { mobileEditRoutes } from './modules/boards/mobile-edit.js';
+import { deviceRoutes } from './modules/devices/routes.js';
+import { createPushNotifier } from './modules/push/push.js';
 import { generationRoutes } from './modules/generation/routes.js';
 import { importRoutes } from './modules/import/routes.js';
 import { projectRoutes } from './modules/projects/routes.js';
@@ -159,7 +162,10 @@ export async function buildApp(
           ...(options.moderator ? { timing: options.moderator } : {}),
         });
   if (moderator) app.addHook('onClose', () => moderator.close());
-  await app.register(auditRoutes, { publish: events.publish, moderator });
+  const push = createPushNotifier(config, app.prisma, app.log);
+  await app.register(deviceRoutes);
+  await app.register(auditRoutes, { publish: events.publish, moderator, push });
+  await app.register(mobileEditRoutes, { config, publish: events.publish, moderator, push });
   await app.register(teamAiRoutes, {
     config,
     publish: events.publish,

@@ -17,6 +17,7 @@ import {
 } from './auth/authorize.js';
 import { loadBoardDocument, storeBoardDocument } from './persistence/board-store.js';
 import { handleTeamAiEvent } from './team-ai-events.js';
+import { handleApplyBatch } from './apply-batch.js';
 
 export const SERVICE_NAME = 'collab';
 
@@ -279,6 +280,20 @@ export function buildCollabServer(config: Config): CollabServer {
 
       if (data.request.method === 'POST' && data.request.url === '/flush') {
         await atenderVolcado({ server, prisma, jwtSecret, request: data.request, responder });
+        return Promise.reject();
+      }
+
+      if (data.request.url === '/internal/apply') {
+        try {
+          await handleApplyBatch({
+            request: data.request,
+            secret: config.COLLAB_INTERNAL_SECRET,
+            server,
+            respond: responder,
+          });
+        } catch {
+          if (!data.response.headersSent) responder(503, { error: 'unavailable' });
+        }
         return Promise.reject();
       }
 
