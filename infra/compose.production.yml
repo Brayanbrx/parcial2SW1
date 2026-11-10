@@ -70,6 +70,11 @@ services:
   proxy:
     profiles: !reset []
     ports: !override ['80:80', '443:443']
+    # El smoke conserva el nombre TLS sin salir a la IP pública de la VM.
+    networks:
+      default:
+        aliases:
+          - ${DOMAIN:?Define el dominio publico sin https ni rutas}
     volumes: !override
       - ./caddy/Caddyfile.production:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

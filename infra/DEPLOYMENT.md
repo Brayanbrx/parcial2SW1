@@ -64,13 +64,13 @@ sudo bash scripts/production.sh ps
 sudo bash scripts/production.sh smoke
 ```
 
-El despliegue exige un checkout limpio. Usa el commit actual como etiqueta de imágenes, construye los cinco componentes, valida configuración y Caddy, inicia PostgreSQL y exige una copia externa exitosa **antes** de aplicar las migraciones. Después arranca los servicios y comprueba las rutas públicas con validación TLS. Guarda la versión exitosa en `/root/.local/state/uml-deploy` al ejecutar con sudo. No borra volúmenes.
+El despliegue exige un checkout limpio. Usa el commit actual como etiqueta de imágenes, construye los cinco componentes, valida configuración y Caddy, inicia PostgreSQL y exige una copia externa exitosa **antes** de aplicar las migraciones. Después arranca los servicios y comprueba las rutas por HTTPS desde la red Docker. El alias de Caddy permite validar el certificado con el dominio configurado sin pasar por la IP pública de la VM. Guarda la versión exitosa en `/root/.local/state/uml-deploy` al ejecutar con sudo. No borra volúmenes.
 
 El servidor necesita acceso saliente a DNS, registros de imágenes, certificados, S3, correo y proveedores de IA. Si la copia externa o un paso falla, el script termina con error; revisar la causa antes de reintentar. Un fallo posterior a una migración puede requerir intervención: el despliegue de una única VM admite una breve interrupción y no promete rollback automático de datos.
 
 ## Verificación funcional antes de compartir el enlace
 
-1. Abrir el dominio con certificado válido; confirmar redirección HTTP a HTTPS.
+1. Abrir el dominio desde un equipo externo a la VM, verificar el certificado y confirmar la redirección de HTTP a HTTPS. Este paso verifica el DNS público y las reglas de entrada.
 2. Registrar una cuenta real, **activarla desde el enlace del correo** —sin activar, el login responde 403— y verificar después login y renovación de sesión. Este paso comprueba de paso la entrega real de Brevo.
 3. Abrir la misma pizarra con dos usuarios y comprobar `En vivo`, cambios y reconexión.
 4. Importar/exportar XMI; probar una imagen con el proveedor de visión elegido.
