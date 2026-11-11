@@ -6,11 +6,13 @@ import {
   aiProposalRejectBodySchema,
   roleCanRequestTeamMode,
   roleCanWrite,
+  teamChatBodySchema,
   teamRequestBodySchema,
   teamRequestKind,
   teamHistoryCursorSchema,
   teamChangesCursorSchema,
   proposalRejectionStatus,
+  type TeamChatBody,
   type TeamRequestBody,
 } from '@uml/contracts';
 import type { FastifyInstance } from 'fastify';
@@ -34,6 +36,7 @@ import {
   messageDto,
   nextTeamTimestamp,
   withTeamBoard,
+  type TeamTransaction,
 } from './persistence.js';
 
 const boardParams = z.object({ boardId: z.string().uuid() });
@@ -75,7 +78,13 @@ function decode<T>(token: string, schema: z.ZodType<T>, boardId: string): T {
 }
 const requestConflict = () =>
   conflict('request_conflict', 'La solicitud entra en conflicto con una solicitud registrada.');
-function sameRequest(saved: TeamMessage, boardId: string, userId: string, body: TeamRequestBody) {
+function sameRequest(
+  saved: TeamMessage,
+  boardId: string,
+  userId: string,
+  body: TeamRequestBody,
+  mentions: readonly string[],
+) {
   return (
     saved.boardId === boardId &&
     saved.authorId === userId &&
@@ -83,8 +92,45 @@ function sameRequest(saved: TeamMessage, boardId: string, userId: string, body: 
     saved.inputMode === body.inputMode &&
     saved.text === body.text &&
     saved.replyToId === body.replyToId &&
+    isDeepStrictEqual(saved.mentions, mentions) &&
     isDeepStrictEqual(saved.requestModel, body.model)
   );
+}
+function sameChat(
+  saved: TeamMessage,
+  boardId: string,
+  userId: string,
+  body: TeamChatBody,
+  mentions: readonly string[],
+) {
+  return (
+    saved.boardId === boardId &&
+    saved.authorId === userId &&
+    saved.kind === 'CHAT' &&
+    saved.inputMode === body.inputMode &&
+    saved.text === body.text &&
+    isDeepStrictEqual(saved.mentions, mentions)
+  );
+}
+/**
+ * Mencionarse a uno mismo no avisa a nadie: se descarta sin error. Mencionar a
+ * alguien ajeno al proyecto sí es un error, para no filtrar quién existe.
+ */
+async function projectMentions(
+  tx: TeamTransaction,
+  projectId: string,
+  userId: string,
+  ids: readonly string[],
+): Promise<string[]> {
+  const mentions = ids.filter((id) => id !== userId);
+  if (!mentions.length) return [];
+  const members = await tx.projectMember.findMany({
+    where: { projectId, userId: { in: mentions } },
+    select: { userId: true },
+  });
+  if (members.length !== mentions.length)
+    throw badRequest('invalid_mention', 'Solo puedes mencionar a integrantes del proyecto.');
+  return mentions;
 }
 
 export async function teamAiRoutes(
@@ -233,7 +279,13 @@ export async function teamAiRoutes(
           where: { clientRequestId: body.clientRequestId },
         });
         if (existing)
-          return sameRequest(existing, boardId, userId, body)
+          return sameRequest(
+            existing,
+            boardId,
+            userId,
+            body,
+            body.mentions.filter((id) => id !== userId),
+          )
             ? messageDto(existing)
             : requestConflict();
         const settings = await tx.projectAiSettings.findUnique({
@@ -277,6 +329,7 @@ export async function teamAiRoutes(
             'team_queue_full',
             'La cola de solicitudes está llena. Espera antes de reintentar.',
           );
+        const mentions = await projectMentions(tx, context.projectId, userId, body.mentions);
         const now = await nextTeamTimestamp(tx, boardId);
         const message = messageDto(
           await tx.teamMessage.create({
@@ -290,6 +343,7 @@ export async function teamAiRoutes(
               kind: teamRequestKind[body.mode],
               text: body.text,
               replyToId: body.replyToId,
+              mentions,
               status: 'QUEUED',
               requestModel: body.model,
               createdAt: now,
@@ -311,6 +365,61 @@ export async function teamAiRoutes(
     }
     if (message.status === 'QUEUED') worker?.notify(boardId);
     return reply.code(202).send(message);
+  });
+
+  /**
+   * Mensaje entre personas. Cualquier integrante puede escribir, incluso un
+   * VIEWER o con la IA desactivada: no se encola ni consume cuota de la IA.
+   */
+  app.post('/boards/:boardId/team-ai/chat', async (request, reply) => {
+    const { boardId } = boardParams.parse(request.params);
+    const body = teamChatBodySchema.parse(request.body);
+    const { userId } = currentUser(request);
+    const accept = () =>
+      boardTransaction(boardId, userId, async (tx, context) => {
+        const existing = await tx.teamMessage.findUnique({
+          where: { clientRequestId: body.clientRequestId },
+        });
+        if (existing)
+          return sameChat(
+            existing,
+            boardId,
+            userId,
+            body,
+            body.mentions.filter((id) => id !== userId),
+          )
+            ? messageDto(existing)
+            : requestConflict();
+        const mentions = await projectMentions(tx, context.projectId, userId, body.mentions);
+        const now = await nextTeamTimestamp(tx, boardId);
+        const message = messageDto(
+          await tx.teamMessage.create({
+            data: {
+              boardId,
+              authorKind: 'USER',
+              authorId: userId,
+              clientRequestId: body.clientRequestId,
+              inputMode: body.inputMode,
+              kind: 'CHAT',
+              text: body.text,
+              mentions,
+              createdAt: now,
+              updatedAt: now,
+            },
+          }),
+        );
+        context.emit({ type: 'team.message', boardId, messageId: message.id });
+        return message;
+      });
+    let message;
+    try {
+      message = await accept();
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
+        throw error;
+      message = await accept();
+    }
+    return reply.code(201).send(message);
   });
 
   app.get('/boards/:boardId/team-ai/messages', async (request) => {

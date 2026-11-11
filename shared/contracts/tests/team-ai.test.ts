@@ -4,6 +4,7 @@ import {
   AI_PROPOSAL_STATUSES,
   AI_PROPOSAL_TTL_MS,
   DEFAULT_AI_SETTINGS,
+  MAX_TEAM_MENTIONS,
   TEAM_AI_EVENT_TYPES,
   TEAM_REQUEST_STATUSES,
   aiProposalSchema,
@@ -24,6 +25,7 @@ import {
   teamAiEventPayloadSchema,
   teamAiEventSchema,
   teamChangesCursorSchema,
+  teamChatBodySchema,
   teamHistoryCursorSchema,
   teamMessageSchema,
   teamRequestBodySchema,
@@ -114,6 +116,7 @@ describe('solicitud e identidad del feed', () => {
     expect(teamRequestBodySchema.parse({ ...request, text: '  Crea Persona  ' })).toEqual({
       ...request,
       replyToId: null,
+      mentions: [],
     });
     expect(teamRequestBodySchema.parse({ ...request, replyToId: id(5) }).replyToId).toBe(id(5));
     expect(teamRequestBodySchema.parse({ ...request, replyToId: null }).replyToId).toBeNull();
@@ -173,6 +176,62 @@ describe('solicitud e identidad del feed', () => {
     expect(
       teamMessageSchema.safeParse({ ...aiMessage, updatedAt: '2026-10-26T00:00:00Z' }).success,
     ).toBe(false);
+  });
+});
+
+describe('conversación del equipo y menciones', () => {
+  const chat = {
+    ...userMessage,
+    mode: null,
+    kind: 'CHAT',
+    status: null,
+    text: 'Hola @Beto, ¿revisas Pedido?',
+    mentions: [id(10)],
+  };
+  it('un CHAT no tiene modo, estado ni error: nunca entra a la cola de la IA', () => {
+    expect(teamMessageSchema.parse(chat).kind).toBe('CHAT');
+    for (const change of [
+      { mode: 'ASK' },
+      { status: 'QUEUED' },
+      { status: 'DONE' },
+      { errorCode: 'team_ai_failed' },
+      { inputMode: 'VOICE_COMMAND' },
+    ])
+      expect(teamMessageSchema.safeParse({ ...chat, ...change }).success).toBe(false);
+    // Una solicitud sigue exigiendo estado y modo coherente con su kind.
+    expect(teamMessageSchema.safeParse({ ...userMessage, status: null }).success).toBe(false);
+    expect(teamMessageSchema.safeParse({ ...userMessage, kind: 'CHAT' }).success).toBe(false);
+  });
+  it('las menciones son IDs únicos de otras personas; la IA no menciona', () => {
+    expect(teamMessageSchema.parse(userMessage).mentions).toEqual([]);
+    expect(teamMessageSchema.safeParse({ ...chat, mentions: [id(4)] }).success).toBe(false);
+    expect(teamMessageSchema.safeParse({ ...chat, mentions: ['Beto'] }).success).toBe(false);
+    expect(teamMessageSchema.safeParse({ ...chat, mentions: [id(10), id(10)] }).success).toBe(
+      false,
+    );
+    expect(
+      teamMessageSchema.safeParse({
+        ...chat,
+        mentions: Array.from({ length: MAX_TEAM_MENTIONS + 1 }, (_, n) => id(20 + n)),
+      }).success,
+    ).toBe(false);
+    expect(teamMessageSchema.safeParse({ ...aiMessage, mentions: [id(10)] }).success).toBe(false);
+  });
+  it('el cuerpo de un mensaje al equipo no elige kind, modo, modelo ni comando de voz', () => {
+    const body = { clientRequestId: id(1), inputMode: 'TEXT', text: '  hola equipo ' };
+    expect(teamChatBodySchema.parse(body)).toEqual({ ...body, text: 'hola equipo', mentions: [] });
+    for (const change of [
+      { kind: 'CHAT' },
+      { mode: 'ASK' },
+      { model },
+      { replyToId: id(2) },
+      { inputMode: 'VOICE_COMMAND' },
+      { text: ' ' },
+    ])
+      expect(teamChatBodySchema.safeParse({ ...body, ...change }).success).toBe(false);
+    expect(teamRequestBodySchema.parse({ ...request, mentions: [id(10)] }).mentions).toEqual([
+      id(10),
+    ]);
   });
 });
 

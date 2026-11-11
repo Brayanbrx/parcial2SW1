@@ -26,6 +26,8 @@ Incluye Compose separado, certificados, cuotas, copias S3, restauración aislada
 monitorización y actualización por versión. `npm run test:production` verifica el
 entorno HTTPS en contenedores temporales.
 
+Desde Windows, ejecuta [`conectar-vm.bat`](conectar-vm.bat) para entrar por SSH a la VM actual de **Azure**, **20.228.139.58**, con el usuario **azureuser**. Solicita una ruta de clave privada opcional; también puedes pasarla como argumento: `.\conectar-vm.bat azureuser "C:\ruta\clave_privada.pem"`. Necesitas la clave autorizada en esa VM y acceso al puerto 22 desde tu PC.
+
 ### Aprender a usar el software
 
 El editor permite abrir y recargar pizarras visitadas sin conexión. Abre la versión compilada con conexión y espera **Disponible sin conexión** en cada pizarra; después podrás editar y sincronizar al reconectar. Consulta [uso, requisitos y límites del editor offline](frontend/OFFLINE.md).

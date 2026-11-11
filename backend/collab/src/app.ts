@@ -18,6 +18,7 @@ import {
 import { loadBoardDocument, storeBoardDocument } from './persistence/board-store.js';
 import { handleTeamAiEvent } from './team-ai-events.js';
 import { handleApplyBatch } from './apply-batch.js';
+import { handleBoardState } from './board-state.js';
 
 export const SERVICE_NAME = 'collab';
 
@@ -289,6 +290,21 @@ export function buildCollabServer(config: Config): CollabServer {
             request: data.request,
             secret: config.COLLAB_INTERNAL_SECRET,
             server,
+            respond: responder,
+          });
+        } catch {
+          if (!data.response.headersSent) responder(503, { error: 'unavailable' });
+        }
+        return Promise.reject();
+      }
+
+      if (data.request.url === '/internal/state') {
+        try {
+          await handleBoardState({
+            request: data.request,
+            secret: config.COLLAB_INTERNAL_SECRET,
+            server,
+            prisma,
             respond: responder,
           });
         } catch {

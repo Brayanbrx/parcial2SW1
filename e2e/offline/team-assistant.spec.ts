@@ -1,7 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { DEFAULT_AI_SETTINGS, type TeamMessage, type TeamRequestBody } from '@uml/contracts';
+import {
+  DEFAULT_AI_SETTINGS,
+  teamChatBodySchema,
+  teamMessageSchema,
+  teamRequestBodySchema,
+  teamRequestKind,
+  type TeamChatBody,
+  type TeamMessage,
+  type TeamRequestBody,
+  type TeamRequestMessage,
+} from '@uml/contracts';
 import { commandSpeech, installCommandSpeech, speakCommand } from '../support/voice-command.js';
+import { hablarConIa } from '../support/destino.js';
 
 const boardId = '00000000-0000-4000-8000-000000000010';
 const projectId = '00000000-0000-4000-8000-000000000020';
@@ -39,7 +50,7 @@ async function setup(
   const requests: TeamRequestBody[] = [];
   let time = Date.now();
   const stamp = () => new Date(++time).toISOString();
-  const makeRequest = (body: TeamRequestBody): Extract<TeamMessage, { authorKind: 'USER' }> => ({
+  const makeRequest = (body: TeamRequestBody): TeamRequestMessage => ({
     id: randomUUID(),
     boardId,
     authorKind: 'USER',
@@ -51,6 +62,7 @@ async function setup(
     inputMode: body.inputMode,
     kind: 'INSTRUCTION',
     text: body.text,
+    mentions: body.mentions,
     status: 'QUEUED',
     errorCode: null,
     createdAt: stamp(),
@@ -65,6 +77,7 @@ async function setup(
       inputMode: 'TEXT',
       text: 'Añade un atributo a Cliente',
       model: { classes: [], relationships: [] },
+      mentions: [],
     });
     messages.push({ ...request, status: 'DONE' });
     messages.push({
@@ -79,6 +92,7 @@ async function setup(
       inputMode: null,
       kind: 'CLARIFICATION',
       text: '¿Cómo se llama el atributo?',
+      mentions: [],
       status: null,
       errorCode: null,
       createdAt: stamp(),
@@ -90,7 +104,8 @@ async function setup(
       const id = new URL(route.request().url()).pathname.split('/').at(-2);
       const index = messages.findIndex((message) => message.id === id);
       const message = messages[index];
-      if (message?.authorKind !== 'USER') throw new Error('Solicitud inexistente');
+      if (message?.authorKind !== 'USER' || message.kind === 'CHAT')
+        throw new Error('Solicitud inexistente');
       messages[index] = { ...message, status: 'CANCELLED', updatedAt: stamp() };
       await route.fulfill({ json: messages[index] });
     } else if (route.request().method() === 'POST') {
@@ -165,6 +180,7 @@ test('termina de cargar el historial antes de contar mensajes nuevos con el pane
     inputMode: 'TEXT',
     kind: 'QUESTION',
     text,
+    mentions: [],
     status: 'DONE',
     errorCode: null,
     createdAt: stamp,
@@ -215,6 +231,7 @@ test('reutiliza la misma solicitud si se pierde la respuesta y luego cambia la p
 }) => {
   const { requests } = await setup(page, 'FAILED', false, true);
   const composer = page.getByTestId('entrada-asistente');
+  await hablarConIa(page);
   await composer.fill('Crea la clase Cliente');
   await page.getByTestId('enviar-asistente').click();
   await expect(page.getByText('No se pudo contactar al servidor.', { exact: true })).toBeVisible();
@@ -280,3 +297,160 @@ for (const draft of ['', 'Borrador pendiente']) {
     await expect(page.getByTestId('transcripcion-comando-voz')).toContainText('Crea Factura');
   });
 }
+
+test('escribe al equipo con menciones por ID y @IA convierte solo ese mensaje en solicitud', async ({
+  page,
+}, info) => {
+  const betoId = '00000000-0000-4000-8000-000000000002';
+  const otroBetoId = '00000000-0000-4000-8000-000000000003';
+  const messages: TeamMessage[] = [];
+  const chats: TeamChatBody[] = [];
+  const requests: TeamRequestBody[] = [];
+  let time = Date.now();
+  const stamp = () => new Date(++time).toISOString();
+  await page.route(`**/api/projects/${projectId}/members`, (route) =>
+    route.fulfill({
+      json: [
+        { id: userId, email: 'ana@example.com', displayName: 'Ana', role: 'OWNER' },
+        { id: betoId, email: 'beto@example.com', displayName: 'Beto Díaz', role: 'EDITOR' },
+        { id: otroBetoId, email: 'otro@example.com', displayName: 'Beto Díaz', role: 'VIEWER' },
+      ],
+    }),
+  );
+  await page.route(`**/api/boards/${boardId}/team-ai/chat`, async (route) => {
+    const body = teamChatBodySchema.parse(route.request().postDataJSON());
+    chats.push(body);
+    const now = stamp();
+    const message = teamMessageSchema.parse({
+      ...body,
+      id: randomUUID(),
+      boardId,
+      authorKind: 'USER',
+      authorId: userId,
+      addressedToId: null,
+      replyToId: null,
+      mode: null,
+      kind: 'CHAT',
+      status: null,
+      errorCode: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    messages.push(message);
+    await route.fulfill({ status: 201, json: message });
+  });
+  await page.route(`**/api/boards/${boardId}/team-ai/messages**`, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fulfill({
+        json: { messages, proposals: [], nextCursor: String(time), hasMore: false },
+      });
+      return;
+    }
+    const body = teamRequestBodySchema.parse(route.request().postDataJSON());
+    requests.push(body);
+    const { model: _model, ...rest } = body;
+    const now = stamp();
+    const request = teamMessageSchema.parse({
+      ...rest,
+      id: randomUUID(),
+      boardId,
+      authorKind: 'USER',
+      authorId: userId,
+      addressedToId: null,
+      kind: teamRequestKind[body.mode],
+      status: 'DONE',
+      errorCode: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const answered = stamp();
+    messages.push(request, {
+      ...request,
+      id: randomUUID(),
+      authorKind: 'AI',
+      authorId: null,
+      addressedToId: userId,
+      replyToId: request.id,
+      clientRequestId: null,
+      mode: null,
+      inputMode: null,
+      kind: 'ANSWER',
+      text: 'Una composición es una relación todo-parte.',
+      mentions: [],
+      status: null,
+      errorCode: null,
+      createdAt: answered,
+      updatedAt: answered,
+    });
+    await route.fulfill({ status: 202, json: request });
+  });
+  await openBoard(page);
+  const composer = page.getByTestId('entrada-asistente');
+  const team = page.getByTestId('destino-equipo');
+  await expect(team).toHaveAttribute('aria-pressed', 'true');
+  await expect(composer).toHaveAttribute('role', 'combobox');
+
+  // Dos personas se llaman igual: lo elegido en la lista decide a quién se avisa.
+  await composer.fill('hola @be');
+  await expect(composer).toHaveAttribute('aria-expanded', 'true');
+  const options = page.getByTestId('sugerencias-mencion').getByRole('option');
+  await expect(options).toHaveCount(2);
+  await composer.press('ArrowDown');
+  await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await page
+    .getByTestId('asistente')
+    .screenshot({ path: info.outputPath('sugerencias-mencion.png') });
+  await expect(composer).toHaveAttribute(
+    'aria-activedescendant',
+    (await options.nth(1).getAttribute('id'))!,
+  );
+  await composer.press('Enter');
+  await expect(composer).toHaveValue('hola @Beto Díaz ');
+  await composer.pressSequentially('¿revisas Pedido?');
+  // Shift + Enter salta de línea; Enter envía y la caja queda lista para seguir.
+  await composer.press('Shift+Enter');
+  await composer.pressSequentially('gracias');
+  expect(chats).toHaveLength(0);
+  await composer.press('Enter');
+  await expect.poll(() => chats.length).toBe(1);
+  expect(chats[0]).toMatchObject({
+    text: 'hola @Beto Díaz ¿revisas Pedido?\ngracias',
+    mentions: [otroBetoId],
+  });
+  await expect(composer).toHaveValue('');
+  await expect(composer).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Cancelar solicitud' })).toHaveCount(0);
+  expect(requests).toHaveLength(0);
+  await expect(page.getByTestId('conversacion')).toContainText('Ana → Beto Díaz');
+  await expect(page.locator('.team-mencion')).toHaveText('@Beto Díaz');
+
+  // Escape cierra las sugerencias sin tocar el texto.
+  await composer.fill('@');
+  await expect(composer).toHaveAttribute('aria-expanded', 'true');
+  await composer.press('Escape');
+  await expect(composer).toHaveAttribute('aria-expanded', 'false');
+  await expect(composer).toHaveValue('@');
+  await composer.fill('');
+
+  // «@IA » cambia el destino de ese mensaje y no queda en el texto.
+  await page.getByTestId('modo-preguntar').click();
+  await team.click();
+  await composer.pressSequentially('@IA ¿qué es una composición?');
+  await expect(page.getByTestId('modo-preguntar')).toHaveAttribute('aria-pressed', 'true');
+  await expect(composer).toHaveValue('¿qué es una composición?');
+  await page.getByTestId('enviar-asistente').click();
+  await expect.poll(() => requests.length).toBe(1);
+  expect(requests[0]).toMatchObject({
+    mode: 'ASK',
+    text: '¿qué es una composición?',
+    mentions: [],
+  });
+  await expect(page.getByTestId('conversacion')).toContainText('Ana → IA');
+  await expect(page.getByTestId('conversacion')).toContainText('IA → Ana');
+  // Tras ese mensaje se vuelve a escribir al equipo.
+  await expect(team).toHaveAttribute('aria-pressed', 'true');
+  expect(chats).toHaveLength(1);
+  await page
+    .getByTestId('asistente')
+    .screenshot({ path: info.outputPath('conversacion-equipo.png') });
+});

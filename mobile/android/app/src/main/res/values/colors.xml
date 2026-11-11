@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Color de acento de design.css -->
+    <color name="ic_launcher_background">#35634C</color>
+    <!-- Color de fondo de design.css (tema claro) -->
+    <color name="splash_background">#F5F4F0</color>
+</resources>

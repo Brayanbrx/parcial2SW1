@@ -13,6 +13,7 @@ import {
   tamanoEnDiagrama,
 } from '../support/actors.js';
 import { montarEscenario } from '../support/escenario.js';
+import { hablarConIa } from '../support/destino.js';
 
 /**
  * Las cinco pruebas de colaboracion de la seccion 15.4, mas las de seguridad y
@@ -382,6 +383,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
       await expect(escenario.beto.page.getByTestId('clase-Cliente')).toBeVisible();
 
       // Nada se aplica sin que el usuario lo vea: llega como propuesta.
+      await hablarConIa(escenario.ana.page);
       await escenario.ana.page
         .getByTestId('entrada-asistente')
         .fill('agrega telefono tipo String a Cliente');
@@ -414,6 +416,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
       await crearClase(escenario.ana, 'Cliente');
 
       for (const atributo of ['nombre', 'correo', 'telefono', 'direccion']) {
+        await hablarConIa(escenario.ana.page);
         await escenario.ana.page
           .getByTestId('entrada-asistente')
           .fill(`agrega ${atributo} tipo String a Cliente`);
@@ -438,6 +441,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
     try {
       await crearClase(escenario.ana, 'Cliente');
 
+      await hablarConIa(escenario.ana.page);
       await escenario.ana.page
         .getByTestId('entrada-asistente')
         .fill('agrega telefono tipo String a Inexistente');
@@ -469,6 +473,7 @@ test.describe('asistente por texto (RF-030 a RF-036)', () => {
       await escenario.ana.page.getByTestId('nuevo-atributo').fill('correo');
       await escenario.ana.page.getByRole('button', { name: 'Añadir' }).click();
 
+      await hablarConIa(escenario.ana.page);
       await escenario.ana.page.getByTestId('entrada-asistente').fill('elimina Cliente');
       await escenario.ana.page.getByTestId('enviar-asistente').click();
 

@@ -368,6 +368,22 @@ button.team-politica:hover:not(:disabled) {
   border-radius: var(--r-md);
   background: var(--suave-fuerte);
 }
+/* Un mensaje que te menciona lleva un filete del acento, como la IA el suyo. */
+.team-assistant .conversacion .usuario.menciona-me .team-texto {
+  padding: var(--e-2) var(--e-3);
+  border-left: 2px solid var(--acento);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: var(--acento-suave);
+}
+.team-mencion {
+  font-weight: 600;
+  color: var(--acento-texto);
+}
+.team-mencion.yo {
+  padding: 0 0.2rem;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--acento) 16%, transparent);
+}
 /* Notas del sistema bajo un mensaje propio (límites, errores). */
 .team-assistant .conversacion .team-msg-cuerpo > p:not(.team-texto) {
   margin: 0;
@@ -559,6 +575,28 @@ button.team-politica:hover:not(:disabled) {
   flex: 1;
   min-width: 0;
   padding-inline: var(--e-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Equipo | ✦ Instruir · Preguntar · Revisar: a la izquierda las personas,
+   a la derecha lo que se le pide a la IA. */
+.team-modes [data-testid='destino-equipo'] {
+  flex: 0.9;
+}
+.team-modos-ia {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding-inline: 0.25rem 0.125rem;
+  border-left: 1px solid var(--borde);
+  color: var(--ia-texto);
+}
+.team-modes button.activa:not([data-testid='destino-equipo']) {
+  color: var(--ia-texto);
+  box-shadow:
+    var(--sombra-1),
+    inset 0 -2px 0 var(--ia);
 }
 .segmentado {
   display: inline-flex;
@@ -610,6 +648,7 @@ button.team-guia:hover:not(:disabled) {
 
 /* La caja de escritura agrupa el texto y sus acciones, como un solo control. */
 .team-assistant .team-entrada {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -627,6 +666,69 @@ button.team-guia:hover:not(:disabled) {
 }
 .team-assistant .team-entrada.escuchando {
   border-color: var(--error);
+}
+/* Escribiendo a la IA: la caja toma su color para que el destino no se olvide. */
+.team-assistant .team-entrada.para-ia:not(.escuchando) {
+  border-color: color-mix(in srgb, var(--ia) 55%, var(--borde-fuerte));
+}
+.team-assistant .team-entrada.para-ia:not(.escuchando):focus-within {
+  border-color: var(--ia);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ia) 20%, transparent);
+}
+
+/* Sugerencias de @: flotan sobre la caja para no empujar la conversación. */
+.team-menciones {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--e-1));
+  z-index: 5;
+  margin: 0;
+  padding: var(--e-1);
+  list-style: none;
+  max-height: 15rem;
+  overflow-y: auto;
+  border: 1px solid var(--borde);
+  border-radius: var(--r-md);
+  background: var(--fondo-panel);
+  box-shadow: var(--sombra-2);
+}
+.team-menciones[hidden] {
+  display: none;
+}
+.team-menciones li {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-1) var(--e-2);
+  border-radius: calc(var(--r-md) - 2px);
+  cursor: pointer;
+}
+.team-menciones li.activa {
+  background: var(--suave-fuerte);
+}
+.team-menciones .team-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.625rem;
+}
+.team-mencion-texto {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e-2);
+  min-width: 0;
+}
+.team-mencion-texto b {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--texto);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-mencion-texto small {
+  font-size: var(--t-xs);
+  color: var(--texto-tenue);
 }
 .team-assistant .team-entrada textarea {
   flex: none;

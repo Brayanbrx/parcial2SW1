@@ -16,9 +16,12 @@ export interface TeamTurn {
   readonly authorName: string;
   readonly addressedToId: string | null;
   readonly replyToId: string | null;
+  /** kind CHAT: conversación entre personas, nunca una solicitud a la IA. */
   readonly kind: string;
   readonly text: string;
   readonly createdAt: string;
+  /** Personas a las que se dirigió el mensaje con @ (por ID, con su nombre actual). */
+  readonly mentions?: readonly { readonly id: string; readonly name: string }[];
   readonly truncated?: boolean;
 }
 
@@ -62,7 +65,9 @@ export class TeamContextError extends Error {
 const compare = (a: TeamTurn, b: TeamTurn) =>
   a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 const personal = (turn: TeamTurn, userId: string) =>
-  turn.authorId === userId || turn.addressedToId === userId;
+  turn.authorId === userId ||
+  turn.addressedToId === userId ||
+  (turn.mentions ?? []).some((mention) => mention.id === userId);
 
 /** Cota deliberadamente conservadora: un token por byte UTF-8 más envoltorio.
  * Incluye sistema, esquema de salida, modelo, petición, aclaraciones e historial.
@@ -105,6 +110,13 @@ export function buildTeamContext(
     kind: turn.kind,
     createdAt: turn.createdAt,
     text: turn.text.slice(0, 2000),
+    ...(turn.mentions?.length
+      ? {
+          mentions: turn.mentions
+            .slice(0, 10)
+            .map((mention) => ({ id: mention.id, name: mention.name.slice(0, 120) })),
+        }
+      : {}),
     ...(turn.text.length > 2000 || turn.truncated ? { truncated: true } : {}),
   });
   const unique = (turns: readonly TeamTurn[]) =>

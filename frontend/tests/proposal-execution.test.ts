@@ -4,7 +4,7 @@ import {
   DEFAULT_AI_SETTINGS,
   type AiProposal,
   type TeamInputMode,
-  type TeamMessage,
+  type TeamRequestMessage,
 } from '@uml/contracts';
 import { ProposalExecution } from '../src/features/team-assistant/proposal-execution.js';
 
@@ -14,7 +14,7 @@ function fixture(inputMode: TeamInputMode = 'VOICE_COMMAND') {
     batchId = randomUUID(),
     boardId = randomUUID(),
     now = new Date().toISOString();
-  const request: TeamMessage = {
+  const request: TeamRequestMessage = {
     id,
     boardId,
     authorKind: 'USER',
@@ -26,6 +26,7 @@ function fixture(inputMode: TeamInputMode = 'VOICE_COMMAND') {
     inputMode,
     kind: 'INSTRUCTION',
     text: 'Crea Factura',
+    mentions: [],
     status: 'DONE',
     errorCode: null,
     createdAt: now,

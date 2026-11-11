@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { Config } from '../../config.js';
 import { HttpError, badRequest, notFound } from '../../lib/http-error.js';
 import { currentUser } from '../../plugins/auth.js';
-import { requireWriteAccess } from '../projects/membership.js';
+import { requireMembership, requireWriteAccess } from '../projects/membership.js';
 import type { PushNotifier } from '../push/push.js';
 import { recordAudit } from '../team-ai/audit-ack.js';
 import type { PublishTeamEvent } from '../team-ai/events.js';
@@ -54,6 +54,7 @@ export async function mobileEditRoutes(
       applied: boolean;
       issues: unknown[];
       model?: unknown;
+      layout?: unknown;
     };
     try {
       const response = await fetch(`${config.COLLAB_INTERNAL_URL}/internal/apply`, {
@@ -87,6 +88,43 @@ export async function mobileEditRoutes(
       if (isSemanticBatch(batch.commands)) moderator?.notify(boardId);
       push?.notifyBatch(boardId, userId, batch);
     }
-    return { applied: true, issues: result.issues, model: result.model };
+    return { applied: true, issues: result.issues, model: result.model, layout: result.layout };
+  });
+
+  /**
+   * Modelo y layout vivos de la pizarra, para dibujar el diagrama como la web.
+   * El snapshot de `GET /boards/:id` solo trae el modelo: las posiciones viven
+   * en el documento colaborativo. Leer no exige escritura: un VIEWER tambien ve.
+   */
+  app.get('/boards/:boardId/state', async (request) => {
+    const { boardId } = boardParams.parse(request.params);
+    const { userId } = currentUser(request);
+    const board = await app.prisma.board.findUnique({
+      where: { id: boardId },
+      select: { projectId: true },
+    });
+    if (board === null) throw notFound('La pizarra no existe.');
+    await requireMembership(app.prisma, board.projectId, userId);
+
+    if (!config.COLLAB_INTERNAL_SECRET) {
+      throw new HttpError(503, 'collab_unavailable', 'La vista de diagrama no está configurada.');
+    }
+    try {
+      const response = await fetch(`${config.COLLAB_INTERNAL_URL}/internal/state`, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${config.COLLAB_INTERNAL_SECRET}`,
+        },
+        body: JSON.stringify({ projectId: board.projectId, boardId }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`collab ${response.status}`);
+      return (await response.json()) as unknown;
+    } catch (error) {
+      request.log.warn({ err: String(error) }, 'no se pudo leer el estado de la pizarra');
+      throw new HttpError(503, 'collab_unavailable', 'No se pudo cargar el diagrama. Reintenta.');
+    }
   });
 }

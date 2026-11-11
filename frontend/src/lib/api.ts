@@ -4,6 +4,7 @@ import {
   teamFeedPageSchema,
   teamMessageSchema,
   aiProposalSchema,
+  type TeamChatBody,
   type TeamRequestBody,
   type AiRejectReason,
   type AiSettingsValues,
@@ -137,6 +138,13 @@ export const teamAiApi = {
     return conforme(
       teamMessageSchema,
       await apiRequest(`/boards/${boardId}/team-ai/messages`, { method: 'POST', body, signal }),
+    );
+  },
+  /** Mensaje para el equipo: la IA no lo responde, solo lo lee como contexto. */
+  async chat(boardId: string, body: TeamChatBody, signal: AbortSignal) {
+    return conforme(
+      teamMessageSchema,
+      await apiRequest(`/boards/${boardId}/team-ai/chat`, { method: 'POST', body, signal }),
     );
   },
   async message(boardId: string, id: string, signal?: AbortSignal) {

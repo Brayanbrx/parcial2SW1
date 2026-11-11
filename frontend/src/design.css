@@ -1470,6 +1470,11 @@ button.aviso-cerrar:hover:not(:disabled) {
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+/* Alguien te mencionó con @: color de acento para distinguirlo del resto. */
+.insignia-nuevos.mencion {
+  background: var(--acento);
+  color: #fff;
+}
 .colaborador-ia-avatar .insignia-nuevos {
   position: absolute;
   top: -0.4375rem;

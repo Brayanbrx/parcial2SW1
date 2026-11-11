@@ -2,8 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { montarEscenario } from '../support/escenario.js';
 import { crearClase } from '../support/actors.js';
 import type { SpeechRecognitionLike } from '../../frontend/src/features/assistant/speech-session.js';
+import { hablarConIa } from '../support/destino.js';
 
 async function send(page: Page, text: string) {
+  await hablarConIa(page);
   await page.getByTestId('entrada-asistente').fill(text);
   await page.getByTestId('enviar-asistente').click();
 }
@@ -51,6 +53,7 @@ test('DICTATION permanece manual incluso con AUTO_SAFE_ALL y Parar no envía', a
     await expect(ana.page.getByTestId('estado-conexion')).toHaveText('En vivo');
     await ana.page.getByTestId('pestana-asistente').click();
     await configure(ana.page, 'AUTO_SAFE_ALL');
+    await hablarConIa(ana.page);
     const requests: { inputMode: string }[] = [];
     ana.page.on('request', (r) => {
       if (r.method() === 'POST' && /\/team-ai\/messages$/.test(r.url()))

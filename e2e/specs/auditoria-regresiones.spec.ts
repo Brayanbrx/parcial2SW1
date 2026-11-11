@@ -4,6 +4,7 @@ import { serializeToXmi } from '@uml/xmi';
 import { abrirHerramienta, crearClase } from '../support/actors.js';
 import { montarEscenario, type EscenarioCompartido } from '../support/escenario.js';
 import { createTeamAiMock } from '../support/team-ai.js';
+import { hablarConIa } from '../support/destino.js';
 
 async function permisos(escenario: EscenarioCompartido, role: 'VIEWER' | 'EDITOR'): Promise<void> {
   const client = escenario.ana.page.request;
@@ -94,6 +95,7 @@ test('una propuesta antigua no borra el atributo añadido por otro colaborador',
     });
     await mock.install(escenario.ana.page);
     await abrirHerramienta(escenario.ana, 'asistente');
+    await hablarConIa(escenario.ana.page);
     await escenario.ana.page.getByTestId('entrada-asistente').fill('elimina Cliente');
     await escenario.ana.page.getByTestId('enviar-asistente').click();
     await expect(escenario.ana.page.getByTestId('aplicar-propuesta')).toBeVisible();

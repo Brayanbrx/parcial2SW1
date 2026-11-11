@@ -612,4 +612,119 @@ describe('paso 3: API colectiva autenticada', () => {
     ).toBe(409);
     expect((await audit({ ...batch, commands: [...batch.commands].reverse() })).status).toBe(202);
   });
+
+  describe('conversación del equipo', () => {
+    const chat = (change = {}, token = owner.token) =>
+      api.request('POST', `/boards/${boardId}/team-ai/chat`, {
+        token,
+        body: { clientRequestId: randomUUID(), inputMode: 'TEXT', text: 'hola equipo', ...change },
+      });
+
+    it('cualquier integrante escribe al equipo, incluso con la IA desactivada, sin encolar', async () => {
+      await api.app.prisma.projectAiSettings.create({
+        data: { projectId, ...DEFAULT_AI_SETTINGS, enabled: false },
+      });
+      const sent = await chat({ text: 'hola Brayan' }, viewer.token);
+      expect(sent.status).toBe(201);
+      expect(teamMessageSchema.safeParse(sent.body).success).toBe(true);
+      expect(sent.body).toMatchObject({
+        authorKind: 'USER',
+        authorId: viewer.userId,
+        kind: 'CHAT',
+        mode: null,
+        status: null,
+        mentions: [],
+      });
+      expect(sent.body).not.toHaveProperty('requestModel');
+      // La IA sigue rechazando solicitudes: el chat no es una puerta lateral.
+      expect((await post(body({ mode: 'ASK' }), viewer.token)).status).toBe(409);
+      expect((await chat({}, outsider.token)).status).toBe(404);
+      expect(
+        await api.app.prisma.teamMessage.count({
+          where: { boardId, status: { in: ['QUEUED', 'PROCESSING'] } },
+        }),
+      ).toBe(0);
+    });
+
+    it('guarda menciones por ID, descarta la propia y rechaza a quien no es integrante', async () => {
+      const sent = await chat({
+        text: '@editor @viewer miren Pedido',
+        mentions: [editor.userId, viewer.userId, owner.userId],
+      });
+      expect(sent.status).toBe(201);
+      expect(sent.body.mentions).toEqual([editor.userId, viewer.userId]);
+      expect((await chat({ mentions: [outsider.userId] })).status).toBe(400);
+      expect((await chat({ mentions: [editor.userId, editor.userId] })).status).toBe(400);
+      expect((await chat({ mentions: ['editor'] })).status).toBe(400);
+      // Una solicitud a la IA también puede mencionar a alguien.
+      const asked = await post(body({ mode: 'ASK', mentions: [editor.userId] }));
+      expect(asked.status).toBe(202);
+      expect(asked.body).toMatchObject({ kind: 'QUESTION', mentions: [editor.userId] });
+    });
+
+    it.each([
+      { mode: 'ASK' },
+      { kind: 'INSTRUCTION' },
+      { status: 'QUEUED' },
+      { model },
+      { inputMode: 'VOICE_COMMAND' },
+      { text: ' ' },
+    ])('rechaza un mensaje al equipo con %j', async (change) => {
+      expect((await chat(change)).status).toBe(400);
+      expect(await api.app.prisma.teamMessage.count({ where: { boardId } })).toBe(0);
+    });
+
+    it('es idempotente por clave y 409 si la clave llega con otro contenido', async () => {
+      const data = { clientRequestId: randomUUID(), text: 'una vez', mentions: [editor.userId] };
+      const results = await Promise.all(Array.from({ length: 3 }, () => chat(data)));
+      expect(results.map((r) => r.status)).toEqual([201, 201, 201]);
+      expect(new Set(results.map((r) => r.body.id)).size).toBe(1);
+      expect((await chat({ ...data, text: 'otra cosa' })).status).toBe(409);
+      expect((await chat({ ...data, mentions: [] })).status).toBe(409);
+      expect((await chat(data, editor.token)).status).toBe(409);
+    });
+
+    it('la base rechaza un CHAT con forma de solicitud o una IA que menciona', async () => {
+      const base = {
+        boardId,
+        authorKind: 'USER' as const,
+        authorId: owner.userId,
+        inputMode: 'TEXT' as const,
+        kind: 'CHAT' as const,
+        text: 'hola',
+      };
+      for (const data of [
+        { ...base, clientRequestId: randomUUID(), status: 'QUEUED' as const },
+        { ...base, clientRequestId: randomUUID(), mode: 'ASK' as const },
+        { ...base, clientRequestId: randomUUID(), mentions: [owner.userId] },
+        { ...base, clientRequestId: randomUUID(), inputMode: 'VOICE_COMMAND' as const },
+        {
+          boardId,
+          authorKind: 'AI' as const,
+          kind: 'REVIEW' as const,
+          text: 'Revisión',
+          mentions: [editor.userId],
+        },
+      ])
+        await expect(api.app.prisma.teamMessage.create({ data })).rejects.toThrow();
+      await expect(
+        api.app.prisma.teamMessage.create({ data: { ...base, clientRequestId: randomUUID() } }),
+      ).resolves.toMatchObject({ kind: 'CHAT', mentions: [] });
+    });
+
+    it('el historial devuelve chats y solicitudes con sus menciones', async () => {
+      await chat({ text: '@editor hola', mentions: [editor.userId] });
+      await post(body({ mode: 'ASK' }), editor.token);
+      const feed = await api.request('GET', messages(), { token: viewer.token });
+      expect(feed.status).toBe(200);
+      expect(
+        feed.body.messages.map((m: { kind: string; mentions: string[] }) => [m.kind, m.mentions]),
+      ).toEqual([
+        ['CHAT', [editor.userId]],
+        ['QUESTION', []],
+      ]);
+      // Cancelar no aplica a un mensaje entre personas.
+      expect((await cancel(feed.body.messages[0].id as string)).status).toBe(409);
+    });
+  });
 });

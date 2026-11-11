@@ -631,4 +631,29 @@ describe('paso 7: contexto persistido y aclaraciones autenticadas', () => {
     expect(loaded.history.referencedTurn?.id).toBe(reference.id);
     expect(loaded.history.referencedTurn?.boardId).toBe(boardId);
   });
+  it('los mensajes entre personas llegan como contexto CHAT con menciones, sin respuesta de la IA', async () => {
+    const chat = (text: string, actor: Account, mentions: string[] = []) =>
+      api.request('POST', `/boards/${boardId}/team-ai/chat`, {
+        token: actor.token,
+        body: { clientRequestId: randomUUID(), inputMode: 'TEXT', text, mentions },
+      });
+    expect((await chat('@Beto propongo agregar fecha a Pedido', ana, [beto.userId])).status).toBe(
+      201,
+    );
+    expect((await chat('Hola equipo', viewer)).status).toBe(201);
+    // Ninguno se encoló: la IA no respondió ni se llamó al proveedor.
+    expect(await api.app.prisma.teamMessage.count({ where: { boardId, authorKind: 'AI' } })).toBe(
+      0,
+    );
+    expect(questions).toHaveLength(0);
+    await ask('¿Qué opinas de lo que propuso Ana?');
+    const team = questions.at(-1)!.team!;
+    // Mencionar a Beto lo vuelve memoria personal de Beto, con el nombre resuelto.
+    expect(team.personalTurns.find((t) => t.kind === 'CHAT')).toMatchObject({
+      authorName: 'Ana',
+      text: '@Beto propongo agregar fecha a Pedido',
+      mentions: [{ id: beto.userId, name: 'Beto' }],
+    });
+    expect(team.groupTurns.some((t) => t.kind === 'CHAT' && t.text === 'Hola equipo')).toBe(true);
+  });
 });

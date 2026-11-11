@@ -3,6 +3,7 @@ import { resolveProposal } from '@uml/ai';
 import { createTeamAiMock } from '../support/team-ai.js';
 import { montarEscenario } from '../support/escenario.js';
 import { aceptarInvitacion, crearClase, registrarActor, type Actor } from '../support/actors.js';
+import { hablarConIa } from '../support/destino.js';
 
 async function session(actor: Actor) {
   const response = await actor.page.request.post('/api/auth/login', {
@@ -13,6 +14,7 @@ async function session(actor: Actor) {
   return { authorization: `Bearer ${accessToken}` };
 }
 async function send(page: Page, text: string) {
+  await hablarConIa(page);
   await page.getByTestId('entrada-asistente').fill(text);
   await page.getByTestId('enviar-asistente').click();
 }
@@ -94,7 +96,7 @@ test('tres cuentas comparten feed durable, configuración OWNER y consulta VIEWE
     await expect(dialog).not.toBeVisible();
     await expect(
       beto.page.getByText(
-        'La IA está deshabilitada en este proyecto. Puedes consultar el historial.',
+        'La IA está deshabilitada en este proyecto. El equipo puede seguir conversando aquí.',
       ),
     ).toBeVisible();
     await expect(carla.page.getByTestId('enviar-asistente')).toBeDisabled();

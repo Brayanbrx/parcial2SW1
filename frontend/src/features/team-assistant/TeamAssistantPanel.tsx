@@ -3,7 +3,9 @@ import type { HocuspocusProvider } from '@hocuspocus/provider';
 import type {
   BoardState,
   CommandBatch,
+  ProjectRole,
   SemanticModel,
+  TeamChatBody,
   TeamMessage,
   TeamMode,
   TeamRequestBody,
@@ -22,6 +24,7 @@ import { recordingToWav } from '../assistant/wav.js';
 import { IconoIA } from '../../components/icons.js';
 import { RichText } from './RichText.js';
 import { IA_EQUIPO, colorEstable, iniciales, type ActividadIa } from './identity.js';
+import { mentionSegments, type MentionCandidate } from './mentions.js';
 import './team-assistant.css';
 
 /** Ejemplos del estado vacío: al pulsarlos llenan el compositor, no envían. */
@@ -30,6 +33,35 @@ const SUGERENCIAS: readonly (readonly [TeamMode, string, string])[] = [
   ['ASK', 'Preguntar', '¿Qué es un atributo derivado?'],
   ['REVIEW', 'Revisar', '¿Está bien modelada la herencia?'],
 ];
+const ROL: Record<ProjectRole, string> = {
+  OWNER: 'Propietario',
+  EDITOR: 'Editor',
+  VIEWER: 'Lector',
+};
+
+/** Texto de una persona con sus menciones resaltadas; la propia, más visible. */
+function MentionText(props: {
+  text: string;
+  mentions: readonly { readonly id: string; readonly name: string }[];
+  self: string;
+}) {
+  return (
+    <p className="team-texto">
+      {mentionSegments(props.text, props.mentions).map((segment, index) =>
+        segment.mention ? (
+          <span
+            key={index}
+            className={`team-mencion${segment.mention === props.self ? ' yo' : ''}`}
+          >
+            {segment.text}
+          </span>
+        ) : (
+          segment.text
+        ),
+      )}
+    </p>
+  );
+}
 
 export function TeamAssistantPanel(props: {
   boardId: string;
@@ -52,6 +84,8 @@ export function TeamAssistantPanel(props: {
   onActivity?(activity: ActividadIa): void;
   /** Mensajes de otros (personas o IA) que llegaron con el panel oculto. */
   onUnread?(count: number): void;
+  /** De esos mensajes, cuántos mencionan con @ a esta persona. */
+  onMentioned?(count: number): void;
 }) {
   const { boardId, projectId, user } = props;
   const feed = useTeamFeed(
@@ -90,6 +124,7 @@ export function TeamAssistantPanel(props: {
   const mounted = useRef(true);
   const activeDraft = useRef<ComposerDraft | null>(null);
   const retry = useRef<{ fingerprint: string; body: TeamRequestBody } | null>(null);
+  const chatRetry = useRef<{ fingerprint: string; body: TeamChatBody } | null>(null);
   const end = useRef<HTMLLIElement>(null);
   const ownRequest = messages.find((m) => m.id === activeId);
   const pending =
@@ -110,12 +145,26 @@ export function TeamAssistantPanel(props: {
   );
   const name = (id: string | null) =>
     id ? (names.get(id) ?? `Participante ${id.slice(0, 8)}`) : 'Equipo';
+  const mentionable = useMemo<readonly MentionCandidate[]>(
+    () =>
+      feed.members
+        .filter((member) => member.id !== user.id)
+        .map((member) => ({
+          id: member.id,
+          displayName: member.displayName,
+          hint: ROL[member.role],
+        })),
+    [feed.members, user.id],
+  );
   const requestProposals = useMemo(
     () => new Map(proposals.map((p) => [p.requestMessageId, p])),
     [proposals],
   );
   const visibleMessages = mineOnly
-    ? messages.filter((m) => m.authorId === user.id || m.addressedToId === user.id)
+    ? messages.filter(
+        (m) =>
+          m.authorId === user.id || m.addressedToId === user.id || m.mentions.includes(user.id),
+      )
     : messages;
   const processing = messages.find((m) => m.status === 'PROCESSING');
   const queued = messages.filter((m) => m.status === 'QUEUED').length;
@@ -143,10 +192,12 @@ export function TeamAssistantPanel(props: {
   }, [onActivity, activity.estado, activity.detalle]);
   const seen = useRef<{ baseline: readonly string[]; ids: Set<string> } | null>(null);
   const [unread, setUnread] = useState(0);
+  const [mentioned, setMentioned] = useState(0);
   useEffect(() => {
     if (initialMessageIds === null) {
       seen.current = null;
       setUnread(0);
+      setMentioned(0);
       return;
     }
     if (seen.current?.baseline !== initialMessageIds) {
@@ -156,14 +207,21 @@ export function TeamAssistantPanel(props: {
     if (props.visible) {
       for (const m of messages) known.add(m.id);
       setUnread(0);
+      setMentioned(0);
       return;
     }
-    setUnread(messages.filter((m) => m.authorId !== user.id && !known.has(m.id)).length);
+    const fresh = messages.filter((m) => m.authorId !== user.id && !known.has(m.id));
+    setUnread(fresh.length);
+    setMentioned(fresh.filter((m) => m.mentions.includes(user.id)).length);
   }, [initialMessageIds, messages, props.visible, user.id]);
   const onUnread = props.onUnread;
   useEffect(() => {
     onUnread?.(unread);
   }, [onUnread, unread]);
+  const onMentioned = props.onMentioned;
+  useEffect(() => {
+    onMentioned?.(mentioned);
+  }, [onMentioned, mentioned]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -222,7 +280,42 @@ export function TeamAssistantPanel(props: {
         setError(cause instanceof Error ? cause.message : 'No se pudo cancelar.');
     }
   }
+  /**
+   * Mensaje entre personas: no espera respuesta de la IA ni toca la aclaración
+   * en curso. Tampoco marca `posting`: eso deshabilitaría la caja (perdiendo el
+   * foco tras cada Enter) y ofrecería «Cancelar solicitud» para algo que no la tiene.
+   */
+  async function sendChat(draft: ComposerDraft): Promise<boolean> {
+    if (sending.current || pending || !props.online || draft.inputMode === 'VOICE_COMMAND')
+      return false;
+    sending.current = true;
+    setError(null);
+    setNotice(null);
+    const content = { text: draft.text, inputMode: draft.inputMode, mentions: [...draft.mentions] };
+    const fingerprint = JSON.stringify(content);
+    // Un fallo de red puede ocultar un envío registrado: el reintento conserva la clave.
+    const body: TeamChatBody =
+      chatRetry.current?.fingerprint === fingerprint
+        ? chatRetry.current.body
+        : { ...content, clientRequestId: crypto.randomUUID() };
+    chatRetry.current = { fingerprint, body };
+    try {
+      await teamAiApi.chat(boardId, body, AbortSignal.timeout(15_000));
+      if (!mounted.current) return false;
+      chatRetry.current = null;
+      void feed.refresh();
+      return true;
+    } catch (cause) {
+      if (!mounted.current) return false;
+      if (cause instanceof ApiError && cause.status < 500) chatRetry.current = null;
+      setError(cause instanceof Error ? cause.message : 'No se pudo enviar. Conservamos tu texto.');
+      return false;
+    } finally {
+      sending.current = false;
+    }
+  }
   async function send(draft: ComposerDraft): Promise<boolean> {
+    if (draft.destination === 'TEAM') return sendChat(draft);
     if (
       sending.current ||
       pending ||
@@ -238,7 +331,13 @@ export function TeamAssistantPanel(props: {
     setError(null);
     setNotice(null);
     // El mismo envío puede haberse registrado aunque su respuesta se perdiera.
-    const content = { ...draft, replyToId };
+    const content = {
+      mode: draft.mode,
+      inputMode: draft.inputMode,
+      text: draft.text,
+      mentions: [...draft.mentions],
+      replyToId,
+    };
     const fingerprint = JSON.stringify(content);
     const body: TeamRequestBody =
       retry.current?.fingerprint === fingerprint
@@ -273,14 +372,17 @@ export function TeamAssistantPanel(props: {
     }
   }
   function restoreRequest(request: TeamMessage) {
-    if (request.authorKind !== 'USER' || request.authorId !== user.id) return;
+    if (request.authorKind !== 'USER' || request.kind === 'CHAT' || request.authorId !== user.id)
+      return;
     // Desde el historial se prepara otra solicitud tras un resultado conocido.
     if (retry.current?.body.clientRequestId === request.clientRequestId) retry.current = null;
     setReplyToId(request.replyToId);
     setRestore({
       text: request.text,
+      destination: 'AI',
       mode: request.mode,
       inputMode: request.inputMode,
+      mentions: request.mentions,
       revision: Date.now(),
     });
   }
@@ -371,7 +473,7 @@ export function TeamAssistantPanel(props: {
       )}
       {settings?.enabled === false && (
         <p className="team-aviso advertencia">
-          La IA está deshabilitada en este proyecto. Puedes consultar el historial.
+          La IA está deshabilitada en este proyecto. El equipo puede seguir conversando aquí.
         </p>
       )}
       {feed.error && (
@@ -412,7 +514,8 @@ export function TeamAssistantPanel(props: {
                 <strong>Soy la IA del equipo</strong>
                 <p>
                   Veo el mismo diagrama que ustedes. Explico conceptos, propongo cambios y aviso
-                  cuando algo no cuadra. Todo el equipo ve lo que conversamos.
+                  cuando algo no cuadra. Conversen entre ustedes aquí; para pedirme algo, escriban
+                  @IA o elijan Instruir, Preguntar o Revisar.
                 </p>
                 <ul className="team-sugerencias" aria-label="Ejemplos para empezar">
                   {SUGERENCIAS.map(([mode, label, text]) => (
@@ -427,7 +530,13 @@ export function TeamAssistantPanel(props: {
                           (mode === 'REVIEW' && settings?.reviewMode === 'OFF')
                         }
                         onClick={() =>
-                          setRestore({ text, mode, inputMode: 'TEXT', revision: Date.now() })
+                          setRestore({
+                            text,
+                            destination: 'AI',
+                            mode,
+                            inputMode: 'TEXT',
+                            revision: Date.now(),
+                          })
                         }
                       >
                         <b>{label}</b>
@@ -443,9 +552,17 @@ export function TeamAssistantPanel(props: {
         {visibleMessages.map((message) => {
           const proposal = requestProposals.get(message.id);
           const owned = message.authorId === user.id;
+          const mentionsMe = !owned && message.mentions.includes(user.id);
+          // Mismo formato en los dos sentidos: «Ana → IA» e «IA → Ana». Un
+          // mensaje al equipo sin menciones lleva solo el nombre de quien escribe.
+          const recipients = message.mentions.map(name).join(', ');
           const author =
             message.authorKind === 'USER'
-              ? name(message.authorId)
+              ? message.kind !== 'CHAT'
+                ? `${name(message.authorId)} → IA`
+                : recipients
+                  ? `${name(message.authorId)} → ${recipients}`
+                  : name(message.authorId)
               : message.authorKind === 'AI'
                 ? `IA → ${name(message.addressedToId)}`
                 : 'Sistema';
@@ -454,7 +571,7 @@ export function TeamAssistantPanel(props: {
               key={message.id}
               id={`team-message-${message.id}`}
               tabIndex={-1}
-              className={`team-msg ${message.authorKind === 'USER' ? 'usuario' : 'asistente-mensaje'}${owned ? ' propio' : ''}${message.kind === 'REVIEW' ? ' moderacion' : ''}`}
+              className={`team-msg ${message.authorKind === 'USER' ? 'usuario' : 'asistente-mensaje'}${owned ? ' propio' : ''}${message.kind === 'REVIEW' ? ' moderacion' : ''}${message.kind === 'CHAT' ? ' chat' : ''}${mentionsMe ? ' menciona-me' : ''}`}
               data-message-id={message.id}
             >
               {message.authorKind === 'USER' ? (
@@ -499,8 +616,13 @@ export function TeamAssistantPanel(props: {
                     ↳ Ver mensaje de referencia
                   </button>
                 )}
+                {mentionsMe && <span className="visualmente-oculto">Te menciona. </span>}
                 {message.authorKind === 'USER' ? (
-                  <p className="team-texto">{message.text}</p>
+                  <MentionText
+                    text={message.text}
+                    mentions={message.mentions.map((id) => ({ id, name: name(id) }))}
+                    self={user.id}
+                  />
                 ) : (
                   <RichText className="team-texto" text={message.text} />
                 )}
@@ -544,8 +666,10 @@ export function TeamAssistantPanel(props: {
                       onClick={() => {
                         activeDraft.current = {
                           text: message.text,
+                          destination: 'AI',
                           mode: message.mode!,
                           inputMode: message.inputMode!,
+                          mentions: message.mentions,
                         };
                         void cancel(message.id);
                       }}
@@ -566,6 +690,7 @@ export function TeamAssistantPanel(props: {
                       setReplyToId(message.id);
                       setRestore({
                         text: '',
+                        destination: 'AI',
                         mode: 'INSTRUCT',
                         inputMode: 'TEXT',
                         revision: Date.now(),
@@ -629,7 +754,9 @@ export function TeamAssistantPanel(props: {
       <TeamComposer
         model={props.state.semantic}
         canWrite={props.canWrite}
-        enabled={props.online && settings?.enabled !== false}
+        enabled={props.online}
+        aiEnabled={settings?.enabled !== false}
+        members={mentionable}
         visible={props.visible}
         reviewEnabled={settings?.reviewMode !== 'OFF'}
         pending={pending}

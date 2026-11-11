@@ -15,6 +15,7 @@ export const TEAM_MESSAGE_KINDS = [
   'PROPOSAL',
   'REVIEW',
   'SYSTEM',
+  'CHAT',
 ] as const;
 export const TEAM_REQUEST_STATUSES = [
   'QUEUED',
@@ -45,6 +46,8 @@ export const TEAM_AI_EVENT_TYPES = [
   'ai.settings',
 ] as const;
 export const MAX_TEAM_REQUEST_TEXT = 2000;
+/** Personas mencionadas con @ en un mismo mensaje. */
+export const MAX_TEAM_MENTIONS = 10;
 export const MAX_TEAM_AI_EVENT_BYTES = 2048;
 export const AI_PROPOSAL_TTL_MS = 15 * 60 * 1000;
 export const DEFAULT_TEAM_BOARD_QUEUE_LIMIT = 20;
@@ -69,6 +72,15 @@ const errorCodeSchema = z
   .max(100)
   .regex(/^[a-zA-Z0-9_.-]+$/);
 
+/**
+ * Menciones como identificadores de integrantes, nunca como texto: un nombre
+ * repetido o cambiado después no puede redirigir el aviso a otra persona.
+ */
+export const teamMentionsSchema = z
+  .array(idSchema)
+  .max(MAX_TEAM_MENTIONS)
+  .refine((ids) => new Set(ids).size === ids.length, 'Menciones repetidas.');
+
 /** El cliente no elige autor, destinatario, kind, status ni permisos. */
 export const teamRequestBodySchema = z
   .object({
@@ -78,9 +90,25 @@ export const teamRequestBodySchema = z
     text: requestTextSchema,
     replyToId: idSchema.nullable().default(null),
     model: semanticModelSchema,
+    mentions: teamMentionsSchema.default([]),
   })
   .strict();
 export type TeamRequestBody = z.infer<typeof teamRequestBodySchema>;
+
+/**
+ * Mensaje entre personas del equipo. No se encola ni lo responde la IA, que
+ * solo lo lee como contexto cuando alguien le pide algo después. El comando de
+ * voz siempre es una instrucción para la IA, así que aquí no se admite.
+ */
+export const teamChatBodySchema = z
+  .object({
+    clientRequestId: idSchema,
+    inputMode: z.enum(['TEXT', 'DICTATION']),
+    text: requestTextSchema,
+    mentions: teamMentionsSchema.default([]),
+  })
+  .strict();
+export type TeamChatBody = z.infer<typeof teamChatBodySchema>;
 
 export const teamRequestKind = {
   ASK: 'QUESTION',
@@ -105,28 +133,51 @@ const responseOnlyFields = {
   errorCode: z.null(),
 };
 
-/** DTO de lectura: null explícito para columnas ausentes; USER es una solicitud. */
+const userFields = {
+  ...messageFields,
+  authorKind: z.literal('USER'),
+  authorId: idSchema,
+  addressedToId: z.null(),
+  clientRequestId: idSchema,
+  text: requestTextSchema,
+  mentions: teamMentionsSchema.default([]),
+};
+/** La IA y el sistema no mencionan a nadie: se dirigen con addressedToId. */
+const noMentions = { mentions: z.array(idSchema).max(0).default([]) };
+
+/**
+ * DTO de lectura: null explícito para columnas ausentes. Un mensaje USER es una
+ * solicitud a la IA (con modo y estado) o un mensaje al equipo (CHAT, sin ellos).
+ */
 export const teamMessageSchema = z
   .discriminatedUnion('authorKind', [
-    z
-      .object({
-        ...messageFields,
-        authorKind: z.literal('USER'),
-        authorId: idSchema,
-        addressedToId: z.null(),
-        clientRequestId: idSchema,
-        mode: teamModeSchema,
-        inputMode: teamInputModeSchema,
-        kind: z.enum(['QUESTION', 'INSTRUCTION', 'REVIEW_REQUEST']),
-        text: requestTextSchema,
-        status: teamRequestStatusSchema,
-        errorCode: errorCodeSchema.nullable(),
-      })
-      .strict(),
+    z.discriminatedUnion('kind', [
+      z
+        .object({
+          ...userFields,
+          mode: teamModeSchema,
+          inputMode: teamInputModeSchema,
+          kind: z.enum(['QUESTION', 'INSTRUCTION', 'REVIEW_REQUEST']),
+          status: teamRequestStatusSchema,
+          errorCode: errorCodeSchema.nullable(),
+        })
+        .strict(),
+      z
+        .object({
+          ...userFields,
+          mode: z.null(),
+          inputMode: z.enum(['TEXT', 'DICTATION']),
+          kind: z.literal('CHAT'),
+          status: z.null(),
+          errorCode: z.null(),
+        })
+        .strict(),
+    ]),
     z
       .object({
         ...messageFields,
         ...responseOnlyFields,
+        ...noMentions,
         authorKind: z.literal('AI'),
         kind: z.enum(['ANSWER', 'CLARIFICATION', 'PROPOSAL', 'REVIEW']),
         text: z.string().min(1),
@@ -136,6 +187,7 @@ export const teamMessageSchema = z
       .object({
         ...messageFields,
         ...responseOnlyFields,
+        ...noMentions,
         authorKind: z.literal('SYSTEM'),
         kind: z.literal('SYSTEM'),
         text: z.string().min(1),
@@ -146,7 +198,18 @@ export const teamMessageSchema = z
     if (Date.parse(message.updatedAt) < Date.parse(message.createdAt)) {
       ctx.addIssue({ code: 'custom', path: ['updatedAt'], message: 'Anterior a createdAt.' });
     }
-    if (message.authorKind === 'USER' && message.kind !== teamRequestKind[message.mode]) {
+    if (message.authorKind === 'USER' && message.mentions.includes(message.authorId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mentions'],
+        message: 'Nadie se menciona a sí mismo.',
+      });
+    }
+    if (
+      message.authorKind === 'USER' &&
+      message.kind !== 'CHAT' &&
+      message.kind !== teamRequestKind[message.mode]
+    ) {
       ctx.addIssue({ code: 'custom', path: ['kind'], message: 'kind no corresponde al modo.' });
     }
     if (
@@ -162,6 +225,10 @@ export const teamMessageSchema = z
     }
   });
 export type TeamMessage = z.infer<typeof teamMessageSchema>;
+/** Solicitud de una persona a la IA: tiene modo y estado de cola. */
+export type TeamRequestMessage = Extract<TeamMessage, { authorKind: 'USER'; mode: TeamMode }>;
+/** Mensaje de una persona al equipo: la IA no lo responde. */
+export type TeamChatMessage = Extract<TeamMessage, { kind: 'CHAT' }>;
 
 /** Los defaults se resuelven al leer configuración ausente, nunca en un PUT parcial. */
 export const aiSettingsValuesSchema = z

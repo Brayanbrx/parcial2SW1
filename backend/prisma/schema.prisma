@@ -285,6 +285,7 @@ enum TeamMessageKind {
   PROPOSAL
   REVIEW
   SYSTEM
+  CHAT
 }
 
 enum TeamRequestStatus {
@@ -349,6 +350,7 @@ model ProjectAiSettings {
 }
 
 // Una intervención USER es la solicitud: no se agrega otra tabla de trabajos.
+// kind CHAT es un mensaje entre personas: sin modo ni estado, nunca se encola.
 // Los UUID de personas son referencias históricas, como AuditOperation.actorId.
 // Los CHECK de forma de mensaje viven en la migración SQL.
 model TeamMessage {
@@ -358,6 +360,8 @@ model TeamMessage {
   authorId        String?            @db.Uuid
   addressedToId   String?            @db.Uuid
   replyToId       String?            @db.Uuid
+  // Integrantes mencionados con @, por ID: un cambio de nombre no los pierde.
+  mentions        String[]           @default([]) @db.Uuid
   clientRequestId String?            @unique @db.Uuid
   mode            TeamMode?
   inputMode       TeamInputMode?

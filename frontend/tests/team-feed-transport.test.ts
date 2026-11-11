@@ -17,6 +17,7 @@ const message = (status: 'QUEUED' | 'CANCELLED', time = 0): TeamMessage => ({
   inputMode: 'TEXT',
   kind: 'QUESTION',
   text: '¿Qué es UML?',
+  mentions: [],
   status,
   errorCode: null,
   createdAt: new Date(0).toISOString(),

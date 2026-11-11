@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { activarCuentaEIniciarSesion, nuevoCorreo } from '../support/actors.js';
 import type { SpeechRecognitionLike } from '../../frontend/src/features/assistant/speech-session.js';
 import { createTeamAiMock, type MockTurn, type MockOutcome } from '../support/team-ai.js';
+import { hablarConIa } from '../support/destino.js';
 
 interface SpeechControl {
   starts: number;
@@ -79,6 +80,7 @@ async function abrirAsistente(page: Page, handler?: (turn: MockTurn) => Promise<
   await page.getByRole('link', { name: 'Dictado', exact: true }).click();
   await expect(page.getByTestId('estado-conexion')).toHaveText('En vivo');
   await page.getByTestId('pestana-asistente').click();
+  await hablarConIa(page);
   return calls;
 }
 

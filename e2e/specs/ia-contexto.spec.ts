@@ -4,6 +4,7 @@ import { resolveProposal } from '@uml/ai';
 import { montarEscenario } from '../support/escenario.js';
 import { crearClase } from '../support/actors.js';
 import { createTeamAiMock } from '../support/team-ai.js';
+import { hablarConIa } from '../support/destino.js';
 
 test('conserva opciones de aclaración y recupera el pedido completo cuando cambia la pizarra', async ({
   browser,
@@ -43,6 +44,7 @@ test('conserva opciones de aclaración y recupera el pedido completo cuando camb
     await mock.install(page);
     await page.getByTestId('pestana-asistente').click();
     const input = page.getByTestId('entrada-asistente');
+    await hablarConIa(page);
     await input.fill('Agrega correo String; no borres ninguna clase.');
     await page.getByTestId('enviar-asistente').click();
     await expect(page.getByTestId('conversacion')).toContainText('1. "Cliente"');

@@ -223,6 +223,13 @@ class ApiClient {
     return data['user'] as Map<String, dynamic>;
   }
 
+  /// Petición sin sesión (registro, recuperación): no renueva ni reintenta.
+  Future<dynamic> publicPost(String path, Map<String, dynamic> body) async {
+    final r = await _send('POST', path, body: body);
+    if (r.statusCode >= 400) throw _toError(r);
+    return _decode(r);
+  }
+
   Future<void> logout() async {
     try {
       await _send('POST', '/auth/logout', withRefreshCookie: true);

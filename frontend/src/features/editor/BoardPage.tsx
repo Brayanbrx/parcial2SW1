@@ -40,8 +40,10 @@ const HERRAMIENTAS: readonly (readonly [Herramienta, string, React.ReactNode])[]
 
 const CLAVE_PROPIEDADES = 'uml.propiedades-plegadas.v1';
 
-function textoNuevos(cantidad: number): string {
-  return cantidad === 1 ? '1 mensaje nuevo' : `${cantidad} mensajes nuevos`;
+function textoNuevos(cantidad: number, menciones = 0): string {
+  const nuevos = cantidad === 1 ? '1 mensaje nuevo' : `${cantidad} mensajes nuevos`;
+  if (menciones === 0) return nuevos;
+  return `${nuevos}, ${menciones === 1 ? '1 te menciona' : `${menciones} te mencionan`}`;
 }
 
 const ESTADO_CONEXION = {
@@ -230,6 +232,8 @@ function BoardSession({
   const [herramienta, setHerramienta] = useState<Herramienta>('asistente');
   const [actividadIa, setActividadIa] = useState<ActividadIa>(ACTIVIDAD_INICIAL);
   const [mensajesNuevos, setMensajesNuevos] = useState(0);
+  // De los nuevos, los que mencionan con @ a esta persona: la insignia lo distingue.
+  const [mencionesNuevas, setMencionesNuevas] = useState(0);
   // El último borrado hecho desde esta pantalla, mientras se puede deshacer.
   const [deshacer, setDeshacer] = useState<(UndoDeletion & { readonly clave: number }) | null>(
     null,
@@ -589,7 +593,7 @@ function BoardSession({
           type="button"
           className={`colaborador-ia estado-${actividadIa.estado}`}
           data-testid="colaborador-ia"
-          aria-label={`${IA_EQUIPO.nombre}: ${actividadIa.detalle}.${mensajesNuevos > 0 ? ` ${textoNuevos(mensajesNuevos)}.` : ''} Abrir conversación`}
+          aria-label={`${IA_EQUIPO.nombre}: ${actividadIa.detalle}.${mensajesNuevos > 0 ? ` ${textoNuevos(mensajesNuevos, mencionesNuevas)}.` : ''} Abrir conversación`}
           title={`${IA_EQUIPO.nombre} · ${actividadIa.detalle}`}
           onClick={() => {
             setPanelVisible(true);
@@ -602,7 +606,11 @@ function BoardSession({
           <span className="colaborador-ia-avatar" aria-hidden="true">
             <IconoIA size={15} />
             {mensajesNuevos > 0 && (
-              <span className="insignia-nuevos" data-testid="ia-mensajes-nuevos">
+              <span
+                className={`insignia-nuevos${mencionesNuevas > 0 ? ' mencion' : ''}`}
+                data-testid="ia-mensajes-nuevos"
+              >
+                {mencionesNuevas > 0 ? '@' : ''}
                 {mensajesNuevos > 9 ? '9+' : mensajesNuevos}
               </span>
             )}
@@ -723,13 +731,16 @@ function BoardSession({
                 {clave === 'asistente' && mensajesNuevos > 0 && (
                   <>
                     <span
-                      className="insignia-nuevos"
+                      className={`insignia-nuevos${mencionesNuevas > 0 ? ' mencion' : ''}`}
                       data-testid="mensajes-nuevos"
                       aria-hidden="true"
                     >
+                      {mencionesNuevas > 0 ? '@' : ''}
                       {mensajesNuevos > 9 ? '9+' : mensajesNuevos}
                     </span>
-                    <span className="visualmente-oculto">, {textoNuevos(mensajesNuevos)}</span>
+                    <span className="visualmente-oculto">
+                      , {textoNuevos(mensajesNuevos, mencionesNuevas)}
+                    </span>
                   </>
                 )}
               </button>
@@ -761,6 +772,7 @@ function BoardSession({
                   participants={documento.participants}
                   onActivity={setActividadIa}
                   onUnread={setMensajesNuevos}
+                  onMentioned={setMencionesNuevas}
                 />
               )}
             </div>

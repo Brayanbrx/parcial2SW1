@@ -1,5 +1,5 @@
 name: uml_mobile
-description: "A new Flutter project."
+description: "App móvil de UMLFORGE AI: diagramas de clases en equipo."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.13.2
+  sdk: ^3.12.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -60,6 +60,19 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Las mismas fuentes que la web (frontend/public/fonts), con su licencia OFL.
+  fonts:
+    - family: Plex Sans
+      fonts:
+        - asset: assets/fonts/plex-sans-regular.ttf
+          weight: 400
+        - asset: assets/fonts/plex-sans-semibold.ttf
+          weight: 600
+    - family: Plex Serif
+      fonts:
+        - asset: assets/fonts/plex-serif-medium.ttf
+          weight: 500
 
   # To add assets to your application, add an assets section, like this:
   # assets:

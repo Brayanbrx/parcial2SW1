@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Isotipo de la web (.isotipo): cuadro del color de acento con el diagrama en blanco. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#35634C" android:pathData="M5,0 L19,0 A5,5 0 0 1 24,5 L24,19 A5,5 0 0 1 19,24 L5,24 A5,5 0 0 1 0,19 L0,5 A5,5 0 0 1 5,0 Z"/>
+    <group android:translateX="4.56" android:translateY="4.56" android:scaleX="0.62" android:scaleY="0.62">
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.9" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M4.5,3 L9.5,3 A1.5,1.5 0 0 1 11,4.5 L11,7.5 A1.5,1.5 0 0 1 9.5,9 L4.5,9 A1.5,1.5 0 0 1 3,7.5 L3,4.5 A1.5,1.5 0 0 1 4.5,3 Z M14.5,15 L19.5,15 A1.5,1.5 0 0 1 21,16.5 L21,19.5 A1.5,1.5 0 0 1 19.5,21 L14.5,21 A1.5,1.5 0 0 1 13,19.5 L13,16.5 A1.5,1.5 0 0 1 14.5,15 Z M7,9 L7,14 A2,2 0 0 0 9,16 L13,16"/>
+    </group>
+</vector>

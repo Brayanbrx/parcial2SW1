@@ -1,8 +1,8 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Server } from '@hocuspocus/server';
-import { collaborationRoomName, commandBatchSchema } from '@uml/contracts';
-import { applyBatchToDocument, readSemanticModel } from '@uml/yjs-adapter';
+import { collaborationRoomName, commandBatchSchema, type BoardState } from '@uml/contracts';
+import { applyBatchToDocument, readBoardState } from '@uml/yjs-adapter';
 import { z } from 'zod';
 import type { CollaborationContext } from './auth/authorize.js';
 
@@ -73,10 +73,10 @@ export async function handleApplyBatch(options: {
   );
   try {
     let outcome: ReturnType<typeof applyBatchToDocument> | undefined;
-    let model: unknown;
+    let state: BoardState | undefined;
     await connection.transact((document) => {
       outcome = applyBatchToDocument(document, batch, 'mobile-api');
-      if (outcome.applied) model = readSemanticModel(document);
+      if (outcome.applied) state = readBoardState(document);
     });
     if (!outcome) {
       respond(500, { error: 'not_applied' });
@@ -86,8 +86,8 @@ export async function handleApplyBatch(options: {
     respond(200, {
       applied,
       issues,
-      // Modelo ya con el cambio: el cliente no espera al guardado diferido.
-      ...(applied ? { model } : {}),
+      // Modelo y layout ya con el cambio: el cliente no espera al guardado diferido.
+      ...(applied && state ? { model: state.semantic, layout: state.layout } : {}),
     });
   } finally {
     await connection.disconnect();

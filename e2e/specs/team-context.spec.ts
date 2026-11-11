@@ -1,8 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { montarEscenario } from '../support/escenario.js';
 import { crearClase } from '../support/actors.js';
+import { hablarConIa } from '../support/destino.js';
 
 async function send(page: Page, text: string) {
+  await hablarConIa(page);
   await page.getByTestId('entrada-asistente').fill(text);
   await page.getByTestId('enviar-asistente').click();
 }
