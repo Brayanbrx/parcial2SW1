@@ -211,6 +211,8 @@ function describirOperacion(operation: AssistantOperation): string {
     case 'UPDATE_ATTRIBUTE':
     case 'DELETE_ATTRIBUTE':
       return `Atributo «${operation.attributeName}» de «${operation.className}»`;
+    case 'ADD_OPERATION':
+      return `Operación «${operation.operationName}» de «${operation.className}»`;
     case 'CREATE_RELATIONSHIP':
     case 'CHANGE_MULTIPLICITY':
     case 'DELETE_RELATIONSHIP':
@@ -255,7 +257,15 @@ function resolveOperation(context: OperationContext): OperationOutcome {
 
       return {
         kind: 'COMMANDS',
-        commands: [command(context, 'CREATE_CLASS', { classId, displayName: operation.className })],
+        commands: [
+          command(context, 'CREATE_CLASS', {
+            classId,
+            displayName: operation.className,
+            ...(operation.classifierKind === undefined ? {} : { kind: operation.classifierKind }),
+            ...(operation.isAbstract === undefined ? {} : { isAbstract: operation.isAbstract }),
+            ...(operation.literals === undefined ? {} : { literals: operation.literals }),
+          }),
+        ],
         summary: `Crear la clase «${operation.className}»`,
         destroys: 0,
       };
@@ -303,6 +313,7 @@ function resolveOperation(context: OperationContext): OperationOutcome {
     case 'ADD_ATTRIBUTE': {
       const objetivo = resolveClass(context, operation.className);
       if (objetivo.kind === 'QUESTION') return objetivo;
+      const attributeType = operation.classifierType ?? operation.type;
 
       const yaEsta = findAttribute(
         model,
@@ -326,13 +337,62 @@ function resolveOperation(context: OperationContext): OperationOutcome {
             classId: objetivo.classId,
             attributeId: context.newId(),
             displayName: operation.attributeName,
-            type: operation.type,
+            type: attributeType,
             ...(operation.primaryKey === undefined ? {} : { primaryKey: operation.primaryKey }),
             ...(operation.required === undefined ? {} : { nullable: !operation.required }),
             ...(operation.unique === undefined ? {} : { unique: operation.unique }),
+            ...(operation.visibility === undefined ? {} : { visibility: operation.visibility }),
+            ...(operation.multiplicity === undefined
+              ? {}
+              : { multiplicity: operation.multiplicity }),
           }),
         ],
-        summary: `Anadir «${operation.attributeName}» (${operation.type}) a «${operation.className}»`,
+        summary: `Anadir «${operation.attributeName}» (${attributeType}) a «${operation.className}»`,
+        destroys: 0,
+      };
+    }
+
+    case 'ADD_OPERATION': {
+      const target = resolveClass(context, operation.className);
+      if (target.kind === 'QUESTION') return target;
+      const params = operation.parameters ?? [];
+      const same = model.classes
+        .find((c) => c.id === target.classId)
+        ?.operations?.some(
+          (o) =>
+            o.displayName === operation.operationName &&
+            o.parameters.length === params.length &&
+            o.parameters.every((p, i) => {
+              const input = params[i];
+              return (
+                p.type === input?.type &&
+                p.direction === (input.direction ?? 'in') &&
+                (p.multiplicity ?? '1') === (input.multiplicity ?? '1')
+              );
+            }),
+        );
+      if (same) return { kind: 'QUESTION', question: 'La operación ya existe en esa clase.' };
+      return {
+        kind: 'COMMANDS',
+        commands: [
+          command(context, 'ADD_OPERATION', {
+            classId: target.classId,
+            operation: {
+              id: context.newId(),
+              displayName: operation.operationName,
+              visibility: operation.visibility ?? 'public',
+              isStatic: operation.isStatic ?? false,
+              isAbstract: operation.isAbstract ?? false,
+              parameters: params.map((p) => ({
+                ...p,
+                id: context.newId(),
+                direction: p.direction ?? 'in',
+              })),
+              ...(operation.returnType === undefined ? {} : { returnType: operation.returnType }),
+            },
+          }),
+        ],
+        summary: `Añadir «${operation.operationName}» a «${operation.className}»`,
         destroys: 0,
       };
     }

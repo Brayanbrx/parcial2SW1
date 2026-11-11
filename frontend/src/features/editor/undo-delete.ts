@@ -1,4 +1,4 @@
-import type { BoardState, UmlAttribute, UmlRelationship } from '@uml/contracts';
+import type { BoardState, UmlAttribute, UmlRelationship, UmlClass } from '@uml/contracts';
 import type { CommandBody } from './commands.js';
 
 /**
@@ -28,6 +28,26 @@ export function undoForDeletion(
   const [command] = commands;
   if (command === undefined) return null;
   const { classes, relationships } = state.semantic;
+
+  if (command.type === 'DELETE_OPERATION') {
+    const { classId, operationId } = command.payload as { classId: string; operationId: string };
+    const operations = classes.find((c) => c.id === classId)?.operations ?? [];
+    const index = operations.findIndex((o) => o.id === operationId);
+    const operation = operations[index];
+    const next = operations[index + 1]?.id;
+    return operation === undefined
+      ? null
+      : {
+          message: `Operación «${operation.displayName}» eliminada`,
+          commands: [
+            {
+              type: 'ADD_OPERATION',
+              payload: { classId, operation, ...(next ? { beforeOperationId: next } : {}) },
+            },
+          ],
+          selectId: classId,
+        };
+  }
 
   if (command.type === 'DELETE_ATTRIBUTE') {
     const { classId, attributeId } = command.payload as { classId: string; attributeId: string };
@@ -77,6 +97,7 @@ export function undoForDeletion(
           payload: {
             classId,
             displayName: umlClass.displayName,
+            ...classifierProperties(umlClass),
             ...(position === undefined ? {} : { position }),
           },
         },
@@ -84,6 +105,10 @@ export function undoForDeletion(
           ? [{ type: 'MOVE_CLASS', payload: { classId, position, size } } satisfies CommandBody]
           : []),
         ...umlClass.attributes.map((item) => addAttribute(classId, item)),
+        ...(umlClass.operations ?? []).map((operation): CommandBody => ({
+          type: 'ADD_OPERATION',
+          payload: { classId, operation },
+        })),
         ...linked.map(createRelationship),
       ],
       selectId: classId,
@@ -108,6 +133,19 @@ function addAttribute(
       primaryKey: attribute.primaryKey,
       nullable: attribute.nullable,
       unique: attribute.unique,
+      ...Object.fromEntries(
+        [
+          'visibility',
+          'isStatic',
+          'multiplicity',
+          'defaultValue',
+          'isDerived',
+          'isReadOnly',
+        ].flatMap((key) => {
+          const value = attribute[key as keyof UmlAttribute];
+          return value === undefined ? [] : [[key, value]];
+        }),
+      ),
       ...(beforeAttributeId === undefined ? {} : { beforeAttributeId }),
     },
   };
@@ -123,6 +161,12 @@ function createRelationship(relationship: UmlRelationship): CommandBody {
       targetClassId: relationship.targetClassId,
       sourceMultiplicity: relationship.sourceMultiplicity,
       targetMultiplicity: relationship.targetMultiplicity,
+      ...Object.fromEntries(
+        ['name', 'sourceNavigability', 'targetNavigability'].flatMap((key) => {
+          const value = relationship[key as keyof UmlRelationship];
+          return value === undefined ? [] : [[key, value]];
+        }),
+      ),
       ...(relationship.sourceRoleName === undefined
         ? {}
         : { sourceRoleName: relationship.sourceRoleName }),
@@ -131,4 +175,13 @@ function createRelationship(relationship: UmlRelationship): CommandBody {
         : { targetRoleName: relationship.targetRoleName }),
     },
   };
+}
+
+function classifierProperties(c: UmlClass) {
+  return Object.fromEntries(
+    ['kind', 'isAbstract', 'literals'].flatMap((key) => {
+      const value = c[key as keyof UmlClass];
+      return value === undefined ? [] : [[key, value]];
+    }),
+  );
 }

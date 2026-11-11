@@ -285,7 +285,13 @@ describe('paso 4: API, PostgreSQL y stateless de producción', () => {
     expect(c.snapshot()).toEqual(a.snapshot());
     const reloaded = feed(scenario.lectorToken, reconnected);
     await reloaded.refresh();
-    expect(reloaded.snapshot()).toEqual(a.snapshot());
+    // La recarga recibe el mismo historial, pero su línea base ya incluye esos
+    // mensajes: no deben contarse como nuevos para esa pestaña.
+    expect(a.snapshot().initialMessageIds).toEqual([]);
+    expect(reloaded.snapshot()).toEqual({
+      ...a.snapshot(),
+      initialMessageIds: a.snapshot().messages.map((m) => m.id),
+    });
     expect(new Set(c.snapshot().messages.map((m) => m.id)).size).toBe(2);
     expect((await request('GET', messages(), scenario.extranoToken)).status).toBe(404);
   });

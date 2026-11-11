@@ -8,16 +8,16 @@ import {
 } from '@uml/contracts';
 
 describe('vocabulario cerrado', () => {
-  it('expone exactamente los 11 comandos del plan maestro', () => {
-    expect(COMMAND_TYPES).toHaveLength(11);
-    expect(new Set(COMMAND_TYPES).size).toBe(11);
+  it('conserva los comandos existentes y añade edición de clasificadores y operaciones', () => {
+    expect(COMMAND_TYPES).toHaveLength(15);
+    expect(new Set(COMMAND_TYPES).size).toBe(15);
   });
 
   it('expone los cinco origenes de lote', () => {
     expect([...BATCH_ORIGINS]).toEqual(['GUI', 'AI_TEXT', 'AI_VOICE', 'IMAGE', 'XMI']);
   });
 
-  it('solo soporta las multiplicidades de RM-04', () => {
+  it('ofrece las multiplicidades habituales como sugerencias', () => {
     expect([...MULTIPLICITIES]).toEqual(['1', '0..1', '0..*', '1..*']);
   });
 

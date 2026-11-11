@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
 import type {
   BoardState,
@@ -22,6 +22,7 @@ import { clarificationTurns, modeLabel, requestLabel } from './feed-model.js';
 import { createServerVoiceEngine } from '../assistant/recorder-recognition.js';
 import { recordingToWav } from '../assistant/wav.js';
 import { IconoIA } from '../../components/icons.js';
+import { PersonalAiSettings } from './PersonalAiSettings.js';
 import { RichText } from './RichText.js';
 import { IA_EQUIPO, colorEstable, iniciales, type ActividadIa } from './identity.js';
 import { mentionSegments, type MentionCandidate } from './mentions.js';
@@ -96,6 +97,13 @@ export function TeamAssistantPanel(props: {
     props.visible && props.online,
   );
   const { messages, proposals, settings, initialMessageIds } = feed.snapshot;
+  const projectEngine = settings
+    ? settings.aiSource === 'LOCAL'
+      ? (settings.localModel ?? 'Modelo local')
+      : settings.aiSource === 'VM'
+        ? 'IA de VM'
+        : 'Nube'
+    : null;
   // Con «Modelo local» y Whisper en el servidor, la voz no sale del equipo.
   const localVoice = settings?.aiSource === 'LOCAL' && !!settings.localSpeechModel;
   const voiceEngine = useMemo(
@@ -114,13 +122,17 @@ export function TeamAssistantPanel(props: {
   const policyId = useId();
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelOnArrival, setCancelOnArrival] = useState<readonly string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [restore, setRestore] = useState<ComposerRestore | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sending = useRef(false);
   const execution = useRef(new ProposalExecution());
-  const cancelWanted = useRef(false);
+  const cancelWanted = useRef<string | null>(null);
+  const activeKey = useRef<string | null>(null);
+  const cancelInFlight = useRef(false);
   const mounted = useRef(true);
   const activeDraft = useRef<ComposerDraft | null>(null);
   const retry = useRef<{ fingerprint: string; body: TeamRequestBody } | null>(null);
@@ -166,8 +178,10 @@ export function TeamAssistantPanel(props: {
           m.authorId === user.id || m.addressedToId === user.id || m.mentions.includes(user.id),
       )
     : messages;
-  const processing = messages.find((m) => m.status === 'PROCESSING');
+  const processing = messages.filter((m) => m.status === 'PROCESSING');
   const queued = messages.filter((m) => m.status === 'QUEUED').length;
+  const processingNames = [...new Set(processing.map((m) => name(m.authorId)))].join(', ');
+  const processingDetail = `Respondiendo a ${processingNames}${processing.length > 1 ? ` · ${processing.length} solicitudes en paralelo` : ''}${queued ? ` · ${queued} en cola` : ''}`;
   const presenceColors = useMemo(
     () => new Map((props.participants ?? []).map((p) => [p.displayName, p.color])),
     [props.participants],
@@ -178,10 +192,10 @@ export function TeamAssistantPanel(props: {
     ? { estado: 'sin-conexion', detalle: 'Sin conexión' }
     : settings?.enabled === false
       ? { estado: 'pausada', detalle: 'Desactivada' }
-      : processing
+      : processing.length
         ? {
             estado: 'pensando',
-            detalle: `Respondiendo a ${name(processing.authorId)}${queued ? ` · ${queued} en cola` : ''}`,
+            detalle: processingDetail,
           }
         : queued
           ? { estado: 'en-cola', detalle: `${queued} en cola` }
@@ -238,7 +252,11 @@ export function TeamAssistantPanel(props: {
     );
     // DONE y su respuesta pueden estar en páginas distintas de la recuperación.
     if (ownRequest.status === 'DONE' && !response && !requestProposals.has(ownRequest.id)) return;
-    if (ownRequest.status === 'FAILED' || ownRequest.status === 'INTERRUPTED') {
+    if (
+      ownRequest.status === 'FAILED' ||
+      ownRequest.status === 'INTERRUPTED' ||
+      ownRequest.status === 'CANCELLED'
+    ) {
       // Un reintento debe responder a la misma aclaración, no enviar una
       // respuesta aislada como «correo» sin la instrucción que la originó.
       setReplyToId(ownRequest.replyToId);
@@ -246,7 +264,8 @@ export function TeamAssistantPanel(props: {
         setRestore({
           ...activeDraft.current,
           revision: Date.now(),
-          preserveExistingText: activeDraft.current.inputMode === 'VOICE_COMMAND',
+          preserveExistingText:
+            ownRequest.status === 'CANCELLED' || activeDraft.current.inputMode === 'VOICE_COMMAND',
         });
     } else if (response?.kind === 'CLARIFICATION' && ownRequest.mode === 'INSTRUCT')
       setReplyToId(response.id);
@@ -254,32 +273,65 @@ export function TeamAssistantPanel(props: {
     setActiveId(null);
   }, [ownRequest, messages, requestProposals, user.id]);
 
-  async function cancel(id = activeId) {
-    cancelWanted.current = true;
-    const key = retry.current?.body.clientRequestId ?? ownRequest?.clientRequestId;
-    if (key) execution.current.cancel(key);
+  function finishCancellation(message: TeamMessage, key: string, restoreDraft: boolean) {
+    if (retry.current?.body.clientRequestId === key) retry.current = null;
+    if (restoreDraft && activeKey.current === key) {
+      setActiveId((current) => (current === message.id ? null : current));
+      setReplyToId(message.replyToId);
+      if (activeDraft.current)
+        setRestore({ ...activeDraft.current, revision: Date.now(), preserveExistingText: true });
+    }
+    setError(null);
+    setNotice('Solicitud cancelada. Puedes volver a usar el texto.');
+  }
+
+  async function cancel(id = activeId, key = activeKey.current, restoreDraft = true) {
+    if (!props.online || cancelInFlight.current) return;
+    if (!key) return;
+    execution.current.cancel(key);
+    setCancelling(true);
+    setError(null);
     if (!id) {
-      setNotice('Cancelando la solicitud cuando se confirme su recepción…');
+      cancelWanted.current = key;
+      setNotice('Cancelando cuando se confirme el envío…');
       return;
     }
+    cancelInFlight.current = true;
+    setNotice(null);
     try {
       const cancelled = await teamAiApi.cancel(boardId, id);
       if (!mounted.current) return;
-      setActiveId(null);
-      setReplyToId(cancelled.replyToId);
-      if (activeDraft.current)
-        setRestore({
-          ...activeDraft.current,
-          revision: Date.now(),
-          preserveExistingText: activeDraft.current.inputMode === 'VOICE_COMMAND',
-        });
-      setNotice('Solicitud cancelada. Puedes revisar el texto y volver a enviarlo.');
-      await feed.refresh();
+      finishCancellation(cancelled, key, restoreDraft);
+      void feed.refresh();
     } catch (cause) {
-      if (mounted.current)
-        setError(cause instanceof Error ? cause.message : 'No se pudo cancelar.');
+      const snapshot = await feed.refreshSnapshot();
+      if (!mounted.current) return;
+      const observed = snapshot.messages.find((message) => message.id === id);
+      if (observed?.status === 'CANCELLED') finishCancellation(observed, key, restoreDraft);
+      else setError(cause instanceof Error ? cause.message : 'No se pudo cancelar.');
+    } finally {
+      cancelInFlight.current = false;
+      if (mounted.current) setCancelling(false);
     }
   }
+
+  const reconcileCancellation = useEffectEvent((message: TeamMessage, key: string) => {
+    setCancelOnArrival((current) => current.filter((item) => item !== key));
+    if (message.status === 'QUEUED' || message.status === 'PROCESSING')
+      void cancel(message.id, key);
+    else if (message.status === 'CANCELLED') finishCancellation(message, key, true);
+    else setNotice('La solicitud ya terminó.');
+  });
+  useEffect(() => {
+    if (!props.online || cancelling || cancelOnArrival.length === 0) return;
+    const message = messages.find(
+      (item) =>
+        item.authorId === user.id &&
+        item.clientRequestId &&
+        cancelOnArrival.includes(item.clientRequestId),
+    );
+    if (message?.clientRequestId) reconcileCancellation(message, message.clientRequestId);
+  }, [props.online, cancelling, cancelOnArrival, messages, user.id]);
   /**
    * Mensaje entre personas: no espera respuesta de la IA ni toca la aclaración
    * en curso. Tampoco marca `posting`: eso deshabilitaría la caja (perdiendo el
@@ -325,7 +377,7 @@ export function TeamAssistantPanel(props: {
     )
       return false;
     sending.current = true;
-    cancelWanted.current = false;
+    cancelWanted.current = null;
     activeDraft.current = draft;
     setPosting(true);
     setError(null);
@@ -344,15 +396,15 @@ export function TeamAssistantPanel(props: {
         ? retry.current.body
         : { ...content, model: props.state.semantic, clientRequestId: crypto.randomUUID() };
     retry.current = { fingerprint, body };
+    activeKey.current = body.clientRequestId;
     if (body.mode === 'INSTRUCT') execution.current.register(body.clientRequestId, body.inputMode);
     try {
       const accepted = await teamAiApi.send(boardId, body, AbortSignal.timeout(15_000));
       if (!mounted.current) return false;
       retry.current = null;
       setActiveId(accepted.id);
-      if (cancelWanted.current) {
-        execution.current.cancel(body.clientRequestId);
-        await cancel(accepted.id);
+      if (cancelWanted.current === body.clientRequestId) {
+        await cancel(accepted.id, body.clientRequestId);
         return false;
       }
       void feed.refresh();
@@ -363,6 +415,17 @@ export function TeamAssistantPanel(props: {
       if (cause instanceof ApiError && cause.status < 500) {
         execution.current.cancel(body.clientRequestId);
         retry.current = null;
+      }
+      if (cancelWanted.current === body.clientRequestId) {
+        retry.current = null;
+        setCancelling(false);
+        if (cause instanceof ApiError && cause.status < 500) {
+          setNotice('Envío cancelado.');
+        } else {
+          setCancelOnArrival((current) => [...current, body.clientRequestId]);
+          void feed.refreshSnapshot();
+        }
+        return false;
       }
       setError(cause instanceof Error ? cause.message : 'No se pudo enviar. Conservamos tu texto.');
       return false;
@@ -420,8 +483,8 @@ export function TeamAssistantPanel(props: {
             <span className="team-rol">{IA_EQUIPO.rol}</span>
           </h3>
           <p className={`team-estado estado-${activity.estado}`} role="status">
-            {processing
-              ? `IA respondiendo a ${name(processing.authorId)} (${queued} en cola)`
+            {processing.length
+              ? processingDetail
               : queued
                 ? `${queued} solicitud${queued === 1 ? '' : 'es'} en cola`
                 : !props.online
@@ -431,6 +494,11 @@ export function TeamAssistantPanel(props: {
                     : 'Al día con el equipo'}
           </p>
         </div>
+        <PersonalAiSettings
+          online={props.online}
+          visible={props.visible}
+          projectEngine={projectEngine}
+        />
         {props.isOwner && settings && props.online && (
           <TeamSettings settings={settings} refresh={feed.refresh} />
         )}
@@ -590,6 +658,9 @@ export function TeamAssistantPanel(props: {
               <div className="team-msg-cuerpo">
                 <div className="team-message-meta">
                   <strong>{author}</strong>
+                  {message.engineLabel && (
+                    <small className="team-etiqueta">{message.engineLabel}</small>
+                  )}
                   {message.mode && (
                     <small className="team-etiqueta">
                       {modeLabel[message.mode]}
@@ -637,6 +708,12 @@ export function TeamAssistantPanel(props: {
                     la consulta o revisa la solicitud antes de reintentar.
                   </p>
                 )}
+                {owned && message.errorCode === 'team_ai_timeout' && (
+                  <p>Se agotó el tiempo de espera. Puedes reintentar o cambiar de motor.</p>
+                )}
+                {owned && message.errorCode === 'ai_engine_unavailable' && (
+                  <p>El motor elegido no está disponible. Puedes cambiarlo en «Mi motor de IA».</p>
+                )}
                 {owned && message.errorCode === 'team_ai_settings_changed' && (
                   <p>
                     El OWNER cambió el modo de respuestas durante la consulta. Envía la pregunta de
@@ -662,22 +739,13 @@ export function TeamAssistantPanel(props: {
                   message.id !== activeId && (
                     <button
                       type="button"
-                      disabled={!props.online || pending}
-                      onClick={() => {
-                        activeDraft.current = {
-                          text: message.text,
-                          destination: 'AI',
-                          mode: message.mode!,
-                          inputMode: message.inputMode!,
-                          mentions: message.mentions,
-                        };
-                        void cancel(message.id);
-                      }}
+                      disabled={!props.online || pending || cancelling}
+                      onClick={() => void cancel(message.id, message.clientRequestId, false)}
                     >
                       Cancelar esta solicitud
                     </button>
                   )}
-                {owned && ['FAILED', 'INTERRUPTED'].includes(message.status ?? '') && (
+                {owned && ['FAILED', 'INTERRUPTED', 'CANCELLED'].includes(message.status ?? '') && (
                   <button type="button" onClick={() => restoreRequest(message)} disabled={pending}>
                     Reintentar con este texto
                   </button>
@@ -719,7 +787,7 @@ export function TeamAssistantPanel(props: {
             </li>
           );
         })}
-        {processing && !mineOnly && (
+        {processing.length > 0 && !mineOnly && (
           <li className="team-msg asistente-mensaje team-pensando" aria-hidden="true">
             <span className="team-avatar ia estado-pensando">
               <IconoIA size={16} />
@@ -734,7 +802,7 @@ export function TeamAssistantPanel(props: {
                   <i />
                   <i />
                 </span>
-                Pensando la respuesta para {name(processing.authorId)}
+                {processingDetail}
               </p>
             </div>
           </li>
@@ -760,6 +828,7 @@ export function TeamAssistantPanel(props: {
         visible={props.visible}
         reviewEnabled={settings?.reviewMode !== 'OFF'}
         pending={pending}
+        cancelling={cancelling}
         context={context}
         restore={restore}
         send={send}

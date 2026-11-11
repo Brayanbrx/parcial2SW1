@@ -57,8 +57,7 @@ class _DiagramViewState extends State<DiagramView> with SingleTickerProviderStat
   static const double _maxScale = 2;
 
   final _transform = TransformationController();
-  late final AnimationController _anim =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+  late final AnimationController _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
   Animation<Matrix4>? _tween;
 
   Size _viewport = Size.zero;
@@ -103,12 +102,13 @@ class _DiagramViewState extends State<DiagramView> with SingleTickerProviderStat
 
   /// Igual que las matrices de InteractiveViewer: escala uniforme en los tres
   /// ejes, para que sus límites de zoom lean la escala correcta.
-  static Matrix4 _matrix(double s, Offset t) =>
-      Matrix4(s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, t.dx, t.dy, 0, 1);
+  static Matrix4 _matrix(double s, Offset t) => Matrix4(s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, t.dx, t.dy, 0, 1);
 
   void _animateTo(Matrix4 target) {
-    _tween = Matrix4Tween(begin: _transform.value, end: target)
-        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
+    _tween = Matrix4Tween(
+      begin: _transform.value,
+      end: target,
+    ).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
     _anim.forward(from: 0);
   }
 
@@ -117,7 +117,8 @@ class _DiagramViewState extends State<DiagramView> with SingleTickerProviderStat
     final origin = _origin;
     if (origin == null || _viewport.isEmpty) return;
     final b = DiagramGeometry(widget.model, widget.layout).bounds;
-    final s = math.min(1.0, math.min(_viewport.width / b.width, _viewport.height / b.height))
+    final s = math
+        .min(1.0, math.min(_viewport.width / b.width, _viewport.height / b.height))
         .clamp(_minScale, _maxScale);
     final centerScene = b.center - origin;
     final m = _matrix(s, _viewport.center(Offset.zero) - centerScene * s);
@@ -164,66 +165,74 @@ class _DiagramViewState extends State<DiagramView> with SingleTickerProviderStat
     final origin = _syncOrigin(bounds);
     final sceneSize = bounds.size + const Offset(_margin * 2, _margin * 2);
 
-    return LayoutBuilder(builder: (context, constraints) {
-      _viewport = constraints.biggest;
-      if (!_fitted && !_viewport.isEmpty) {
-        _fitted = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
-      }
-      return ClipRect(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: ColoredBox(
-                color: c.diagramaFondo,
-                child: AnimatedBuilder(
-                  animation: _transform,
-                  builder: (context, _) => CustomPaint(
-                    painter: _DotsPainter(_scale, _translation, c.diagramaPunto),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _viewport = constraints.biggest;
+        if (!_fitted && !_viewport.isEmpty) {
+          _fitted = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
+        }
+        return ClipRect(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ColoredBox(
+                  color: c.diagramaFondo,
+                  child: AnimatedBuilder(
+                    animation: _transform,
+                    builder: (context, _) => CustomPaint(painter: _DotsPainter(_scale, _translation, c.diagramaPunto)),
                   ),
                 ),
               ),
-            ),
-            InteractiveViewer(
-              transformationController: _transform,
-              constrained: false,
-              minScale: _minScale,
-              maxScale: _maxScale,
-              boundaryMargin: const EdgeInsets.all(400),
-              child: SizedBox.fromSize(
-                size: sceneSize,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: widget.onTapBackground,
-                        child: CustomPaint(
-                          painter: _EdgesPainter(geometry.edges, origin, c, Theme.of(context).textTheme),
+              InteractiveViewer(
+                transformationController: _transform,
+                constrained: false,
+                minScale: _minScale,
+                maxScale: _maxScale,
+                boundaryMargin: const EdgeInsets.all(400),
+                child: SizedBox.fromSize(
+                  size: sceneSize,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: widget.onTapBackground,
+                          child: CustomPaint(
+                            painter: _EdgesPainter(geometry.edges, origin, c, Theme.of(context).textTheme),
+                          ),
                         ),
                       ),
-                    ),
-                    for (final cls in _paintOrder())
-                      if (geometry.rects[cls.id] case final rect?)
-                        Positioned(
-                          left: rect.left - origin.dx,
-                          top: rect.top - origin.dy,
-                          width: rect.width,
-                          height: rect.height,
+                      for (final cls in _paintOrder())
+                        if (geometry.rects[cls.id] case final rect?)
+                          Positioned(
+                            left: rect.left - origin.dx,
+                            top: rect.top - origin.dy,
+                            width: rect.width,
+                            height: rect.height,
                             // La clave conserva el estado del gesto aunque la
-                          // clase cambie de lugar en el orden de dibujo.
-                          key: ValueKey(cls.id),
-                          child: _classNode(cls, rect),
-                        ),
-                  ],
+                            // clase cambie de lugar en el orden de dibujo.
+                            key: ValueKey(cls.id),
+                            child: _classNode(cls, rect),
+                          ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Positioned(left: 12, bottom: 12, child: _ZoomControls(onIn: () => _zoom(1.25), onOut: () => _zoom(0.8), onFit: () => _fit(animate: true))),
-          ],
-        ),
-      );
-    });
+              Positioned(
+                left: 12,
+                bottom: 12,
+                child: _ZoomControls(
+                  onIn: () => _zoom(1.25),
+                  onOut: () => _zoom(0.8),
+                  onFit: () => _fit(animate: true),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   /// La clase seleccionada o arrastrada se dibuja la última, encima de las
@@ -255,9 +264,7 @@ class _DiagramViewState extends State<DiagramView> with SingleTickerProviderStat
                 });
               }
             : null,
-        onLongPressMoveUpdate: widget.canWrite
-            ? (d) => setState(() => _dragDelta = d.localOffsetFromOrigin)
-            : null,
+        onLongPressMoveUpdate: widget.canWrite ? (d) => setState(() => _dragDelta = d.localOffsetFromOrigin) : null,
         onLongPressEnd: widget.canWrite
             ? (_) {
                 final start = widget.layout.positions[cls.id] ?? Offset.zero;
@@ -311,8 +318,7 @@ class _DotsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DotsPainter old) =>
-      old.scale != scale || old.translation != translation || old.color != color;
+  bool shouldRepaint(_DotsPainter old) => old.scale != scale || old.translation != translation || old.color != color;
 }
 
 /// Líneas rectas, rombo en el origen (composición y agregación), triángulo
@@ -342,19 +348,45 @@ class _EdgesPainter extends CustomPainter {
       for (final p in e.points.skip(1)) {
         path.lineTo(p.dx, p.dy);
       }
-      canvas.drawPath(path, line);
-
       final kind = e.relationship.kind;
-      if (kind == 'GENERALIZATION') {
-        _marker(canvas, e.target, angleBetween(e.target, e.targetToward),
-            const [Offset(0, 0), Offset(18, -9), Offset(18, 9)], markerStroke, filled: false);
+      if (kind == 'DEPENDENCY' || kind == 'REALIZATION') {
+        for (final metric in path.computeMetrics()) {
+          for (var offset = 0.0; offset < metric.length; offset += 11) {
+            canvas.drawPath(metric.extractPath(offset, math.min(offset + 7, metric.length)), line);
+          }
+        }
+      } else {
+        canvas.drawPath(path, line);
+      }
+      if (kind == 'GENERALIZATION' || kind == 'REALIZATION') {
+        _marker(
+          canvas,
+          e.target,
+          angleBetween(e.target, e.targetToward),
+          const [Offset(0, 0), Offset(18, -9), Offset(18, 9)],
+          markerStroke,
+          filled: false,
+        );
       } else if (kind == 'COMPOSITION' || kind == 'AGGREGATION') {
-        _marker(canvas, e.source, angleBetween(e.source, e.sourceToward),
-            const [Offset(0, 0), Offset(10, -7), Offset(20, 0), Offset(10, 7)], markerStroke,
-            filled: kind == 'COMPOSITION');
+        _marker(
+          canvas,
+          e.source,
+          angleBetween(e.source, e.sourceToward),
+          const [Offset(0, 0), Offset(10, -7), Offset(20, 0), Offset(10, 7)],
+          markerStroke,
+          filled: kind == 'COMPOSITION',
+        );
       }
 
-      if (kind != 'GENERALIZATION') {
+      if (kind == 'DEPENDENCY') {
+        _openArrow(canvas, e.target, e.targetToward, markerStroke);
+      }
+      if (e.relationship.name case final name?) {
+        _label(canvas, name, (e.source + e.target) / 2 - const Offset(0, 12), italic: true);
+      }
+      if (e.relationship.isStructural) {
+        _navigation(canvas, e.source, e.sourceToward, e.relationship.sourceNavigability, markerStroke);
+        _navigation(canvas, e.target, e.targetToward, e.relationship.targetNavigability, markerStroke);
         _label(canvas, e.relationship.sourceMultiplicity, e.sourceLabel, italic: false);
         _label(canvas, e.relationship.targetMultiplicity, e.targetLabel, italic: false);
         if (e.relationship.sourceRole case final role?) {
@@ -367,8 +399,39 @@ class _EdgesPainter extends CustomPainter {
     }
   }
 
-  void _marker(Canvas canvas, Offset at, double angle, List<Offset> points, Paint stroke,
-      {required bool filled}) {
+  void _openArrow(Canvas canvas, Offset at, Offset toward, Paint stroke) {
+    canvas.save();
+    canvas.translate(at.dx, at.dy);
+    canvas.rotate(angleBetween(at, toward));
+    canvas.drawPath(
+      Path()
+        ..moveTo(12, -6)
+        ..lineTo(0, 0)
+        ..lineTo(12, 6),
+      stroke,
+    );
+    canvas.restore();
+  }
+
+  void _navigation(Canvas canvas, Offset at, Offset toward, String? value, Paint stroke) {
+    if (value == 'navigable') _openArrow(canvas, at, toward, stroke);
+    if (value == 'nonNavigable') {
+      canvas.save();
+      canvas.translate(at.dx, at.dy);
+      canvas.rotate(angleBetween(at, toward));
+      canvas.drawPath(
+        Path()
+          ..moveTo(2, -4)
+          ..lineTo(10, 4)
+          ..moveTo(2, 4)
+          ..lineTo(10, -4),
+        stroke,
+      );
+      canvas.restore();
+    }
+  }
+
+  void _marker(Canvas canvas, Offset at, double angle, List<Offset> points, Paint stroke, {required bool filled}) {
     canvas.save();
     canvas.translate(at.dx, at.dy);
     canvas.rotate(angle);
@@ -381,11 +444,7 @@ class _EdgesPainter extends CustomPainter {
   /// Texto con un halo del color del fondo (`paint-order: stroke`), para que
   /// se lea aunque cruce una línea.
   void _label(Canvas canvas, String value, Offset center, {required bool italic}) {
-    final base = TextStyle(
-      fontFamily: kSans,
-      fontSize: 11,
-      fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-    );
+    final base = TextStyle(fontFamily: kSans, fontSize: 11, fontStyle: italic ? FontStyle.italic : FontStyle.normal);
     final halo = TextPainter(
       text: TextSpan(
         text: value,
@@ -400,7 +459,10 @@ class _EdgesPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     final fill = TextPainter(
-      text: TextSpan(text: value, style: base.copyWith(color: italic ? c.claseTenue : c.claseTexto)),
+      text: TextSpan(
+        text: value,
+        style: base.copyWith(color: italic ? c.claseTenue : c.claseTexto),
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
     final topLeft = center - Offset(fill.width / 2, fill.height / 2);
@@ -423,12 +485,12 @@ class _ZoomControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.uml;
     Widget button(IconData icon, String tooltip, VoidCallback onTap) => Tooltip(
-          message: tooltip,
-          child: InkWell(
-            onTap: onTap,
-            child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 20, color: c.texto)),
-          ),
-        );
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 20, color: c.texto)),
+      ),
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         color: c.superficie,

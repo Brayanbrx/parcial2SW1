@@ -23,6 +23,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:connector": "node --test scripts/ai-connector.test.mjs",
     "pretest:generated": "npm run build",
     "test:generated": "tsx shared/generator-backend/tests/verify-bank.ts T01",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
@@ -64,6 +65,7 @@
     "@types/archiver": "^8.0.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.3.0",
@@ -71,7 +73,7 @@
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.0.0",
-    "vitest": "^5.1.0",
-    "vite": "^6.4.5"
+    "vite": "^6.4.5",
+    "vitest": "^5.1.0"
   }
 }

@@ -50,15 +50,21 @@ export function TeamSettings({
       >
         <IconoAjustes size={18} />
       </button>
-      <dialog ref={dialog} className="team-settings" aria-label="IA del proyecto">
+      <dialog
+        ref={dialog}
+        className="team-settings team-project-settings"
+        aria-label="IA del proyecto"
+      >
         <form
           onSubmit={(event) => {
             event.preventDefault();
             void save();
           }}
         >
-          <h2>IA del proyecto</h2>
-          <p>Estos cambios se comparten con todas las pizarras del proyecto.</p>
+          <div className="team-settings-heading">
+            <h2>IA del proyecto</h2>
+            <p>Para todas las pizarras del proyecto.</p>
+          </div>
           <label>
             <input
               type="checkbox"
@@ -66,7 +72,7 @@ export function TeamSettings({
               disabled={busy}
               onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
             />{' '}
-            Habilitar nuevas solicitudes
+            Activar asistente
           </label>
           <label>
             Motor de IA
@@ -80,20 +86,24 @@ export function TeamSettings({
             >
               <option value="PROVIDERS">Proveedores en la nube</option>
               <option value="LOCAL" disabled={!settings.localModel}>
-                {settings.localModel
-                  ? `Modelo local (${settings.localModel})`
-                  : 'Modelo local (no instalado en el servidor)'}
+                Modelo local{settings.localModel ? '' : ' · sin configurar'}
+              </option>
+              <option value="VM" disabled={!settings.vmModel && draft.aiSource !== 'VM'}>
+                IA de VM
               </option>
             </select>
           </label>
-          <p data-testid="ayuda-motor-ia">
-            El modelo local responde Preguntar, Instruir y Revisar. Si está apagado o falla, se usan
-            los proveedores.{' '}
-            {settings.localSpeechModel
-              ? `Dictar y Comando de voz se transcriben con Whisper local (${settings.localSpeechModel}), sin depender de internet. `
-              : 'La voz sigue con el reconocimiento del navegador. '}
-            Leer fotos sigue con los proveedores.
-          </p>
+          {(draft.aiSource !== 'PROVIDERS' || !settings.vmModel) && (
+            <p className="team-settings-note" data-testid="ayuda-motor-ia">
+              {draft.aiSource === 'LOCAL'
+                ? `${settings.localModel ?? 'Modelo sin configurar'}${settings.localSpeechModel ? ' · Voz local' : ''}. Si falla, se usa la nube.`
+                : settings.vmModel
+                  ? `${settings.vmModel} · Para cuentas con acceso.`
+                  : settings.vmAllowed
+                    ? 'IA de VM está desconectada.'
+                    : 'Tu cuenta aún no tiene acceso a IA de VM.'}
+            </p>
+          )}
           <label>
             Respuestas
             <select
@@ -110,11 +120,6 @@ export function TeamSettings({
               <option value="ON_REQUEST">Soluciones a petición</option>
             </select>
           </label>
-          <p>
-            Preguntar y Revisar empiezan con orientación. Solo pistas mantiene esa ayuda incluso si
-            se solicita resolver el ejercicio. Instruir conserva las solicitudes explícitas de
-            cambios.
-          </p>
           <label>
             Aplicación de cambios
             <select
@@ -128,13 +133,10 @@ export function TeamSettings({
               }
             >
               <option value="PROPOSE_ONLY">Siempre revisar</option>
-              <option value="AUTO_SAFE_VOICE">Automática para comandos de voz seguros</option>
-              <option value="AUTO_SAFE_ALL">Automática para texto y comandos de voz seguros</option>
+              <option value="AUTO_SAFE_VOICE">Automática en cambios seguros por voz</option>
+              <option value="AUTO_SAFE_ALL">Automática en cambios seguros por texto o voz</option>
             </select>
           </label>
-          <p>
-            El dictado siempre requiere revisión. Las acciones sensibles necesitan confirmación.
-          </p>
           <label>
             Revisión del modelo
             <select
@@ -149,10 +151,6 @@ export function TeamSettings({
               <option value="ON_ISSUES">Al detectar problemas</option>
             </select>
           </label>
-          <p>
-            Desactivada impide Revisar; A petición permite solicitar una revisión. Al detectar
-            problemas también permite revisiones solicitadas.
-          </p>
           {error && (
             <p className="error" role="alert">
               {error}

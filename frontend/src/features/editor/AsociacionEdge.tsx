@@ -1,4 +1,4 @@
-import type { RelationshipKind } from '@uml/contracts';
+import type { RelationshipKind, UmlRelationship } from '@uml/contracts';
 import { getStraightPath, type Edge, type EdgeProps } from '@xyflow/react';
 
 export interface AsociacionData extends Record<string, unknown> {
@@ -7,6 +7,9 @@ export interface AsociacionData extends Record<string, unknown> {
   readonly rolOrigen: string | undefined;
   readonly rolDestino: string | undefined;
   readonly kind: RelationshipKind;
+  readonly name?: string | undefined;
+  readonly sourceNavigability?: UmlRelationship['sourceNavigability'];
+  readonly targetNavigability?: UmlRelationship['targetNavigability'];
   readonly parallelIndex: number;
   readonly parallelCount: number;
 }
@@ -70,6 +73,7 @@ export function AsociacionEdge({
         desplazamientoCarril,
       );
   const kind = data?.kind ?? 'ASSOCIATION';
+  const structural = !['GENERALIZATION', 'DEPENDENCY', 'REALIZATION'].includes(kind);
   const className = [
     'asociacion',
     `tipo-${kind.toLocaleLowerCase()}`,
@@ -83,7 +87,11 @@ export function AsociacionEdge({
       {/* Una franja invisible y ancha sobre la linea: una linea de un pixel es
           casi imposible de acertar con el raton. */}
       <path className="asociacion-zona" d={path} />
-      <path className="asociacion-linea" d={path} />
+      <path
+        className="asociacion-linea"
+        d={path}
+        strokeDasharray={kind === 'DEPENDENCY' || kind === 'REALIZATION' ? '7 4' : undefined}
+      />
       <RelationshipMarker
         kind={kind}
         sourceX={sourceX}
@@ -96,7 +104,36 @@ export function AsociacionEdge({
         targetTowardY={ruta.targetToward.y}
       />
 
-      {kind !== 'GENERALIZATION' && (
+      {data?.name && (
+        <text
+          className="rol-asociacion"
+          x={(sourceX + targetX) / 2 + ruta.normal.x * desplazamientoCarril}
+          y={(sourceY + targetY) / 2 + ruta.normal.y * desplazamientoCarril - 8}
+          textAnchor="middle"
+        >
+          {data.name}
+        </text>
+      )}
+      {structural && (
+        <>
+          <NavigabilityMarker
+            value={data?.sourceNavigability}
+            x={sourceX}
+            y={sourceY}
+            towardX={ruta.sourceToward.x}
+            towardY={ruta.sourceToward.y}
+            offset={kind === 'AGGREGATION' || kind === 'COMPOSITION' ? 24 : 0}
+          />
+          <NavigabilityMarker
+            value={data?.targetNavigability}
+            x={targetX}
+            y={targetY}
+            towardX={ruta.targetToward.x}
+            towardY={ruta.targetToward.y}
+          />
+        </>
+      )}
+      {structural && (
         <>
           <text className="multiplicidad" x={origen.x} y={origen.y}>
             {data?.origen}
@@ -107,12 +144,12 @@ export function AsociacionEdge({
         </>
       )}
 
-      {kind !== 'GENERALIZATION' && data?.rolOrigen !== undefined && (
+      {structural && data?.rolOrigen !== undefined && (
         <text className="rol-asociacion" x={rolOrigen.x} y={rolOrigen.y}>
           {data.rolOrigen}
         </text>
       )}
-      {kind !== 'GENERALIZATION' && data?.rolDestino !== undefined && (
+      {structural && data?.rolDestino !== undefined && (
         <text className="rol-asociacion" x={rolDestino.x} y={rolDestino.y}>
           {data.rolDestino}
         </text>
@@ -144,7 +181,18 @@ function RelationshipMarker({
 }): React.JSX.Element | null {
   if (kind === 'ASSOCIATION') return null;
 
-  if (kind === 'GENERALIZATION') {
+  if (kind === 'DEPENDENCY')
+    return (
+      <NavigabilityMarker
+        value="navigable"
+        x={targetX}
+        y={targetY}
+        towardX={targetTowardX}
+        towardY={targetTowardY}
+      />
+    );
+
+  if (kind === 'GENERALIZATION' || kind === 'REALIZATION') {
     const angle = angleBetween(targetX, targetY, targetTowardX, targetTowardY);
     return (
       <polygon
@@ -161,6 +209,35 @@ function RelationshipMarker({
       className={`marcador-relacion diamante${kind === 'COMPOSITION' ? ' relleno' : ''}`}
       points="0,0 10,-7 20,0 10,7"
       transform={`translate(${sourceX} ${sourceY}) rotate(${angle})`}
+    />
+  );
+}
+
+function NavigabilityMarker({
+  value,
+  x,
+  y,
+  towardX,
+  towardY,
+  offset = 0,
+}: {
+  value: UmlRelationship['sourceNavigability'];
+  x: number;
+  y: number;
+  towardX: number;
+  towardY: number;
+  offset?: number;
+}): React.JSX.Element | null {
+  if (!value || value === 'unspecified') return null;
+  return (
+    <path
+      className="marcador-relacion navegabilidad"
+      d={
+        value === 'navigable'
+          ? `M${offset + 12},-6 L${offset},0 L${offset + 12},6`
+          : `M${offset + 2},-4 L${offset + 10},4 M${offset + 2},4 L${offset + 10},-4`
+      }
+      transform={`translate(${x} ${y}) rotate(${angleBetween(x, y, towardX, towardY)})`}
     />
   );
 }

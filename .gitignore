@@ -142,3 +142,11 @@ docs
 !/templates/flutter/docs/
 /templates/flutter/docs/*
 !/templates/flutter/docs/*.md.tpl
+
+# Decisiones de IA simultánea y motores personales/VM.
+!/docs/
+/docs/*
+!/docs/adr/
+/docs/adr/*
+!/docs/adr/ADR-028-*.md
+!/docs/adr/ADR-029-*.md

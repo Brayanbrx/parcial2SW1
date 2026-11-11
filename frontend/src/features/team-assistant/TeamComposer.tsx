@@ -70,6 +70,7 @@ export function TeamComposer(props: {
   visible: boolean;
   reviewEnabled?: boolean;
   pending: boolean;
+  cancelling: boolean;
   context: readonly PendingTurn[];
   restore: ComposerRestore | null;
   /** Integrantes que se pueden mencionar, sin la persona actual. */
@@ -639,9 +640,10 @@ export function TeamComposer(props: {
                 type="button"
                 className="fantasma"
                 data-testid="cancelar-solicitud"
+                disabled={!props.enabled || props.cancelling}
                 onClick={props.cancel}
               >
-                Cancelar solicitud
+                {props.cancelling ? 'Cancelando…' : 'Cancelar solicitud'}
               </button>
             )}
             <button
@@ -659,7 +661,7 @@ export function TeamComposer(props: {
               }
               data-testid="enviar-asistente"
             >
-              <span>{props.pending ? 'Enviando…' : 'Enviar'}</span>
+              <span>{props.pending ? 'En espera' : 'Enviar'}</span>
               <IconoEnviar size={15} />
             </button>
           </div>

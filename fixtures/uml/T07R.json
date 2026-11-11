@@ -1,6 +1,6 @@
 {
   "$schema": "https://plataforma-uml.local/schemas/board-state.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "id": "T07R",
   "title": "Modelo hostil resuelto",
   "coverage": "Reservada de PostgreSQL, tildes y espacios, reservada de Java, clase sin clave, colision al normalizar, dos relaciones entre el mismo par con roles, 0..1 y unico, con la colision resuelta para que llegue al generador",

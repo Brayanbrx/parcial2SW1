@@ -1,7 +1,10 @@
 import type {
   Command,
   CommandBatch,
-  ConceptualType,
+  CommandOf,
+  UmlAttribute,
+  UmlOperation,
+  Visibility,
   Multiplicity,
   Position,
   RelationshipKind,
@@ -48,6 +51,28 @@ export const gui = {
     payload: { classId, displayName },
   }),
 
+  updateClass: (
+    classId: string,
+    changes: Omit<CommandOf<'UPDATE_CLASS'>['payload'], 'classId'>,
+  ): CommandBody => ({ type: 'UPDATE_CLASS', payload: { classId, ...changes } }),
+  addOperation: (classId: string, operation: UmlOperation): CommandBody => ({
+    type: 'ADD_OPERATION',
+    payload: { classId, operation },
+  }),
+  updateOperation: (
+    classId: string,
+    operationId: string,
+    changes: CommandOf<'UPDATE_OPERATION'>['payload']['changes'],
+    autoParameterId?: string,
+  ): CommandBody => ({
+    type: 'UPDATE_OPERATION',
+    payload: { classId, operationId, changes, ...(autoParameterId ? { autoParameterId } : {}) },
+  }),
+  deleteOperation: (classId: string, operationId: string): CommandBody => ({
+    type: 'DELETE_OPERATION',
+    payload: { classId, operationId },
+  }),
+
   deleteClass: (classId: string): CommandBody => ({ type: 'DELETE_CLASS', payload: { classId } }),
 
   /**
@@ -65,22 +90,23 @@ export const gui = {
     classId: string,
     attributeId: string,
     displayName: string,
-    type: ConceptualType,
+    type: string,
+    visibility?: Visibility,
   ): CommandBody => ({
     type: 'ADD_ATTRIBUTE',
-    payload: { classId, attributeId, displayName, type },
+    payload: {
+      classId,
+      attributeId,
+      displayName,
+      type,
+      ...(visibility === undefined ? {} : { visibility }),
+    },
   }),
 
   updateAttribute: (
     classId: string,
     attributeId: string,
-    cambios: {
-      displayName?: string;
-      type?: ConceptualType;
-      primaryKey?: boolean;
-      nullable?: boolean;
-      unique?: boolean;
-    },
+    cambios: Partial<Omit<UmlAttribute, 'id' | 'codeName' | 'databaseName'>>,
   ): CommandBody => ({
     type: 'UPDATE_ATTRIBUTE',
     payload: { classId, attributeId, ...cambios },
@@ -99,10 +125,9 @@ export const gui = {
     sourceMultiplicity?: Multiplicity,
     targetMultiplicity?: Multiplicity,
   ): CommandBody => {
-    const defaults =
-      kind === 'GENERALIZATION'
-        ? ({ source: '1', target: '1' } as const)
-        : ({ source: '1', target: '0..*' } as const);
+    const defaults = ['GENERALIZATION', 'DEPENDENCY', 'REALIZATION'].includes(kind)
+      ? ({ source: '1', target: '1' } as const)
+      : ({ source: '1', target: '0..*' } as const);
 
     return {
       type: 'CREATE_RELATIONSHIP',
@@ -119,11 +144,7 @@ export const gui = {
 
   updateRelationship: (
     relationshipId: string,
-    changes: {
-      kind?: RelationshipKind;
-      sourceRoleName?: string | null;
-      targetRoleName?: string | null;
-    },
+    changes: Omit<CommandOf<'UPDATE_RELATIONSHIP'>['payload'], 'relationshipId'>,
   ): CommandBody => ({
     type: 'UPDATE_RELATIONSHIP',
     payload: { relationshipId, ...changes },

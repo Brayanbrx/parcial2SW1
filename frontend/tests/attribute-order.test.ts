@@ -140,6 +140,7 @@ describe('texto de atributo en notación UML', () => {
       name: 'fechaAlta',
       type: 'Date',
       unknownType: null,
+      visibility: 'private',
     });
     expect(parseAttributeText('correo')).toEqual({ name: 'correo', type: null, unknownType: null });
   });

@@ -69,6 +69,7 @@
 .team-perfil {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--e-3);
   padding: var(--e-4) var(--e-4) var(--e-3);
@@ -80,6 +81,23 @@
 .team-perfil-texto {
   flex: 1;
   min-width: 0;
+  flex-basis: 10rem;
+}
+.team-engine-trigger {
+  display: grid;
+  justify-items: start;
+  gap: 0.125rem;
+  min-width: 0;
+  max-width: min(100%, 12rem);
+  text-align: left;
+}
+.team-engine-trigger small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--texto-suave);
+  font-size: var(--t-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .team-perfil h3 {
   margin: 0;
@@ -873,6 +891,27 @@ button.team-guia:hover:not(:disabled) {
 }
 .team-settings::backdrop {
   background: rgb(0 0 0 / 0.45);
+}
+
+.team-project-settings,
+.team-personal-settings {
+  padding: var(--e-5);
+}
+
+.team-settings-heading h2,
+.team-settings-heading p,
+.team-project-settings .team-settings-note {
+  margin: 0;
+}
+
+.team-settings-heading p,
+.team-project-settings .team-settings-note {
+  color: var(--texto-suave, var(--texto));
+  font-size: var(--t-sm);
+}
+
+.team-project-settings .team-settings-note {
+  margin-top: calc(-1 * var(--e-2));
 }
 
 @media (prefers-reduced-motion: reduce) {

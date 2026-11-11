@@ -9,6 +9,9 @@ import {
   type AiRejectReason,
   type AiSettingsValues,
   type CommandBatch,
+  personalAiChoiceSchema,
+  personalAiStateSchema,
+  type PersonalAiChoice,
 } from '@uml/contracts';
 import { forgetUser, markLogout } from './offline.js';
 
@@ -134,6 +137,30 @@ function conforme<T>(schema: { parse(data: unknown): T }, data: unknown): T {
 
 /** Recuperación del feed con la misma sesión Bearer y renovación que el editor. */
 export const teamAiApi = {
+  async personalEngines(signal?: AbortSignal) {
+    return conforme(
+      personalAiStateSchema,
+      await apiRequest('/ai-devices', signal ? { signal } : {}),
+    );
+  },
+  async savePersonalEngine(body: PersonalAiChoice) {
+    return conforme(
+      personalAiChoiceSchema,
+      await apiRequest('/ai-devices/preference', {
+        method: 'PUT',
+        body,
+        signal: AbortSignal.timeout(15_000),
+      }),
+    );
+  },
+  pairDevice() {
+    return apiRequest<{ code: string; expiresAt: string }>('/ai-devices/pairing', {
+      method: 'POST',
+    });
+  },
+  removeDevice(id: string) {
+    return apiRequest<void>(`/ai-devices/${id}`, { method: 'DELETE' });
+  },
   async send(boardId: string, body: TeamRequestBody, signal: AbortSignal) {
     return conforme(
       teamMessageSchema,
@@ -160,7 +187,10 @@ export const teamAiApi = {
   async cancel(boardId: string, id: string) {
     return conforme(
       teamMessageSchema,
-      await apiRequest(`/boards/${boardId}/team-ai/messages/${id}/cancel`, { method: 'POST' }),
+      await apiRequest(`/boards/${boardId}/team-ai/messages/${id}/cancel`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(15_000),
+      }),
     );
   },
   async confirm(boardId: string, id: string) {

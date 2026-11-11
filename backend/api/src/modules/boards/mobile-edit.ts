@@ -2,11 +2,11 @@ import { commandBatchSchema } from '@uml/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Config } from '../../config.js';
-import { HttpError, badRequest, notFound } from '../../lib/http-error.js';
+import { HttpError, badRequest, conflict, forbidden, notFound } from '../../lib/http-error.js';
 import { currentUser } from '../../plugins/auth.js';
 import { requireMembership, requireWriteAccess } from '../projects/membership.js';
 import type { PushNotifier } from '../push/push.js';
-import { recordAudit } from '../team-ai/audit-ack.js';
+import { checkAuditBeforeApply, recordAudit } from '../team-ai/audit-ack.js';
 import type { PublishTeamEvent } from '../team-ai/events.js';
 import type { TeamModerator } from '../team-ai/moderator.js';
 import { isSemanticBatch } from '../team-ai/review-evidence.js';
@@ -35,7 +35,7 @@ export async function mobileEditRoutes(
   app.post('/boards/:boardId/commands', async (request) => {
     const { boardId } = boardParams.parse(request.params);
     const batch = commandBatchSchema.parse(request.body);
-    const { userId } = currentUser(request);
+    const { userId, sessionVersion = 0 } = currentUser(request);
 
     if (batch.actorId !== userId) {
       throw badRequest('actor_mismatch', 'El lote debe declarar a quien lo envía como autor.');
@@ -50,6 +50,14 @@ export async function mobileEditRoutes(
     if (!config.COLLAB_INTERNAL_SECRET) {
       throw new HttpError(503, 'collab_unavailable', 'La edición móvil no está configurada.');
     }
+    const recorded = await checkAuditBeforeApply(
+      app.prisma,
+      boardId,
+      userId,
+      batch,
+      request.body,
+      publish,
+    );
     let result: {
       applied: boolean;
       issues: unknown[];
@@ -64,12 +72,22 @@ export async function mobileEditRoutes(
           'content-type': 'application/json',
           authorization: `Bearer ${config.COLLAB_INTERNAL_SECRET}`,
         },
-        body: JSON.stringify({ projectId: board.projectId, boardId, batch }),
+        body: JSON.stringify({
+          projectId: board.projectId,
+          boardId,
+          batch,
+          recorded,
+          sessionVersion,
+        }),
         signal: AbortSignal.timeout(10_000),
       });
+      if (response.status === 409)
+        throw conflict('audit_conflict', 'El lote no coincide con el registro esperado.');
+      if (response.status === 403) throw forbidden();
       if (!response.ok) throw new Error(`collab ${response.status}`);
       result = (await response.json()) as typeof result;
     } catch (error) {
+      if (error instanceof HttpError) throw error;
       request.log.warn({ err: String(error) }, 'no se pudo aplicar el lote en colaboración');
       throw new HttpError(503, 'collab_unavailable', 'No se pudo aplicar el cambio. Reintenta.');
     }

@@ -8,11 +8,15 @@ import 'package:uml_mobile/features/editor/model.dart';
 
 final _model = SemanticModel(
   classes: [
-    UmlClass(id: 'a', name: 'Pedido', attributes: [
-      UmlAttribute(id: 'a1', name: 'id', type: 'UUID', primaryKey: true, nullable: false, unique: false),
-      UmlAttribute(id: 'a2', name: 'fecha', type: 'DateTime', primaryKey: false, nullable: false, unique: false),
-      UmlAttribute(id: 'a3', name: 'codigo', type: 'String', primaryKey: false, nullable: true, unique: true),
-    ]),
+    UmlClass(
+      id: 'a',
+      name: 'Pedido',
+      attributes: [
+        UmlAttribute(id: 'a1', name: 'id', type: 'UUID', primaryKey: true, nullable: false, unique: false),
+        UmlAttribute(id: 'a2', name: 'fecha', type: 'DateTime', primaryKey: false, nullable: false, unique: false),
+        UmlAttribute(id: 'a3', name: 'codigo', type: 'String', primaryKey: false, nullable: true, unique: true),
+      ],
+    ),
     UmlClass(id: 'b', name: 'Detalle', attributes: []),
   ],
   relationships: [
@@ -27,35 +31,40 @@ final _model = SemanticModel(
   ],
 );
 
-Widget _app(Widget child, {Brightness brightness = Brightness.light}) =>
-    MaterialApp(theme: buildTheme(brightness), home: Scaffold(body: child));
+Widget _app(Widget child, {Brightness brightness = Brightness.light}) => MaterialApp(
+  theme: buildTheme(brightness),
+  home: Scaffold(body: child),
+);
 
 void main() {
-  testWidgets('la tarjeta muestra las filas como la web: «- nombre: Tipo», PK, * y U', (tester) async {
+  testWidgets('la tarjeta usa visibilidad y multiplicidad UML, sin marcas de base de datos', (tester) async {
     await tester.pumpWidget(_app(ClassBox(umlClass: _model.classes.first)));
     expect(find.text('Pedido'), findsOneWidget);
-    expect(find.text('PK'), findsOneWidget);
-    expect(find.text('U'), findsOneWidget);
-    expect(find.textContaining('fecha: DateTime *', findRichText: true), findsOneWidget);
+    expect(find.text('PK'), findsNothing);
+    expect(find.text('U'), findsNothing);
+    expect(find.textContaining('- fecha: DateTime [1]', findRichText: true), findsOneWidget);
   });
 
-  testWidgets('una clase sin atributos lo dice', (tester) async {
+  testWidgets('una clase sin atributos conserva su nombre y no dibuja texto de ayuda', (tester) async {
     await tester.pumpWidget(_app(ClassBox(umlClass: _model.classes.last)));
-    expect(find.text('sin atributos'), findsOneWidget);
+    expect(find.text('sin atributos'), findsNothing);
+    expect(find.text('Detalle'), findsOneWidget);
   });
 
   for (final brightness in Brightness.values) {
     testWidgets('el diagrama se dibuja y responde al toque (${brightness.name})', (tester) async {
       UmlClass? tapped;
-      await tester.pumpWidget(_app(
-        DiagramView(
-          model: _model,
-          layout: BoardLayout(positions: {'a': Offset.zero, 'b': const Offset(400, 0)}),
-          onTapClass: (c) => tapped = c,
-          onMoveClass: (_, _) {},
+      await tester.pumpWidget(
+        _app(
+          DiagramView(
+            model: _model,
+            layout: BoardLayout(positions: {'a': Offset.zero, 'b': const Offset(400, 0)}),
+            onTapClass: (c) => tapped = c,
+            onMoveClass: (_, _) {},
+          ),
+          brightness: brightness,
         ),
-        brightness: brightness,
-      ));
+      );
       await tester.pumpAndSettle();
       expect(find.text('Detalle'), findsOneWidget);
       expect(find.byTooltip('Ajustar diagrama a la vista'), findsOneWidget);
@@ -67,18 +76,20 @@ void main() {
   testWidgets('arrastrar una clase con pulsación larga envía su nueva posición', (tester) async {
     String? moved;
     Offset? to;
-    await tester.pumpWidget(_app(
-      DiagramView(
-        model: _model,
-        layout: BoardLayout(positions: {'a': Offset.zero, 'b': const Offset(400, 0)}),
-        canWrite: true,
-        onTapClass: (_) {},
-        onMoveClass: (id, p) {
-          moved = id;
-          to = p;
-        },
+    await tester.pumpWidget(
+      _app(
+        DiagramView(
+          model: _model,
+          layout: BoardLayout(positions: {'a': Offset.zero, 'b': const Offset(400, 0)}),
+          canWrite: true,
+          onTapClass: (_) {},
+          onMoveClass: (id, p) {
+            moved = id;
+            to = p;
+          },
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     final gesture = await tester.startGesture(tester.getCenter(find.text('Detalle')));
     await tester.pump(const Duration(milliseconds: 700));
@@ -100,18 +111,16 @@ void main() {
     addTearDown(tester.view.reset);
     final controller = DiagramController();
     final layout = BoardLayout(positions: {'a': Offset.zero, 'b': const Offset(1400, 900)});
-    await tester.pumpWidget(_app(DiagramView(
-      controller: controller,
-      model: _model,
-      layout: layout,
-      onTapClass: (_) {},
-      onMoveClass: (_, _) {},
-    )));
+    await tester.pumpWidget(
+      _app(
+        DiagramView(controller: controller, model: _model, layout: layout, onTapClass: (_) {}, onMoveClass: (_, _) {}),
+      ),
+    );
     await tester.pumpAndSettle();
     final center = controller.viewportCenter!;
-    // Caja de las dos clases: x 0..1640, y 0..966 (Detalle sin atributos, 66 de alto).
+    // Caja de las dos clases: x 0..1640, y 0..980 (Detalle sin atributos, 80 de alto).
     expect(center.dx, closeTo(1640 / 2, 2));
-    expect(center.dy, closeTo((900 + 66) / 2, 2));
+    expect(center.dy, closeTo((900 + 80) / 2, 2));
   });
 
   test('iniciales del avatar como en la web', () {

@@ -68,8 +68,8 @@ export const SISTEMA_VISION = [
   'Lees fotografias de diagramas de clases —pizarrones, papel, capturas— y las',
   'traduces a operaciones sobre un modelo conceptual de datos.',
   '',
-  'Devuelves las clases que ves, sus atributos con el tipo que corresponda, y las',
-  'relaciones con su multiplicidad en cada extremo.',
+  'Devuelves los clasificadores, atributos, métodos y relaciones visibles. Usa ADD_OPERATION para cada método. Escribe en operationName solo el nombre, sin paréntesis. Escribe los parámetros en parameters y el tipo de retorno en returnType.',
+  'Usa classifierKind INTERFACE, ENUMERATION o DATA_TYPE cuando lo indique el dibujo. Para enumeraciones, conserva sus literales.',
   '',
   'Reglas:',
   '',
@@ -84,14 +84,13 @@ export const SISTEMA_VISION = [
   '   lo mencionas en `rationale`. La persona lo corregira antes de aplicarlo.',
   `4. Tipos permitidos: ${CONCEPTUAL_TYPES.join(', ')}. Si el diagrama usa otro`,
   '   nombre —varchar, int, numeric— lo traduces al equivalente de la lista.',
-  '   Si no hay tipo escrito, usas String.',
-  `5. Multiplicidades permitidas: ${MULTIPLICITIES.join(', ')}. Si el diagrama`,
+  '   Si el tipo es un clasificador del diagrama, conserva su nombre exacto en classifierType. Si no hay tipo escrito, usas String.',
+  '5. Conserva multiplicidades UML numéricas y rangos como 2..5 o 1..*. Si el diagrama',
   '   escribe `N`, `*` o `n`, es `0..*`. Toda CREATE_RELATIONSHIP lleva',
   '   `fromMultiplicity` y `toMultiplicity`, sin excepcion: en una generalizacion',
   '   pon `1` y `1`; si el diagrama no las escribe, usa `1` y `0..*` y dilo en',
   '   `rationale`.',
-  '6. No existe la relacion muchos a muchos directa. Si el diagrama la dibuja,',
-  '   propon una clase intermedia con dos relaciones N:1 y dilo en `rationale`.',
+  '6. Conserva las asociaciones muchos a muchos tal como se dibujaron. No inventes clases intermedias.',
   '7. El triangulo blanco hueco es una generalizacion: `kind` GENERALIZATION,',
   '   `fromClass` la clase del extremo sin triangulo —la subclase— y `toClass`',
   '   la que lo tiene. El rombo relleno es COMPOSITION y el hueco AGGREGATION,',
@@ -111,7 +110,7 @@ export const INSTRUCCION_ESQUEMA = [
   'Responde UNICAMENTE con un objeto JSON que cumpla este esquema, sin texto',
   'alrededor y sin envolverlo en un bloque de codigo:',
   '',
-  'Campos por operación: CREATE_CLASS/DELETE_CLASS(className); RENAME_CLASS(className,newName); ADD_ATTRIBUTE(className,attributeName,type); UPDATE_ATTRIBUTE(className,attributeName y al menos un cambio); DELETE_ATTRIBUTE(className,attributeName); CREATE_RELATIONSHIP(fromClass,toClass,fromMultiplicity,toMultiplicity); CHANGE_MULTIPLICITY(fromClass,toClass y al menos una multiplicidad); DELETE_RELATIONSHIP(fromClass,toClass). Nombres/roles: máximo 120 caracteres; rationale: 400; needsClarification: 300.',
+  'Campos por operación: CREATE_CLASS/DELETE_CLASS(className); RENAME_CLASS(className,newName); ADD_ATTRIBUTE(className,attributeName,type); ADD_OPERATION(className,operationName); UPDATE_ATTRIBUTE(className,attributeName y al menos un cambio); DELETE_ATTRIBUTE(className,attributeName); CREATE_RELATIONSHIP(fromClass,toClass,fromMultiplicity,toMultiplicity); CHANGE_MULTIPLICITY(fromClass,toClass y al menos una multiplicidad); DELETE_RELATIONSHIP(fromClass,toClass). Nombres/roles: máximo 120 caracteres; rationale: 400; needsClarification: 300.',
   JSON.stringify(PROPOSAL_JSON_SCHEMA),
 ].join('\n');
 
@@ -458,9 +457,49 @@ function sinTextosVacios(valor: unknown): unknown {
 function completarCamposFaltantes(valor: unknown, visual: boolean): unknown {
   if (!esRegistro(valor) || !Array.isArray(valor.operations)) return valor;
   let supuestas = 0;
+  const classifiers = new Set(
+    visual
+      ? valor.operations.flatMap((operation) =>
+          esRegistro(operation) &&
+          operation.op === 'CREATE_CLASS' &&
+          typeof operation.className === 'string'
+            ? [operation.className.trim()]
+            : [],
+        )
+      : [],
+  );
 
   const operations = valor.operations.map((operacion) => {
     if (!esRegistro(operacion)) return operacion;
+    if (visual && operacion.op === 'ADD_OPERATION' && typeof operacion.operationName === 'string') {
+      const signature = /^([^():]+)\s*\(([^()]*)\)\s*(?::\s*(.+))?$/.exec(
+        operacion.operationName.trim(),
+      );
+      if (
+        signature &&
+        (signature[2]?.trim() === '' ||
+          (Array.isArray(operacion.parameters) && operacion.parameters.length > 0))
+      ) {
+        const name = signature[1]?.trim().replace(/^[+\-#~]\s*/, '');
+        if (name)
+          return {
+            ...operacion,
+            operationName: name,
+            ...(operacion.returnType === undefined && signature[3]
+              ? { returnType: signature[3].trim() }
+              : {}),
+          };
+      }
+    }
+    if (
+      visual &&
+      operacion.op === 'ADD_ATTRIBUTE' &&
+      typeof operacion.type === 'string' &&
+      classifiers.has(operacion.type.trim()) &&
+      !(CONCEPTUAL_TYPES as readonly string[]).includes(operacion.type)
+    ) {
+      return { ...operacion, type: 'String', classifierType: operacion.type.trim() };
+    }
 
     if (
       operacion.op === 'ADD_ATTRIBUTE' &&

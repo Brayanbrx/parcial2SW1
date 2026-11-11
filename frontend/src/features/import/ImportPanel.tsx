@@ -8,11 +8,12 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { planBatch, validateModel } from '@uml/domain-core';
 import { CandidateEditor, etiquetaComando } from './CandidateEditor.js';
-import { removeCandidateCommand } from './candidate.js';
+import { editCandidateCommand, removeCandidateCommand } from './candidate.js';
 import { apiRequest, downloadXmi } from '../../lib/api.js';
 import { descargarBlob, nombreDeArchivo } from '../../lib/guardar-archivo.js';
 import { CapturaCamara } from './CapturaCamara.js';
 import { ExportImage } from './ExportImage.js';
+import { preparePhoto } from './photo.js';
 
 /**
  * Importacion por foto y XMI, y exportacion a XMI (M4 y M5).
@@ -87,6 +88,7 @@ export function ImportPanel({
   const [formatoExport, setFormatoExport] = useState<'EA_21' | 'UML_251'>('EA_21');
   const [exportando, setExportando] = useState(false);
   const imagenRef = useRef<HTMLInputElement>(null);
+  const capturaNativaRef = useRef<HTMLInputElement>(null);
   const xmiRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLFormElement>(null);
   const candidateRef = useRef<HTMLDivElement>(null);
@@ -94,14 +96,14 @@ export function ImportPanel({
   const solicitudExport = useRef<AbortController | null>(null);
   const permisoActual = useRef(canWrite);
   permisoActual.current = canWrite;
-  useEffect(
+  useLayoutEffect(
     () => () => {
       solicitud.current?.abort();
       solicitud.current = null;
       solicitudExport.current?.abort();
       solicitudExport.current = null;
     },
-    [],
+    [boardId],
   );
   const exportOpen = nombreExport !== null;
   const candidateOpen = candidato !== null;
@@ -153,6 +155,7 @@ export function ImportPanel({
   ): Promise<void> {
     if (!permisoActual.current || solicitud.current !== null) return;
     const controller = new AbortController();
+    const ruta = window.location.pathname;
     solicitud.current = controller;
     setPendiente(true);
     setError(null);
@@ -166,6 +169,7 @@ export function ImportPanel({
       // pizarra. Forma parte de la misma operación que la petición HTTP.
       const origen = typeof leer === 'function' ? await leer() : leer;
       controller.signal.throwIfAborted();
+      if (window.location.pathname !== ruta) return;
       if (!permisoActual.current)
         throw new Error('Ya no tienes permiso para importar en esta pizarra.');
       setFuente(origen);
@@ -187,6 +191,7 @@ export function ImportPanel({
             },
           }));
       controller.signal.throwIfAborted();
+      if (window.location.pathname !== ruta) return;
       setCandidato(respuesta);
     } catch (causa) {
       if (!controller.signal.aborted)
@@ -200,15 +205,15 @@ export function ImportPanel({
   }
 
   async function importarImagen(archivo: File): Promise<void> {
-    await importarFuente(
-      async () => ({
+    await importarFuente(async () => {
+      const foto = await preparePhoto(archivo);
+      return {
         kind: 'IMAGE',
         name: archivo.name,
-        image: await leerBase64(archivo),
-        mediaType: archivo.type,
-      }),
-      modo,
-    );
+        image: await leerBase64(foto),
+        mediaType: foto.type,
+      };
+    }, modo);
   }
 
   async function importarXmi(archivo: File): Promise<void> {
@@ -216,6 +221,14 @@ export function ImportPanel({
       async () => ({ kind: 'XMI', name: archivo.name, xml: await archivo.text() }),
       modo,
     );
+  }
+
+  function cancelarImportacion(): void {
+    solicitud.current?.abort();
+    solicitud.current = null;
+    setPendiente(false);
+    setFuente(null);
+    setBaseCandidato(null);
   }
 
   async function reintentarReemplazando(): Promise<void> {
@@ -297,12 +310,7 @@ export function ImportPanel({
       }
       return {
         ...actual,
-        batch: {
-          ...actual.batch,
-          commands: actual.batch.commands.map((command) =>
-            command.commandId === commandId ? editar(command) : command,
-          ),
-        },
+        batch: editCandidateCommand(actual.batch, commandId, editar),
       };
     });
   }
@@ -338,7 +346,10 @@ export function ImportPanel({
           type="button"
           disabled={!canWrite || pendiente}
           data-testid="abrir-camara"
-          onClick={() => setCamaraAbierta(true)}
+          onClick={() => {
+            if (typeof navigator.mediaDevices?.getUserMedia === 'function') setCamaraAbierta(true);
+            else capturaNativaRef.current?.click();
+          }}
         >
           Tomar foto
         </button>
@@ -362,13 +373,19 @@ export function ImportPanel({
         </button>
       </div>
 
+      {pendiente && (
+        <button type="button" className="secundario" onClick={cancelarImportacion}>
+          Cancelar lectura
+        </button>
+      )}
+
       <ExportImage boardName={boardName} empty={state.semantic.classes.length === 0} />
 
       <input
         ref={imagenRef}
         type="file"
         disabled={!canWrite || pendiente}
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/*"
         hidden
         data-testid="archivo-imagen"
         onChange={(evento) => {
@@ -389,6 +406,20 @@ export function ImportPanel({
           const archivo = evento.target.files?.[0];
           evento.target.value = '';
           if (archivo !== undefined) void importarXmi(archivo);
+        }}
+      />
+
+      <input
+        ref={capturaNativaRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        disabled={!canWrite || pendiente}
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void importarImagen(file);
         }}
       />
 
@@ -667,7 +698,7 @@ function useAparecerALaVista<T extends HTMLElement>(
 }
 
 /** El servidor recibe la imagen en base64: no hay multipart en esta API. */
-async function leerBase64(archivo: File): Promise<string> {
+async function leerBase64(archivo: Blob): Promise<string> {
   const bytes = new Uint8Array(await archivo.arrayBuffer());
   let binario = '';
 

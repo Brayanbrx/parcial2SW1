@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
+import { resolveProposal } from '@uml/ai';
 
 const boardId = '00000000-0000-4000-8000-000000000010';
 
@@ -222,6 +223,100 @@ test('cancelar la cámara descarta una foto cuya codificación termina después'
     return state.__photoReads;
   });
   expect(reads).toBe(0);
+});
+
+test('toma una foto, corrige el método reconocido y aplica el diagrama', async ({ page }) => {
+  await enter(page);
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 960;
+      canvas.height = 480;
+      const context = canvas.getContext('2d')!;
+      const stream = canvas.captureStream(1);
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, 960, 480);
+      context.fillStyle = '#000';
+      context.font = '26px Arial';
+      context.strokeRect(36, 40, 300, 140);
+      context.strokeRect(590, 40, 300, 140);
+      context.fillText('Cliente', 56, 82);
+      context.fillText('Pedido', 610, 82);
+      context.fillText('+ calcular(): Decimal', 610, 139);
+      return stream;
+    };
+  });
+  await page.route(`**/api/boards/${boardId}/import/image`, (route) => {
+    const { image, mediaType, model } = route.request().postDataJSON();
+    expect(mediaType).toBe('image/jpeg');
+    expect(Buffer.from(image, 'base64').subarray(0, 3).toString('hex')).toBe('ffd8ff');
+    const outcome = resolveProposal({
+      model,
+      actorId: '00000000-0000-4000-8000-000000000001',
+      origin: 'IMAGE',
+      proposal: {
+        operations: [
+          { op: 'CREATE_CLASS', className: 'Cliente' },
+          { op: 'CREATE_CLASS', className: 'Pedido' },
+          {
+            op: 'ADD_OPERATION',
+            className: 'Pedido',
+            operationName: 'calcular',
+            returnType: 'Decimal',
+          },
+          {
+            op: 'CREATE_RELATIONSHIP',
+            fromClass: 'Cliente',
+            toClass: 'Pedido',
+            fromMultiplicity: '1',
+            toMultiplicity: '0..*',
+          },
+        ],
+      },
+    });
+    return route.fulfill({ json: { ...outcome, rationale: null, warnings: [] } });
+  });
+  await page.getByTestId('abrir-camara').click();
+  await page.getByTestId('tomar-foto').click();
+  const method = page.getByRole('textbox', { name: 'Nombre de método 3' });
+  await expect(method).toHaveValue('calcular');
+  await expect(page.getByTestId('clase-Pedido')).toHaveCount(0);
+  await method.fill('calcularTotal');
+  await page.getByTestId('aplicar-candidato').click();
+  await expect(page.getByTestId('importacion-aplicada')).toBeVisible();
+  await expect(page.getByTestId('clase-Cliente')).toBeVisible();
+  await expect(page.getByTestId('clase-Pedido')).toContainText('calcularTotal(): Decimal');
+});
+
+test('cancelar la lectura de una foto permite iniciar otra sin abandonar la pizarra', async ({
+  page,
+}) => {
+  await enter(page);
+  let finish!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  let calls = 0;
+  await page.route(`**/api/boards/${boardId}/import/image`, async (route) => {
+    if (++calls === 1) await waiting;
+    await route
+      .fulfill({
+        json: { kind: 'NO_CHANGES', message: 'Foto leída.', rationale: null, warnings: [] },
+      })
+      .catch(() => undefined);
+  });
+  const file = { name: 'foto.png', mimeType: 'image/png', buffer: Buffer.from('fixture') };
+  try {
+    await page.getByTestId('archivo-imagen').setInputFiles(file);
+    await expect.poll(() => calls).toBe(1);
+    await page.getByRole('button', { name: 'Cancelar lectura' }).click();
+    await expect(page.getByTestId('importar-imagen')).toBeEnabled();
+    await page.getByTestId('archivo-imagen').setInputFiles(file);
+    await expect(page.getByTestId('candidato')).toContainText('Foto leída.');
+    expect(calls).toBe(2);
+  } finally {
+    finish();
+  }
 });
 
 for (const action of ['pestana', 'panel'] as const) {

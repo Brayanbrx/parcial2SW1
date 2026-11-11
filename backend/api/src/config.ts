@@ -17,11 +17,28 @@ const schema = z.object({
   WORK_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   TEAM_AI_BOARD_QUEUE_LIMIT: z.coerce.number().int().positive().max(1000).default(20),
   TEAM_AI_USER_QUEUE_LIMIT: z.coerce.number().int().positive().max(1000).default(3),
+  TEAM_AI_BOARD_CONCURRENCY: z.coerce.number().int().positive().max(32).default(3),
+  TEAM_AI_MAX_CONCURRENCY: z.coerce.number().int().positive().max(64).default(6),
+  AI_VM_CONNECTOR_TOKEN: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(48).max(256).optional(),
+  ),
+  AI_VM_ALLOWED_EMAILS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.email()).max(100)),
   TEAM_AI_GROUP_TURNS: z.coerce.number().int().min(1).max(100).default(20),
   TEAM_AI_PERSONAL_TURNS: z.coerce.number().int().min(1).max(100).default(10),
   TEAM_AI_MAX_INPUT_TOKENS: z.coerce.number().int().min(4096).max(131072).default(32768),
   AI_CHAIN_TIMEOUT_MS: z.coerce.number().int().positive().max(2_147_483_647).default(120_000),
   TEAM_AI_TIMEOUT_MS: z.coerce.number().int().positive().max(2_147_483_647),
+  TEAM_AI_DEVICE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(300_000),
   RATE_LIMIT_ENABLED: z.enum(['true', 'false']).transform((value) => value === 'true'),
 
   DATABASE_URL: z.string().min(1),
@@ -93,8 +110,11 @@ export type Config = z.infer<typeof schema>;
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = schema.safeParse({
     ...env,
+    TEAM_AI_BOARD_CONCURRENCY: env['TEAM_AI_BOARD_CONCURRENCY'] || '3',
+    TEAM_AI_MAX_CONCURRENCY: env['TEAM_AI_MAX_CONCURRENCY'] || '6',
     AI_CHAIN_TIMEOUT_MS: env['AI_CHAIN_TIMEOUT_MS'] || '120000',
     TEAM_AI_TIMEOUT_MS: env['TEAM_AI_TIMEOUT_MS'] || env['AI_CHAIN_TIMEOUT_MS'] || '120000',
+    TEAM_AI_DEVICE_TIMEOUT_MS: env['TEAM_AI_DEVICE_TIMEOUT_MS'] || undefined,
     RATE_LIMIT_ENABLED:
       env['RATE_LIMIT_ENABLED'] ?? (env['NODE_ENV'] === 'production' ? 'true' : 'false'),
   });

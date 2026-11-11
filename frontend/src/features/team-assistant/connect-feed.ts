@@ -33,6 +33,7 @@ export function connectTeamFeed(options: {
   if (!panelVisible || document.visibilityState !== 'visible') void transport.refresh(true);
   return {
     acceptEvent: transport.acceptEvent,
+    snapshot: transport.snapshot,
     refresh: transport.refresh,
     retry: transport.retry,
     setPanelVisible(value: boolean) {

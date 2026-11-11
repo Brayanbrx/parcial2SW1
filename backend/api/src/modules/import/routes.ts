@@ -2,6 +2,7 @@ import {
   layoutSchema,
   semanticModelSchema,
   type CommandBatch,
+  emptyBoardState,
   type SemanticModel,
 } from '@uml/contracts';
 import {
@@ -13,8 +14,7 @@ import {
   pareceTruncada,
   resolveProposal,
   type AiPorts,
-  type AssistantOperation,
-  type BatchProposal,
+  SUPPORTED_IMAGE_TYPES,
 } from '@uml/ai';
 import {
   XmiParseError,
@@ -72,31 +72,37 @@ export async function importRoutes(
       const board = await findBoard(app, boardId);
       await requireWriteAccess(app.prisma, board.projectId, userId);
 
+      const image = decodePhoto(body.image, body.mediaType);
       const { proposal, usage } = await withRequestCancellation(request, reply, (signal) =>
         conProveedor(() =>
           ports.vision.extractModel({
-            image: Buffer.from(body.image, 'base64'),
+            image,
             mediaType: body.mediaType,
             signal,
           }),
         ),
       );
 
+      const operationOrder = [
+        'CREATE_CLASS',
+        'ADD_ATTRIBUTE',
+        'ADD_OPERATION',
+        'CREATE_RELATIONSHIP',
+      ];
+      const operations = operationOrder.flatMap((op) =>
+        proposal.operations.filter((item) => item.op === op),
+      );
+      const replacing = body.mode === 'REPLACE';
       const { skipped = [], ...candidate } = resolveProposal({
-        proposal: conBorradoPrevio(proposal, body.mode, body.model),
-        model: body.model,
+        proposal: { ...proposal, operations },
+        model: replacing ? emptyBoardState().semantic : body.model,
         actorId: userId,
         origin: 'IMAGE',
         tolerante: true,
       });
       const outcome =
-        body.mode === 'REPLACE' &&
-        'batch' in candidate &&
-        !contieneClasesImportadas(candidate.batch)
-          ? {
-              kind: 'QUESTION' as const,
-              question: 'No se pudo preparar ninguna clase de la foto para reemplazar la pizarra.',
-            }
+        replacing && 'batch' in candidate
+          ? replacementFromPhoto(candidate.batch, candidate.summary, body.model)
           : candidate;
 
       request.log.info(
@@ -116,6 +122,14 @@ export async function importRoutes(
       // fotografia tuviera mas de lo que cabe en una propuesta
       const warnings = [
         ...skipped,
+        ...(operations.length === proposal.operations.length
+          ? []
+          : [
+              {
+                element: 'la fotografía',
+                reason: 'Se omitieron cambios ajenos a la transcripción del diagrama.',
+              },
+            ]),
         ...(pareceTruncada(proposal)
           ? [
               {
@@ -242,37 +256,63 @@ export async function importRoutes(
   });
 }
 
-// En modo de reemplazo, el borrado va delante.
-function conBorradoPrevio(
-  proposal: BatchProposal,
-  mode: 'ADD' | 'REPLACE',
+function replacementFromPhoto(
+  batch: CommandBatch,
+  summary: readonly string[],
   current: SemanticModel,
-): BatchProposal {
-  if (mode === 'ADD' || !proposal.operations.some((operation) => operation.op === 'CREATE_CLASS')) {
-    return proposal;
-  }
-
+) {
+  if (!batch.commands.some((command) => command.type === 'CREATE_CLASS'))
+    return {
+      kind: 'QUESTION' as const,
+      question: 'La foto no produjo ninguna clase para reemplazar la pizarra.',
+    };
+  if (!current.classes.length) return { kind: 'BATCH' as const, batch, summary };
+  const { origin, actorId, issuedAt } = batch;
   return {
-    ...proposal,
-    operations: [
-      ...current.classes.map<AssistantOperation>((umlClass) => ({
-        op: 'DELETE_CLASS',
-        className: umlClass.displayName,
-      })),
-      ...proposal.operations,
-    ],
+    kind: 'CONFIRMATION' as const,
+    question: `Se reemplazarán ${current.classes.length} clases de la pizarra con el diagrama de la foto.`,
+    summary: [...current.classes.map((c) => `Eliminar «${c.displayName}»`), ...summary],
+    batch: {
+      ...batch,
+      commands: [
+        ...current.classes.map((c) => ({
+          type: 'DELETE_CLASS' as const,
+          payload: { classId: c.id },
+          origin,
+          actorId,
+          issuedAt,
+          commandId: crypto.randomUUID(),
+        })),
+        ...batch.commands,
+      ],
+    },
   };
 }
 
-function contieneClasesImportadas(batch: CommandBatch): boolean {
-  const creadas = new Set<string>();
-  for (const command of batch.commands) {
-    if (command.type === 'CREATE_CLASS') creadas.add(command.payload.classId);
-    if (command.type === 'DELETE_CLASS') creadas.delete(command.payload.classId);
-  }
-  return creadas.size > 0;
+function decodePhoto(input: string, mediaType: string): Buffer {
+  if (!(SUPPORTED_IMAGE_TYPES as readonly string[]).includes(mediaType))
+    throw new HttpError(422, 'imagen_no_interpretable', 'Usa una imagen JPG, PNG, WebP o GIF.');
+  const bytes = Buffer.from(input, 'base64');
+  const header = bytes.subarray(0, 12);
+  const detected =
+    header.subarray(0, 3).toString('hex') === 'ffd8ff'
+      ? 'image/jpeg'
+      : header.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
+        ? 'image/png'
+        : /^GIF8[79]a/.test(header.toString('ascii'))
+          ? 'image/gif'
+          : header.subarray(0, 4).toString('ascii') === 'RIFF' &&
+              header.subarray(8).toString('ascii') === 'WEBP'
+            ? 'image/webp'
+            : null;
+  if (detected !== mediaType || bytes.toString('base64') !== input)
+    throw new HttpError(
+      422,
+      'imagen_no_interpretable',
+      'El archivo no coincide con el formato de imagen indicado.',
+    );
+  return bytes;
 }
-
 async function conProveedor<T>(llamar: () => Promise<T>): Promise<T> {
   try {
     return await llamar();

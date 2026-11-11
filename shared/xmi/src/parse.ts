@@ -5,6 +5,13 @@ import {
   type RelationshipKind,
   type Position,
   type Size,
+  multiplicityBounds,
+  VISIBILITIES,
+  type UmlAttribute,
+  type UmlOperation,
+  type UmlParameter,
+  type UmlRelationship,
+  type ClassifierKind,
   MIN_CLASS_WIDTH,
   MIN_CLASS_HEIGHT,
 } from '@uml/contracts';
@@ -36,16 +43,29 @@ import { fromXmiId } from './serialize.js';
  * (RF-052), como cualquier otro lote.
  */
 
-export interface XmiAttribute {
+export interface XmiAttribute extends Pick<
+  UmlAttribute,
+  'visibility' | 'isStatic' | 'multiplicity' | 'defaultValue' | 'isDerived' | 'isReadOnly'
+> {
   readonly xmiId: string | null;
   readonly name: string;
-  readonly type: ConceptualType;
+  readonly type: string;
+  readonly typeXmiId?: string;
   readonly primaryKey: boolean;
   readonly nullable: boolean;
   readonly unique: boolean;
 }
 
+interface XmiOperation extends Omit<UmlOperation, 'parameters'> {
+  readonly parameters: (UmlParameter & { readonly typeXmiId?: string })[];
+  readonly returnTypeXmiId?: string;
+}
+
 export interface XmiClass {
+  readonly kind?: ClassifierKind;
+  readonly isAbstract?: boolean;
+  readonly literals?: string[];
+  readonly operations?: XmiOperation[];
   readonly xmiId: string | null;
   readonly name: string;
   readonly attributes: readonly XmiAttribute[];
@@ -53,7 +73,10 @@ export interface XmiClass {
   readonly size?: Size;
 }
 
-export interface XmiRelationship {
+export interface XmiRelationship extends Pick<
+  UmlRelationship,
+  'name' | 'sourceNavigability' | 'targetNavigability'
+> {
   readonly xmiId: string | null;
   readonly kind?: RelationshipKind;
   readonly sourceName: string;
@@ -99,8 +122,14 @@ const parser = new XMLParser({
       'memberEnd',
       'attribute',
       'generalization',
+      'ownedOperation',
+      'ownedParameter',
+      'ownedLiteral',
+      'interfaceRealization',
+      'navigableOwnedEnd',
     ].includes(nombre),
   parseAttributeValue: false,
+  parseTagValue: false,
   trimValues: true,
 });
 
@@ -129,10 +158,18 @@ export function parseXmi(xml: string): XmiImport {
 
   const warnings: XmiWarning[] = [];
   const extensiones = buscarExtensiones(documento);
+  const xmiRoot = (documento['xmi:XMI'] ?? documento) as Nodo;
+  const documentation = (xmiRoot['xmi:Documentation'] ?? xmiRoot['xmi:documentation']) as
+    Nodo | undefined;
+  const legacyAggregation =
+    (documentation?.['@exporter'] === 'UMLFORGE AI' ||
+      documentation?.['exporter'] === 'UMLFORGE AI') &&
+    !extensiones.some((e) => (e['umlNotation'] as Nodo | undefined)?.['@version'] === '2.5.1');
   const geometria = leerGeometria(extensiones);
   const elementos = normalizarClasesAsociativas(recolectar(raiz), extensiones, warnings);
 
-  const primitivos = new Map<string, ConceptualType>();
+  const primitivos = new Map<string, string>();
+  const clasificadores = new Set<string>();
   const tiposDeclarados = [
     ...elementos,
     ...buscarExtensiones(documento).flatMap((extension) =>
@@ -140,12 +177,25 @@ export function parseXmi(xml: string): XmiImport {
     ),
   ];
   for (const elemento of tiposDeclarados) {
-    if (tipoXmi(elemento) !== 'uml:PrimitiveType') continue;
+    if (
+      ![
+        'uml:PrimitiveType',
+        'uml:Class',
+        'uml:Interface',
+        'uml:Enumeration',
+        'uml:DataType',
+      ].includes(tipoXmi(elemento) ?? '')
+    )
+      continue;
     const id = texto(elemento['@xmi:id']);
     const nombre = texto(elemento['@name']);
     if (id !== null && nombre !== null) {
       const conceptual = tipoConceptual(nombre);
-      if (conceptual !== null) primitivos.set(id, conceptual);
+      if (tipoXmi(elemento) === 'uml:PrimitiveType') primitivos.set(id, conceptual ?? nombre);
+      else {
+        primitivos.set(id, nombre);
+        clasificadores.add(id);
+      }
     }
   }
 
@@ -166,7 +216,12 @@ export function parseXmi(xml: string): XmiImport {
   );
 
   for (const elemento of elementos) {
-    if (tipoXmi(elemento) !== 'uml:Class') continue;
+    if (
+      !['uml:Class', 'uml:Interface', 'uml:Enumeration', 'uml:DataType'].includes(
+        tipoXmi(elemento) ?? '',
+      )
+    )
+      continue;
     if (proxies.has(texto(elemento['@xmi:id']))) {
       warnings.push({
         element: texto(elemento['@name']) ?? 'conector auxiliar',
@@ -188,10 +243,33 @@ export function parseXmi(xml: string): XmiImport {
     classes.push({
       xmiId: id === null ? null : fromXmiId(id),
       name: nombre,
+      ...(tipoXmi(elemento) === 'uml:Class'
+        ? {}
+        : {
+            kind: (
+              {
+                'uml:Interface': 'INTERFACE',
+                'uml:Enumeration': 'ENUMERATION',
+                'uml:DataType': 'DATA_TYPE',
+              } as Record<string, ClassifierKind>
+            )[tipoXmi(elemento) ?? ''],
+          }),
+      ...(texto(elemento['@isAbstract']) === 'true' ? { isAbstract: true } : {}),
+      ...(tipoXmi(elemento) === 'uml:Enumeration'
+        ? {
+            literals: comoLista(elemento['ownedLiteral']).flatMap((l) =>
+              texto(l['@name']) === null ? [] : [texto(l['@name']) as string],
+            ),
+          }
+        : {}),
+      ...(comoLista(elemento['ownedOperation']).length > 0
+        ? { operations: leerOperaciones(elemento, nombre, primitivos, clasificadores, warnings) }
+        : {}),
       attributes: leerAtributos(
         elemento,
         nombre,
         primitivos,
+        clasificadores,
         unicos,
         claves,
         tiposDeExtension,
@@ -202,10 +280,25 @@ export function parseXmi(xml: string): XmiImport {
   }
 
   const relationships = [
-    ...leerAsociaciones(elementos, porId, warnings, extensiones),
+    ...leerAsociaciones(elementos, porId, warnings, extensiones, legacyAggregation),
     ...leerGeneralizaciones(elementos, porId, warnings),
+    ...leerDependencias(elementos, porId, warnings),
   ];
 
+  for (const extension of extensiones)
+    for (const n of comoLista(
+      (extension['relationshipNotations'] as Nodo | undefined)?.['relationship'],
+    )) {
+      const r = relationships.find(
+        (item) => item.xmiId === fromXmiId(texto(n['@xmi:idref']) ?? ''),
+      );
+      if (r !== undefined)
+        for (const field of ['sourceNavigability', 'targetNavigability'] as const) {
+          const value = texto(n[`@${field}`]);
+          if (value === 'unspecified' || value === 'navigable' || value === 'nonNavigable')
+            Object.assign(r, { [field]: value });
+        }
+    }
   const paquetes = comoLista(raiz['packagedElement']).filter(
     (item) => tipoXmi(item) === 'uml:Package',
   );
@@ -320,7 +413,8 @@ function recolectar(nodo: Nodo): readonly Nodo[] {
 function leerAtributos(
   clase: Nodo,
   nombreClase: string,
-  primitivos: ReadonlyMap<string, ConceptualType>,
+  primitivos: ReadonlyMap<string, string>,
+  clasificadores: ReadonlySet<string>,
   unicos: ReadonlySet<string>,
   claves: ReadonlySet<string>,
   tiposDeExtension: ReadonlyMap<string, ConceptualType>,
@@ -360,17 +454,34 @@ function leerAtributos(
       });
     }
 
+    const referencia = identidadDelTipo(nodo, clasificadores);
+    const rango = multiplicidad(nodo, warnings, `${nombreClase}.${nombre}`);
     atributos.push({
       xmiId: id === null ? null : fromXmiId(id),
       name: nombre,
       type: tipo ?? 'String',
+      ...(referencia === undefined ? {} : { typeXmiId: referencia }),
       primaryKey: texto(nodo['@isID']) === 'true' || (id !== null && claves.has(id)),
       nullable: minimo(nodo) === 0,
       unique: id !== null && unicos.has(id),
+      ...(VISIBILITIES.includes(texto(nodo['@visibility']) as (typeof VISIBILITIES)[number]) &&
+      nodo['@visibility'] !== 'private'
+        ? { visibility: nodo['@visibility'] as UmlAttribute['visibility'] }
+        : {}),
+      ...(nodo['@isStatic'] === 'true' ? { isStatic: true } : {}),
+      ...(nodo['@isDerived'] === 'true' ? { isDerived: true } : {}),
+      ...(nodo['@isReadOnly'] === 'true' ? { isReadOnly: true } : {}),
+      ...(!['1', '0..1'].includes(rango) ? { multiplicity: rango } : {}),
+      ...(defaultValue(nodo) === undefined ? {} : { defaultValue: defaultValue(nodo) as string }),
     });
   }
 
   return atributos;
+}
+
+function identidadDelTipo(node: Nodo, classifiers: ReadonlySet<string>): string | undefined {
+  const id = texto((node['type'] as Nodo | undefined)?.['@xmi:idref']) ?? texto(node['@type']);
+  return id !== null && classifiers.has(id) ? fromXmiId(id) : undefined;
 }
 
 /**
@@ -379,10 +490,7 @@ function leerAtributos(
  * Aceptar las tres cuesta veinte lineas y evita que el primer archivo real que
  * llegue no se pueda importar por una diferencia de notacion.
  */
-function resolverTipo(
-  nodo: Nodo,
-  primitivos: ReadonlyMap<string, ConceptualType>,
-): ConceptualType | null {
+function resolverTipo(nodo: Nodo, primitivos: ReadonlyMap<string, string>): string | null {
   // 1. Referencia a un tipo declarado en el modelo.
   const referencia = nodo['type'] as Nodo | undefined;
   const idref = referencia === undefined ? null : texto(referencia['@xmi:idref']);
@@ -422,11 +530,138 @@ function resolverTipo(
   return primitivos.get(literal) ?? tipoConceptual(literal);
 }
 
+function defaultValue(node: Nodo): string | undefined {
+  const value = node['defaultValue'] as Nodo | undefined;
+  return value === undefined
+    ? undefined
+    : (texto(value['@value']) ?? texto(value['body']) ?? undefined);
+}
+
+function leerOperaciones(
+  clase: Nodo,
+  className: string,
+  types: ReadonlyMap<string, string>,
+  classifiers: ReadonlySet<string>,
+  warnings: XmiWarning[],
+): XmiOperation[] {
+  const typeFor = (node: Nodo, element: string) => {
+    const type = resolverTipo(node, types);
+    if (type === null)
+      warnings.push({ element, reason: 'No se reconoció el tipo; se importa como String.' });
+    return type ?? 'String';
+  };
+  return comoLista(clase['ownedOperation']).flatMap((node, index) => {
+    const name = texto(node['@name']);
+    if (!name) {
+      warnings.push({ element: 'operación', reason: 'Se omitió una operación sin nombre.' });
+      return [];
+    }
+    const params = comoLista(node['ownedParameter']);
+    const result = params.find((p) => p['@direction'] === 'return');
+    const resultLabel = `${className}.${name} (retorno)`;
+    const returnMultiplicity =
+      result === undefined ? '1' : multiplicidad(result, warnings, resultLabel);
+    const returnTypeXmiId =
+      result === undefined ? undefined : identidadDelTipo(result, classifiers);
+    return [
+      {
+        id: fromXmiId(texto(node['@xmi:id']) ?? `operation_${index}`),
+        displayName: name,
+        visibility: VISIBILITIES.includes(
+          texto(node['@visibility']) as (typeof VISIBILITIES)[number],
+        )
+          ? (node['@visibility'] as (typeof VISIBILITIES)[number])
+          : 'public',
+        isStatic: node['@isStatic'] === 'true',
+        isAbstract:
+          node['@isAbstract'] === 'true' ||
+          (node['@isAbstract'] === undefined && tipoXmi(clase) === 'uml:Interface'),
+        parameters: params
+          .filter((p) => p['@direction'] !== 'return')
+          .map((p, i) => {
+            const paramName = texto(p['@name']) ?? `parametro${i + 1}`;
+            const label = `${className}.${name} (${paramName})`;
+            const multiplicity = multiplicidad(p, warnings, label);
+            const typeXmiId = identidadDelTipo(p, classifiers);
+            const initial = defaultValue(p);
+            return {
+              id: fromXmiId(texto(p['@xmi:id']) ?? `parameter_${index}_${i}`),
+              name: paramName,
+              type: typeFor(p, label),
+              direction:
+                p['@direction'] === 'out' || p['@direction'] === 'inout' ? p['@direction'] : 'in',
+              ...(multiplicity === '1' ? {} : { multiplicity }),
+              ...(typeXmiId === undefined ? {} : { typeXmiId }),
+              ...(initial === undefined ? {} : { defaultValue: initial }),
+            };
+          }),
+        ...(result === undefined
+          ? {}
+          : {
+              returnType: typeFor(result, resultLabel),
+              ...(returnMultiplicity === '1' ? {} : { returnMultiplicity }),
+              ...(returnTypeXmiId === undefined ? {} : { returnTypeXmiId }),
+            }),
+      },
+    ];
+  });
+}
+
+function leerDependencias(
+  elements: readonly Nodo[],
+  names: ReadonlyMap<string, string>,
+  warnings: XmiWarning[],
+): XmiRelationship[] {
+  const relationships: XmiRelationship[] = [];
+  const add = (
+    node: Nodo,
+    source: string | null,
+    target: string | null,
+    kind: RelationshipKind,
+  ) => {
+    if (!source || !target || !names.has(source) || !names.has(target)) {
+      warnings.push({
+        element: kind,
+        reason: 'No se pudieron resolver los clasificadores de la dependencia o realización.',
+      });
+      return;
+    }
+    relationships.push({
+      xmiId: texto(node['@xmi:id']) ? fromXmiId(texto(node['@xmi:id']) as string) : null,
+      kind,
+      sourceName: names.get(source) as string,
+      targetName: names.get(target) as string,
+      sourceXmiId: fromXmiId(source),
+      targetXmiId: fromXmiId(target),
+      sourceMultiplicity: '1',
+      targetMultiplicity: '1',
+      sourceRole: null,
+      targetRole: null,
+      ...(texto(node['@name']) ? { name: texto(node['@name']) as string } : {}),
+    });
+  };
+  const ref = (node: Nodo, field: string) =>
+    texto(node[`@${field}`]) ?? texto(comoLista(node[field])[0]?.['@xmi:idref']);
+  for (const node of elements) {
+    if (tipoXmi(node) === 'uml:Dependency' || tipoXmi(node) === 'uml:Realization')
+      add(
+        node,
+        ref(node, 'client'),
+        ref(node, 'supplier'),
+        tipoXmi(node) === 'uml:Dependency' ? 'DEPENDENCY' : 'REALIZATION',
+      );
+    for (const r of comoLista(node['interfaceRealization']))
+      add(r, texto(node['@xmi:id']), texto(r['@contract']) ?? ref(r, 'supplier'), 'REALIZATION');
+  }
+  return relationships;
+}
+
 function leerAsociaciones(
   elementos: readonly Nodo[],
   nombrePorId: ReadonlyMap<string, string>,
   warnings: XmiWarning[],
   extensiones: readonly Nodo[],
+  legacyAggregation = false,
 ): readonly XmiRelationship[] {
   const relaciones: XmiRelationship[] = [];
   // EA puede guardar un memberEnd como ownedAttribute de la clase opuesta.
@@ -439,7 +674,8 @@ function leerAsociaciones(
   for (const elemento of elementos) {
     if (tipoXmi(elemento) !== 'uml:Association') continue;
 
-    const miembros = comoLista(elemento['memberEnd']);
+    const miembros = referenciasDe(elemento, 'memberEnd');
+    const navegables = referenciasDe(elemento, 'navigableOwnedEnd');
     const conector = conectores.find((c) => c['@xmi:idref'] === elemento['@xmi:id']);
     const lista = extremosDe(elemento, extremosPorId).map((extremo) => {
       // EA guarda el diamante en source/target.type de su extensión. Su
@@ -485,7 +721,11 @@ function leerAsociaciones(
     });
     // Nuestro modelo coloca el todo en el origen, que es tambien donde se
     // dibuja el diamante. Algunos exportadores escriben ese extremo segundo.
-    const [origen, destino] = aggregateIndex === 1 ? [segundo, primero] : [primero, segundo];
+    const [origen, destino] = (
+      conector || legacyAggregation ? aggregateIndex === 1 : aggregateIndex === 0
+    )
+      ? [segundo, primero]
+      : [primero, segundo];
     const claseOrigen = resolverExtremo(origen, nombrePorId);
     const claseDestino = resolverExtremo(destino, nombrePorId);
 
@@ -500,7 +740,7 @@ function leerAsociaciones(
     const nombreDestino = claseDestino.name;
 
     const id = texto(elemento['@xmi:id']);
-    const aggregation = texto(origen['@aggregation']);
+    const aggregation = texto((conector || legacyAggregation ? origen : destino)['@aggregation']);
     const kind: RelationshipKind | undefined =
       aggregation === 'composite'
         ? 'COMPOSITION'
@@ -526,6 +766,13 @@ function leerAsociaciones(
         warnings,
         `${nombreOrigen} → ${nombreDestino}: destino`,
       ),
+      ...(texto(elemento['@name']) ? { name: texto(elemento['@name']) as string } : {}),
+      ...(navegables.includes(texto(origen['@xmi:id']) ?? '')
+        ? { sourceNavigability: 'navigable' as const }
+        : {}),
+      ...(navegables.includes(texto(destino['@xmi:id']) ?? '')
+        ? { targetNavigability: 'navigable' as const }
+        : {}),
       sourceRole: texto(origen['@name']),
       targetRole: texto(destino['@name']),
     });
@@ -542,7 +789,12 @@ function leerGeneralizaciones(
   const relaciones: XmiRelationship[] = [];
 
   for (const clase of elementos) {
-    if (tipoXmi(clase) !== 'uml:Class') continue;
+    if (
+      !['uml:Class', 'uml:Interface', 'uml:Enumeration', 'uml:DataType'].includes(
+        tipoXmi(clase) ?? '',
+      )
+    )
+      continue;
     const sourceName = texto(clase['@name']);
     if (sourceName === null) continue;
     const sourceId = texto(clase['@xmi:id']);
@@ -605,12 +857,18 @@ function indexarExtremos(elementos: readonly Nodo[]): ReadonlyMap<string, Nodo> 
   return extremos;
 }
 
+function referenciasDe(elemento: Nodo, campo: 'memberEnd' | 'navigableOwnedEnd'): string[] {
+  const ids = [
+    ...(texto(elemento[`@${campo}`])?.split(/\s+/) ?? []),
+    ...comoLista(elemento[campo]).map((ref) => texto(ref['@xmi:idref']) ?? ''),
+  ];
+  return [...new Set(ids)];
+}
+
 function extremosDe(elemento: Nodo, extremos: ReadonlyMap<string, Nodo>): readonly Nodo[] {
-  const miembros = comoLista(elemento['memberEnd']);
+  const miembros = referenciasDe(elemento, 'memberEnd');
   return miembros.length > 0
-    ? miembros
-        .map((m) => extremos.get(texto(m['@xmi:idref']) ?? ''))
-        .filter((e): e is Nodo => e !== undefined)
+    ? miembros.map((id) => extremos.get(id)).filter((e): e is Nodo => e !== undefined)
     : comoLista(elemento['ownedEnd']);
 }
 
@@ -659,10 +917,11 @@ function normalizarClasesAsociativas(
       base = porId.get(referencias[0]) ?? clase;
     }
     const participantes = extremosDe(base, extremos);
+    const miembros = referenciasDe(base, 'memberEnd');
     if (
       id === null ||
       participantes.length !== 2 ||
-      (comoLista(base['memberEnd']).length > 0 && comoLista(base['memberEnd']).length !== 2) ||
+      (miembros.length > 0 && miembros.length !== 2) ||
       participantes.some((e) => {
         const participante = porId.get(idDeExtremo(e));
         return (
@@ -885,24 +1144,16 @@ function tipoXmi(nodo: Nodo): string | null {
 }
 
 function multiplicidad(extremo: Nodo, warnings: XmiWarning[], element: string): Multiplicity {
-  const inferior = minimo(extremo);
   const lower = valorLimite(extremo['lowerValue']) ?? '1';
-  const upper = valorLimite(extremo['upperValue']) ?? '1';
-  const muchos = maximo(extremo) === '*' || Number(upper) > 1;
-  const result: Multiplicity = muchos
-    ? inferior === 0
-      ? '0..*'
-      : '1..*'
-    : inferior === 0
-      ? '0..1'
-      : '1';
-  if (!['0', '1'].includes(lower) || !['1', '*', '-1'].includes(upper)) {
-    warnings.push({
-      element,
-      reason: `La multiplicidad ${lower}..${upper} no se representa exactamente. Se importa como ${result}; revisa este extremo antes de aplicar.`,
-    });
-  }
-  return result;
+  const rawUpper = valorLimite(extremo['upperValue']) ?? '1';
+  const upper = rawUpper === '-1' ? '*' : rawUpper;
+  const result = lower === upper ? lower : `${lower}..${upper}`;
+  if (multiplicityBounds(result) !== null) return result;
+  warnings.push({
+    element,
+    reason: `La multiplicidad ${result} no es válida; revisa este extremo. Se importa como 1.`,
+  });
+  return '1';
 }
 
 function minimo(nodo: Nodo): number {
@@ -912,15 +1163,15 @@ function minimo(nodo: Nodo): number {
   return valor === null ? 1 : Number(valor) === 0 ? 0 : 1;
 }
 
-function maximo(nodo: Nodo): string {
-  const valor = valorLimite(nodo['upperValue']);
-  if (valor === null) return '1';
-  return valor === '*' || valor === '-1' ? '*' : '1';
-}
-
 function valorLimite(nodo: unknown): string | null {
   if (typeof nodo !== 'object' || nodo === null) return null;
-  return texto((nodo as Nodo)['@value']);
+  const literal = nodo as Nodo;
+  return (
+    texto(literal['@value']) ??
+    (['uml:LiteralInteger', 'uml:LiteralUnlimitedNatural'].includes(tipoXmi(literal) ?? '')
+      ? '0'
+      : null)
+  );
 }
 
 function tipoConceptual(nombre: string): ConceptualType | null {

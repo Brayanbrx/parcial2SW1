@@ -23,6 +23,8 @@ export const ERROR_CODES = [
   'ROLE_NAME_COLLISION',
   'MANY_TO_MANY_RELATIONSHIP',
   'UNSUPPORTED_MULTIPLICITY',
+  'INVALID_UML_MODEL',
+  'GENERATION_UNSUPPORTED_UML',
   // Herencia. Las cuatro construcciones que el modelo relacional no puede
   // proyectar: una clase que se hereda a si misma, un ciclo, dos superclases
   // —Java solo tiene una— y un miembro que tapa al que ya venia de arriba.
@@ -48,6 +50,7 @@ export const PRECONDITION_CODES = [
   'WRITE_ACCESS_DENIED',
   'UNKNOWN_CLASS',
   'UNKNOWN_ATTRIBUTE',
+  'UNKNOWN_OPERATION',
   'UNKNOWN_RELATIONSHIP',
   'SELF_RELATIONSHIP',
 ] as const;
@@ -82,6 +85,7 @@ export const validationIssueSchema = z.object({
   suggestion: z.string().optional(),
   /** Identificadores de los elementos implicados, para que la interfaz los resalte. */
   elementIds: z.array(z.string()).default([]),
+  scope: z.enum(['UML', 'GENERATION']).optional(),
 });
 export type ValidationIssue = z.infer<typeof validationIssueSchema>;
 

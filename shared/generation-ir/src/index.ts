@@ -372,13 +372,17 @@ function buildAttributes(umlClass: UmlClass, heredaClave: boolean): IrAttribute[
 }
 
 function toIrAttribute(attribute: UmlAttribute, primaryKey: boolean): IrAttribute {
-  const mapping = JAVA_TYPE_BY_CONCEPTUAL_TYPE[attribute.type];
+  // validateModel rejects custom UML types before projection; keep a runtime guard here too.
+  const type = attribute.type as ConceptualType;
+  const mapping = JAVA_TYPE_BY_CONCEPTUAL_TYPE[type];
+  if (mapping === undefined)
+    throw new Error(`El generador no transforma el tipo UML «${attribute.type}».`);
   return {
     sourceAttributeId: attribute.id,
     displayName: attribute.displayName,
     fieldName: attribute.codeName,
     columnName: attribute.databaseName,
-    conceptualType: attribute.type,
+    conceptualType: type,
     javaType: mapping.type,
     postgresType: mapping.postgresType,
     javaImport: 'import' in mapping ? mapping.import : null,

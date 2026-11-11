@@ -1,6 +1,8 @@
 import {
   hasErrors,
   severityOf,
+  SCHEMA_VERSION,
+  UML_PRIMITIVE_TYPES,
   type BoardState,
   type Command,
   type CommandBatch,
@@ -112,6 +114,7 @@ export function planBatch(state: BoardState, batch: CommandBatch): BatchOutcome 
     return { applied: false, issues: preconditionIssues };
   }
 
+  if (draft.schemaVersion === '1.0.0') draft.schemaVersion = SCHEMA_VERSION;
   return { applied: true, state: draft, issues: [] };
 }
 
@@ -135,6 +138,50 @@ function applyCommand(draft: BoardState, command: Command): ValidationIssue[] {
       return createClass(draft, command);
     case 'RENAME_CLASS':
       return renameClass(draft, command);
+    case 'UPDATE_CLASS': {
+      const target = findClass(draft, command.payload.classId);
+      if (target === undefined) return [unknownClass(command.payload.classId)];
+      const { classId: _classId, ...changes } = command.payload;
+      Object.assign(target, changes);
+      return [];
+    }
+    case 'ADD_OPERATION': {
+      const target = findClass(draft, command.payload.classId);
+      if (target === undefined) return [unknownClass(command.payload.classId)];
+      const operations = target.operations ?? [];
+      if (
+        draft.semantic.classes.some((c) =>
+          c.operations?.some((o) => o.id === command.payload.operation.id),
+        )
+      )
+        return [
+          issue('DUPLICATE_ID', 'Ya existe esa operación.', [
+            target.id,
+            command.payload.operation.id,
+          ]),
+        ];
+      const before = operations.findIndex((o) => o.id === command.payload.beforeOperationId);
+      target.operations = [...operations];
+      target.operations.splice(
+        before < 0 ? operations.length : before,
+        0,
+        structuredClone(command.payload.operation),
+      );
+      return [];
+    }
+    case 'UPDATE_OPERATION':
+    case 'DELETE_OPERATION': {
+      const { classId, operationId } = command.payload;
+      const target = findClass(draft, classId);
+      if (target === undefined) return [unknownClass(classId)];
+      const operation = target.operations?.find((o) => o.id === operationId);
+      if (operation === undefined)
+        return [issue('UNKNOWN_OPERATION', 'La operación ya no existe.', [classId, operationId])];
+      if (command.type === 'DELETE_OPERATION')
+        target.operations = target.operations?.filter((o) => o.id !== operationId);
+      else Object.assign(operation, command.payload.changes);
+      return [];
+    }
     case 'DELETE_CLASS':
       return deleteClass(draft, command);
     case 'MOVE_CLASS':
@@ -174,6 +221,7 @@ function createClass(draft: BoardState, command: CommandOf<'CREATE_CLASS'>): Val
     codeName: names.codeName,
     databaseName: names.databaseName,
     attributes: [],
+    ...pickDefined(command.payload, ['kind', 'isAbstract', 'literals']),
   };
 
   draft.semantic.classes.push(umlClass);
@@ -193,6 +241,15 @@ function renameClass(draft: BoardState, command: CommandOf<'RENAME_CLASS'>): Val
   if ('issue' in names) return [names.issue(classId, 'La clase')];
 
   // RA-04: el identificador no cambia, asi que ninguna relacion se rompe.
+  const previousTypes = new Set([umlClass.displayName, umlClass.codeName]);
+  for (const primitive of [...UML_PRIMITIVE_TYPES, 'void']) previousTypes.delete(primitive);
+  for (const c of draft.semantic.classes) {
+    for (const a of c.attributes) if (previousTypes.has(a.type)) a.type = displayName;
+    for (const o of c.operations ?? []) {
+      if (o.returnType !== undefined && previousTypes.has(o.returnType)) o.returnType = displayName;
+      for (const p of o.parameters) if (previousTypes.has(p.type)) p.type = displayName;
+    }
+  }
   umlClass.displayName = displayName;
   umlClass.codeName = names.codeName;
   umlClass.databaseName = names.databaseName;
@@ -259,6 +316,17 @@ function addAttribute(draft: BoardState, command: CommandOf<'ADD_ATTRIBUTE'>): V
     primaryKey: command.payload.primaryKey ?? false,
     nullable: command.payload.nullable ?? true,
     unique: command.payload.unique ?? false,
+    ...(umlClass.kind === 'INTERFACE' && command.payload.visibility === undefined
+      ? { visibility: 'public' as const }
+      : {}),
+    ...pickDefined(command.payload, [
+      'visibility',
+      'isStatic',
+      'multiplicity',
+      'defaultValue',
+      'isDerived',
+      'isReadOnly',
+    ]),
   };
 
   const before =
@@ -300,6 +368,17 @@ function updateAttribute(
   if (command.payload.primaryKey !== undefined) attribute.primaryKey = command.payload.primaryKey;
   if (command.payload.nullable !== undefined) attribute.nullable = command.payload.nullable;
   if (command.payload.unique !== undefined) attribute.unique = command.payload.unique;
+  Object.assign(
+    attribute,
+    pickDefined(command.payload, [
+      'visibility',
+      'isStatic',
+      'multiplicity',
+      'defaultValue',
+      'isDerived',
+      'isReadOnly',
+    ]),
+  );
 
   if (beforeAttributeId !== undefined && beforeAttributeId !== attributeId) {
     attributes.splice(index, 1);
@@ -360,6 +439,7 @@ function createRelationship(
     targetClassId: payload.targetClassId,
     sourceMultiplicity: payload.sourceMultiplicity,
     targetMultiplicity: payload.targetMultiplicity,
+    ...pickDefined(payload, ['name', 'sourceNavigability', 'targetNavigability']),
     ...(payload.sourceRoleName === undefined ? {} : { sourceRoleName: payload.sourceRoleName }),
     ...(payload.targetRoleName === undefined ? {} : { targetRoleName: payload.targetRoleName }),
   };
@@ -379,6 +459,10 @@ function updateRelationship(
   if (kind === 'GENERALIZATION' && relationship.sourceClassId === relationship.targetClassId)
     return [invalidSelfGeneralization(relationshipId, relationship.sourceClassId)];
   if (kind !== undefined) relationship.kind = kind;
+  Object.assign(
+    relationship,
+    pickDefined(command.payload, ['name', 'sourceNavigability', 'targetNavigability']),
+  );
 
   // `null` borra el rol; `undefined` lo deja como estaba. Sin esa distincion no
   // habria forma de quitar un rol ya asignado.
@@ -445,6 +529,15 @@ function changeMultiplicity(
 
 function findClass(draft: BoardState, classId: string): UmlClass | undefined {
   return draft.semantic.classes.find((c) => c.id === classId);
+}
+
+function pickDefined<T extends object, K extends keyof T>(
+  value: T,
+  keys: readonly K[],
+): Partial<Pick<T, K>> {
+  return Object.fromEntries(
+    keys.filter((key) => value[key] !== undefined).map((key) => [key, value[key]]),
+  ) as Partial<Pick<T, K>>;
 }
 
 function findRelationship(draft: BoardState, relationshipId: string): UmlRelationship | undefined {

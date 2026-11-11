@@ -1,8 +1,15 @@
-import { CONCEPTUAL_TYPES, MULTIPLICITIES, RELATIONSHIP_KINDS } from '@uml/contracts';
+import {
+  CLASSIFIER_KINDS,
+  CONCEPTUAL_TYPES,
+  RELATIONSHIP_KINDS,
+  VISIBILITIES,
+  multiplicitySchema,
+  umlTypeSchema,
+} from '@uml/contracts';
 import { z } from 'zod';
 
 /**
- * Lo que el modelo puede proponer, 11 operaciones, cada una con su carga tipada.
+ * Lo que el modelo puede proponer, con una carga tipada por operación.
  * Si el vocabulario fuera abierto, cada respuesta del proveedor seria una superficie de ataque.
  */
 
@@ -13,6 +20,9 @@ const createClass = z
   .object({
     op: z.literal('CREATE_CLASS'),
     className,
+    classifierKind: z.enum(CLASSIFIER_KINDS).optional(),
+    isAbstract: z.boolean().optional(),
+    literals: z.array(memberName).max(100).optional(),
   })
   .strict();
 
@@ -37,9 +47,37 @@ const addAttribute = z
     className,
     attributeName: memberName,
     type: z.enum(CONCEPTUAL_TYPES),
+    classifierType: umlTypeSchema.optional(),
     primaryKey: z.boolean().optional(),
     required: z.boolean().optional(),
     unique: z.boolean().optional(),
+    visibility: z.enum(VISIBILITIES).optional(),
+    multiplicity: multiplicitySchema.optional(),
+  })
+  .strict();
+
+const addOperation = z
+  .object({
+    op: z.literal('ADD_OPERATION'),
+    className,
+    operationName: memberName,
+    visibility: z.enum(VISIBILITIES).optional(),
+    isStatic: z.boolean().optional(),
+    isAbstract: z.boolean().optional(),
+    returnType: umlTypeSchema.optional(),
+    parameters: z
+      .array(
+        z
+          .object({
+            name: memberName,
+            type: umlTypeSchema,
+            direction: z.enum(['in', 'out', 'inout']).optional(),
+            multiplicity: multiplicitySchema.optional(),
+          })
+          .strict(),
+      )
+      .max(60)
+      .optional(),
   })
   .strict();
 
@@ -74,8 +112,8 @@ const createRelationship = z
     kind: z.enum(RELATIONSHIP_KINDS).optional(),
     fromClass: className,
     toClass: className,
-    fromMultiplicity: z.enum(MULTIPLICITIES),
-    toMultiplicity: z.enum(MULTIPLICITIES),
+    fromMultiplicity: multiplicitySchema,
+    toMultiplicity: multiplicitySchema,
     fromRole: memberName.optional(),
     toRole: memberName.optional(),
   })
@@ -88,8 +126,8 @@ const changeMultiplicity = z
     toClass: className,
     fromRole: memberName.optional(),
     toRole: memberName.optional(),
-    fromMultiplicity: z.enum(MULTIPLICITIES).optional(),
-    toMultiplicity: z.enum(MULTIPLICITIES).optional(),
+    fromMultiplicity: multiplicitySchema.optional(),
+    toMultiplicity: multiplicitySchema.optional(),
   })
   .strict();
 
@@ -108,6 +146,7 @@ export const assistantOperationSchema = z.discriminatedUnion('op', [
   renameClass,
   deleteClass,
   addAttribute,
+  addOperation,
   updateAttribute,
   deleteAttribute,
   createRelationship,
@@ -185,6 +224,7 @@ export const PROPOSAL_JSON_SCHEMA = {
               'RENAME_CLASS',
               'DELETE_CLASS',
               'ADD_ATTRIBUTE',
+              'ADD_OPERATION',
               'UPDATE_ATTRIBUTE',
               'DELETE_ATTRIBUTE',
               'CREATE_RELATIONSHIP',
@@ -193,9 +233,35 @@ export const PROPOSAL_JSON_SCHEMA = {
             ],
           },
           className: { type: 'string' },
+          classifierKind: { type: 'string', enum: [...CLASSIFIER_KINDS] },
+          literals: { type: 'array', items: { type: 'string' } },
+          visibility: { type: 'string', enum: [...VISIBILITIES] },
+          isStatic: { type: 'boolean' },
+          isAbstract: { type: 'boolean' },
+          multiplicity: { type: 'string' },
+          operationName: { type: 'string' },
+          returnType: { type: 'string' },
+          parameters: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['name', 'type'],
+              properties: {
+                name: { type: 'string' },
+                type: { type: 'string' },
+                direction: { type: 'string', enum: ['in', 'out', 'inout'] },
+                multiplicity: { type: 'string' },
+              },
+            },
+          },
           newName: { type: 'string' },
           attributeName: { type: 'string' },
           type: { type: 'string', enum: [...CONCEPTUAL_TYPES] },
+          classifierType: {
+            type: 'string',
+            description: 'Exact name of a classifier used as the attribute type',
+          },
           primaryKey: { type: 'boolean' },
           required: { type: 'boolean' },
           unique: { type: 'boolean' },
@@ -203,13 +269,11 @@ export const PROPOSAL_JSON_SCHEMA = {
           toClass: { type: 'string' },
           fromMultiplicity: {
             type: 'string',
-            enum: [...MULTIPLICITIES],
             description:
               'Number of fromClass instances per one toClass instance. Pedido -> Cliente: 0..* orders per customer.',
           },
           toMultiplicity: {
             type: 'string',
-            enum: [...MULTIPLICITIES],
             description:
               'Number of toClass instances per one fromClass instance. Pedido -> Cliente: 1 customer per order.',
           },

@@ -22,7 +22,11 @@ export function xmiToBatch(
   const occupied = new Set<string>(
     options.mode === 'ADD'
       ? [
-          ...options.current.classes.flatMap((c) => [c.id, ...c.attributes.map((a) => a.id)]),
+          ...options.current.classes.flatMap((c) => [
+            c.id,
+            ...c.attributes.map((a) => a.id),
+            ...(c.operations ?? []).flatMap((o) => [o.id, ...o.parameters.map((p) => p.id)]),
+          ]),
           ...options.current.relationships.map((r) => r.id),
         ]
       : [],
@@ -61,7 +65,7 @@ export function xmiToBatch(
   const namesInFile = uniqueByName(imported.classes, (item) => item.name);
   const classesById = new Map<string, string | null>();
   const classesByName = new Map<string, string | null>();
-  for (const c of imported.classes) {
+  const mapped = imported.classes.map((c) => {
     const name = key(c.name);
     const uniqueName = namesInFile.get(name) === c;
     const existing =
@@ -70,6 +74,16 @@ export function xmiToBatch(
     const classId = existing?.id ?? allocate(c.xmiId, c.name);
     if (c.xmiId !== null) classesById.set(c.xmiId, classesById.has(c.xmiId) ? null : classId);
     classesByName.set(c.name, classesByName.has(c.name) ? null : classId);
+    return { c, existing, classId };
+  });
+  const resolvedNames = new Map(
+    mapped.map(({ c, existing, classId }) => [classId, existing?.displayName ?? c.name]),
+  );
+  const resolveType = (type: string, typeId?: string) => {
+    const classId = typeId === undefined ? undefined : classesById.get(typeId);
+    return (classId ? resolvedNames.get(classId) : undefined) ?? type;
+  };
+  for (const { c, existing, classId } of mapped) {
     if (!existing) {
       add(
         {
@@ -77,6 +91,7 @@ export function xmiToBatch(
           payload: {
             classId,
             displayName: c.name,
+            ...pick(c, ['kind', 'isAbstract', 'literals']),
             ...(c.position === undefined ? {} : { position: c.position }),
           },
         },
@@ -93,6 +108,7 @@ export function xmiToBatch(
         reason: `Se conserva la clase existente «${existing.displayName}» con la misma identidad.`,
       });
     for (const a of c.attributes) {
+      const type = resolveType(a.type, a.typeXmiId);
       const present = existing?.attributes.find(
         (item) => item.id === a.xmiId || key(item.displayName) === key(a.name),
       );
@@ -100,7 +116,7 @@ export function xmiToBatch(
         skipped.push({
           element: `${c.name}.${a.name}`,
           reason:
-            present.type === a.type &&
+            present.type === type &&
             present.primaryKey === a.primaryKey &&
             present.nullable === a.nullable &&
             present.unique === a.unique &&
@@ -117,13 +133,69 @@ export function xmiToBatch(
             classId,
             attributeId: allocate(a.xmiId, `${c.name}.${a.name}`),
             displayName: a.name,
-            type: a.type,
+            type,
             primaryKey: a.primaryKey,
             nullable: a.nullable,
             unique: a.unique,
+            ...pick(a, [
+              'visibility',
+              'isStatic',
+              'multiplicity',
+              'defaultValue',
+              'isDerived',
+              'isReadOnly',
+            ]),
           },
         },
         `Añadir «${a.name}» a «${c.name}»`,
+      );
+    }
+    for (const { returnTypeXmiId, ...sourceOperation } of c.operations ?? []) {
+      const operation = {
+        ...sourceOperation,
+        ...(sourceOperation.returnType === undefined
+          ? {}
+          : { returnType: resolveType(sourceOperation.returnType, returnTypeXmiId) }),
+        parameters: sourceOperation.parameters.map(({ typeXmiId, ...parameter }) => ({
+          ...parameter,
+          type: resolveType(parameter.type, typeXmiId),
+        })),
+      };
+      if (
+        existing?.operations?.some(
+          (o) =>
+            o.id === operation.id ||
+            (o.displayName === operation.displayName &&
+              JSON.stringify(
+                o.parameters.map((p) => [p.type, p.direction, p.multiplicity ?? '1']),
+              ) ===
+                JSON.stringify(
+                  operation.parameters.map((p) => [p.type, p.direction, p.multiplicity ?? '1']),
+                )),
+        )
+      ) {
+        skipped.push({
+          element: `${c.name}.${operation.displayName}`,
+          reason: 'La operación ya existe; se conserva la versión de la pizarra.',
+        });
+        continue;
+      }
+      add(
+        {
+          type: 'ADD_OPERATION',
+          payload: {
+            classId,
+            operation: {
+              ...operation,
+              id: allocate(operation.id, operation.displayName),
+              parameters: operation.parameters.map((p) => ({
+                ...p,
+                id: allocate(p.id, `${operation.displayName}.${p.name}`),
+              })),
+            },
+          },
+        },
+        `Añadir operación «${operation.displayName}» a «${c.name}»`,
       );
     }
   }
@@ -149,6 +221,7 @@ export function xmiToBatch(
       ...(r.kind === undefined ? {} : { kind: r.kind }),
       sourceMultiplicity: r.sourceMultiplicity,
       targetMultiplicity: r.targetMultiplicity,
+      ...pick(r, ['name', 'sourceNavigability', 'targetNavigability']),
       ...(r.sourceRole === null ? {} : { sourceRoleName: r.sourceRole }),
       ...(r.targetRole === null ? {} : { targetRoleName: r.targetRole }),
     };
@@ -209,12 +282,26 @@ function uniqueByName<T>(items: readonly T[], nameOf: (item: T) => string): Map<
 function equivalent(a: UmlRelationship, b: Omit<UmlRelationship, 'id'>): boolean {
   const kind = a.kind ?? 'ASSOCIATION';
   if (kind !== (b.kind ?? 'ASSOCIATION')) return false;
+  if ((a.name ?? '') !== (b.name ?? '')) return false;
   const ends = (reverse: boolean): boolean =>
     (reverse ? a.targetClassId : a.sourceClassId) === b.sourceClassId &&
     (reverse ? a.sourceClassId : a.targetClassId) === b.targetClassId &&
     (reverse ? a.targetRoleName : a.sourceRoleName) === b.sourceRoleName &&
+    ((reverse ? a.targetNavigability : a.sourceNavigability) ?? 'unspecified') ===
+      (b.sourceNavigability ?? 'unspecified') &&
+    ((reverse ? a.sourceNavigability : a.targetNavigability) ?? 'unspecified') ===
+      (b.targetNavigability ?? 'unspecified') &&
     (reverse ? a.sourceRoleName : a.targetRoleName) === b.targetRoleName &&
     (reverse ? a.targetMultiplicity : a.sourceMultiplicity) === b.sourceMultiplicity &&
     (reverse ? a.sourceMultiplicity : a.targetMultiplicity) === b.targetMultiplicity;
   return ends(false) || (kind === 'ASSOCIATION' && ends(true));
+}
+
+function pick<T extends object, K extends keyof T>(
+  value: T,
+  keys: readonly K[],
+): Partial<Pick<T, K>> {
+  return Object.fromEntries(
+    keys.filter((key) => value[key] !== undefined).map((key) => [key, value[key]]),
+  ) as Partial<Pick<T, K>>;
 }

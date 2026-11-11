@@ -6,8 +6,15 @@ import type { PublishTeamEvent } from './events.js';
 export type TeamTransaction = Prisma.TransactionClient;
 
 // La entrada UML es privada; solo el DTO publico sale al historial.
-export function messageDto({ requestModel: _model, ...message }: TeamMessage) {
-  return message;
+export function messageDto({ requestModel: _model, executionTarget, ...message }: TeamMessage) {
+  const target = executionTarget as { source?: string } | null;
+  const engineLabel =
+    target?.source === 'VM'
+      ? 'IA de VM'
+      : target?.source === 'DEVICE'
+        ? 'Mi computadora'
+        : undefined;
+  return engineLabel ? { ...message, engineLabel } : message;
 }
 
 export async function lockProject(

@@ -36,21 +36,27 @@ class ClassBox extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (umlClass.attributes.isEmpty)
-            SizedBox(
-              height: kRowHeight,
-              child: Padding(
+          if (umlClass.kind == 'ENUMERATION')
+            for (final literal in umlClass.literals)
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'sin atributos',
-                    style: TextStyle(fontSize: 12.5, fontStyle: FontStyle.italic, color: c.claseTenue),
-                  ),
+                child: Text(literal, style: TextStyle(fontSize: 12.5, color: c.claseTexto)),
+              ),
+          for (final a in umlClass.attributes) _AttributeRow(a),
+          if (umlClass.operations.isNotEmpty) Divider(height: 8, color: c.claseBorde),
+          for (final operation in umlClass.operations)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                operation.notation,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: c.claseTexto,
+                  fontStyle: operation.isAbstract ? FontStyle.italic : FontStyle.normal,
+                  decoration: operation.isStatic ? TextDecoration.underline : TextDecoration.none,
                 ),
               ),
             ),
-          for (final a in umlClass.attributes) _AttributeRow(a),
         ],
       ),
     );
@@ -83,19 +89,21 @@ class ClassBox extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text.rich(
-              TextSpan(children: [
-                TextSpan(
-                  text: umlClass.name,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.claseTexto),
-                ),
-                if (umlClass.technicalDiffers)
+              TextSpan(
+                children: [
                   TextSpan(
-                    text: '  ${umlClass.databaseName}',
-                    style: TextStyle(fontSize: 10, fontFamily: 'monospace', color: c.claseTenue),
+                    text: '${umlClass.keyword == null ? '' : '«${umlClass.keyword}»\n'}${umlClass.name}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      fontStyle: umlClass.isAbstract ? FontStyle.italic : FontStyle.normal,
+                      color: c.claseTexto,
+                    ),
                   ),
-              ]),
+                ],
+              ),
               textAlign: TextAlign.center,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -123,38 +131,19 @@ class _AttributeRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.uml;
     final a = attribute;
-    final dim = TextStyle(color: c.claseTenue);
     return SizedBox(
       height: kRowHeight,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7),
-        child: Row(
-          children: [
-            SizedBox(width: 12, child: Text('-', textAlign: TextAlign.center, style: dim)),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  style: TextStyle(fontSize: 12.5, color: c.claseTexto),
-                  children: [
-                    TextSpan(text: a.name),
-                    TextSpan(text: ': ${a.type}', style: dim),
-                    if (!a.nullable && !a.primaryKey)
-                      TextSpan(
-                        text: ' *',
-                        style: TextStyle(color: c.avisoTexto, fontWeight: FontWeight.w600),
-                      ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (a.primaryKey)
-              Text('PK', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: c.avisoTexto, letterSpacing: 0.2))
-            else if (a.unique)
-              Text('U', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: c.claseTenue)),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Text(
+          a.notation,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: c.claseTexto,
+            decoration: a.isStatic ? TextDecoration.underline : TextDecoration.none,
+          ),
         ),
       ),
     );

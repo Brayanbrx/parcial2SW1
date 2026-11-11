@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import {
   BOARD_TYPES,
-  CONCEPTUAL_TYPES,
-  MULTIPLICITIES,
+  CLASSIFIER_KINDS,
+  VISIBILITIES,
+  multiplicityBounds,
   PROJECT_ROLES,
   RELATIONSHIP_KINDS,
   SCHEMA_VERSION,
@@ -19,30 +20,72 @@ import {
 /** RA-04: identidad interna independiente del nombre. Renombrar no rompe relaciones. */
 export const idSchema = z.string().uuid();
 
+export const multiplicitySchema = z
+  .string()
+  .refine(
+    (value) => multiplicityBounds(value) !== null,
+    'Usa un entero o un rango UML válido, como 0..1, 2..5 o 1..*.',
+  );
+export const umlTypeSchema = z.string().trim().min(1).max(200);
+export const memberPropertiesSchema = z.object({
+  visibility: z.enum(VISIBILITIES).optional(),
+  isStatic: z.boolean().optional(),
+  multiplicity: multiplicitySchema.optional(),
+  defaultValue: z.string().max(2000).optional(),
+  isDerived: z.boolean().optional(),
+  isReadOnly: z.boolean().optional(),
+});
+export const parameterSchema = z.object({
+  id: idSchema,
+  name: z.string().trim().min(1),
+  type: umlTypeSchema,
+  direction: z.enum(['in', 'out', 'inout']).default('in'),
+  multiplicity: multiplicitySchema.optional(),
+  defaultValue: z.string().optional(),
+});
+export type UmlParameter = z.infer<typeof parameterSchema>;
+export const operationSchema = z.object({
+  id: idSchema,
+  displayName: z.string().trim().min(1),
+  visibility: z.enum(VISIBILITIES).default('public'),
+  isStatic: z.boolean().default(false),
+  isAbstract: z.boolean().default(false),
+  parameters: z.array(parameterSchema).default([]),
+  returnType: umlTypeSchema.optional(),
+  returnMultiplicity: multiplicitySchema.optional(),
+});
+export type UmlOperation = z.infer<typeof operationSchema>;
+export const classifierPropertiesSchema = z.object({
+  kind: z.enum(CLASSIFIER_KINDS).optional(),
+  isAbstract: z.boolean().optional(),
+  literals: z.array(z.string().trim().min(1)).optional(),
+});
+
 /**
  * RTM-02: tres nombres por elemento.
  *
  * `displayName` es lo que escribe el usuario. Los otros dos los deriva el
  * normalizador de `@uml/domain-core`; nunca se escriben a mano.
  */
-export const attributeSchema = z.object({
+export const attributeSchema = memberPropertiesSchema.extend({
   id: idSchema,
   displayName: z.string().min(1),
   codeName: z.string().min(1),
   databaseName: z.string().min(1),
-  type: z.enum(CONCEPTUAL_TYPES),
+  type: umlTypeSchema,
   primaryKey: z.boolean().default(false),
   nullable: z.boolean().default(true),
   unique: z.boolean().default(false),
 });
 export type UmlAttribute = z.infer<typeof attributeSchema>;
 
-export const classSchema = z.object({
+export const classSchema = classifierPropertiesSchema.extend({
   id: idSchema,
   displayName: z.string().min(1),
   codeName: z.string().min(1),
   databaseName: z.string().min(1),
   attributes: z.array(attributeSchema).default([]),
+  operations: z.array(operationSchema).optional(),
 });
 export type UmlClass = z.infer<typeof classSchema>;
 
@@ -56,8 +99,11 @@ export const relationshipSchema = z.object({
   kind: z.enum(RELATIONSHIP_KINDS).optional(),
   sourceClassId: idSchema,
   targetClassId: idSchema,
-  sourceMultiplicity: z.enum(MULTIPLICITIES),
-  targetMultiplicity: z.enum(MULTIPLICITIES),
+  sourceMultiplicity: multiplicitySchema,
+  targetMultiplicity: multiplicitySchema,
+  name: z.string().optional(),
+  sourceNavigability: z.enum(['unspecified', 'navigable', 'nonNavigable']).optional(),
+  targetNavigability: z.enum(['unspecified', 'navigable', 'nonNavigable']).optional(),
   sourceRoleName: z.string().min(1).optional(),
   targetRoleName: z.string().min(1).optional(),
 });

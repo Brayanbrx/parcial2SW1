@@ -1,6 +1,6 @@
 {
   "$schema": "https://plataforma-uml.local/schemas/board-state.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "id": "T01",
   "title": "Ventas",
   "coverage": "1:N, N:1, decimales, fechas y entidad intermedia",

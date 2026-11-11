@@ -33,14 +33,15 @@ export const softwareLessons: readonly SoftwareLesson[] = [
     title: 'Clases y atributos',
     question: '¿Cómo dibujo una clase y añado sus campos?',
     keywords:
-      'dibujar diagrama entidad tabla campo atributo clase nombre tipo clave primaria requerido unico',
+      'dibujar diagrama entidad tabla campo atributo clase nombre tipo clave primaria requerido unico interfaz enumeracion operacion metodo parametro visibilidad abstracto estatico',
     where: 'Pizarra → Nueva clase → tarjeta de la clase / Propiedades',
     summary:
       'Una clase representa un concepto, como Cliente. Sus atributos describen los datos que guardarás, como nombre o correo.',
     steps: [
       'Pulsa Nueva clase. Haz doble clic en su nombre sobre el diagrama (o usa Propiedades) y cámbialo a Cliente.',
       'Con la clase seleccionada pulsa + Atributo debajo de la tarjeta y escribe nombre: String. Doble clic sobre un atributo lo edita; ⠿ o Alt+↑/↓ cambian su orden.',
-      'Revisa Clave primaria, Requerido y Único según tus necesidades. Selecciona cada clase para editarla y arrástrala para organizar el diagrama.',
+      'En Propiedades, Tipo de elemento permite elegir clase, interfaz, enumeración o tipo de datos. + Operación añade una firma con parámetros y retorno. Propiedades UML de cada atributo permite elegir visibilidad y multiplicidad.',
+      'Usa Abstracta para una clase abstracta y las opciones de operación o atributo para miembros estáticos. Las opciones Clave primaria y Único pertenecen a la generación de base de datos.',
     ],
     practice:
       'Crea Cliente con un atributo nombre de tipo String. Añade un identificador id de tipo UUID y márcalo como Clave primaria.',
@@ -51,7 +52,7 @@ export const softwareLessons: readonly SoftwareLesson[] = [
     title: 'Relaciones entre clases',
     question: '¿Cómo conecto dos clases?',
     keywords:
-      'conectar unir relacion asociacion herencia generalizacion composicion agregacion cardinalidad multiplicidad',
+      'conectar unir relacion asociacion herencia generalizacion composicion agregacion cardinalidad multiplicidad dependencia realizacion navegabilidad',
     where: 'Pizarra → Herramientas → Asociación',
     summary:
       'Las relaciones indican cómo se vinculan los conceptos. Las multiplicidades expresan cuántos elementos pueden participar en cada extremo.',
@@ -62,7 +63,7 @@ export const softwareLessons: readonly SoftwareLesson[] = [
     ],
     practice:
       'Relaciona Cliente con Pedido. Revisa si tu negocio permite varios pedidos por cliente y ajusta las multiplicidades.',
-    tip: 'Vuelve a Seleccionar o pulsa Escape para salir de una herramienta. Selecciona un elemento antes de editar sus propiedades.',
+    tip: 'Dependencia indica que el origen utiliza el destino; Realización conecta una clase con su interfaz. En las asociaciones puedes editar roles, navegabilidad y rangos como 2..5. Escape vuelve a Seleccionar.',
   },
   {
     id: 'collaboration',

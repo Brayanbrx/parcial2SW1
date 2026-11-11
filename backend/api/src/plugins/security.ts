@@ -53,6 +53,8 @@ export const securityPlugin = fp(
           '/auth/password/reset',
           '/auth/verification/resend',
           '/auth/verification/confirm',
+          '/ai-devices/pair',
+          '/ai-devices/pairing',
         ].includes(path ?? '')
       ) {
         await enforceLimit(authentication, request, reply);

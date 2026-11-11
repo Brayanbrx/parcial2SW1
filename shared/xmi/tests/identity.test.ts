@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyBoardState, type Layout } from '@uml/contracts';
+import { emptyBoardState, type Layout, type UmlOperation } from '@uml/contracts';
 import { applyBatch } from '@uml/domain-core';
 import { fixture, VALID_FIXTURE_IDS } from '@uml/fixtures';
 import {
@@ -13,6 +13,165 @@ import { applyBatchToDocument, readBoardState, seedDocument } from '@uml/yjs-ada
 import * as Y from 'yjs';
 
 const actorId = '11111111-1111-4111-8111-111111111111';
+it('conserva referencias a una clase renombrada al añadir un XMI anterior', () => {
+  const customer = {
+    id: '20000000-0000-4000-8000-000000000101',
+    displayName: 'Comprador',
+    codeName: 'Comprador',
+    databaseName: 'comprador',
+    attributes: [],
+  };
+  const order = {
+    id: '20000000-0000-4000-8000-000000000102',
+    displayName: 'Pedido',
+    codeName: 'Pedido',
+    databaseName: 'pedido',
+    attributes: [],
+  };
+  const state = {
+    ...emptyBoardState(),
+    semantic: { classes: [customer, order], relationships: [] },
+  };
+  const source = {
+    classes: [
+      { ...customer, displayName: 'Cliente', codeName: 'Cliente', databaseName: 'cliente' },
+      {
+        ...order,
+        attributes: [
+          {
+            id: '20000000-0000-4000-8000-000000000103',
+            displayName: 'titular',
+            codeName: 'titular',
+            databaseName: 'titular',
+            type: 'Cliente',
+            primaryKey: false,
+            nullable: false,
+            unique: false,
+          },
+        ],
+        operations: [
+          {
+            id: '20000000-0000-4000-8000-000000000104',
+            displayName: 'convertir',
+            visibility: 'public' as const,
+            isStatic: false,
+            isAbstract: false,
+            returnType: 'Cliente',
+            parameters: [
+              {
+                id: '20000000-0000-4000-8000-000000000105',
+                name: 'cliente',
+                type: 'Cliente',
+                direction: 'in' as const,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    relationships: [],
+  };
+  const imported = parseXmi(serializeToXmi251(source, { modelName: 'Ventas' }));
+  const { batch } = xmiToBatch(imported, { mode: 'ADD', current: state.semantic, actorId });
+  const result = applyBatch(state, batch);
+  expect(result.applied).toBe(true);
+  if (result.applied)
+    expect(result.state.semantic.classes.find((c) => c.id === order.id)).toMatchObject({
+      attributes: [{ type: 'Comprador' }],
+      operations: [{ returnType: 'Comprador', parameters: [{ type: 'Comprador' }] }],
+    });
+});
+
+it('respeta el cero implícito de un literal y avisa al sustituir tipos de operaciones', () => {
+  const parsed = parseXmi(`<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model name="Ventas">
+    <packagedElement xmi:type="uml:Class" xmi:id="A" name="Pedido">
+      <ownedAttribute xmi:id="a" name="descuento" type="Integer">
+        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="lower"/>
+        <upperValue xmi:type="uml:LiteralUnlimitedNatural" value="1"/>
+      </ownedAttribute>
+      <ownedOperation xmi:id="o" name="buscar">
+        <ownedParameter xmi:id="p" name="criterio" type="Externo"/>
+        <ownedParameter xmi:id="r" direction="return" type="ResultadoExterno"/>
+      </ownedOperation>
+    </packagedElement>
+  </uml:Model></xmi:XMI>`);
+  expect(parsed.classes[0]).toMatchObject({
+    attributes: [{ nullable: true }],
+    operations: [{ returnType: 'String', parameters: [{ type: 'String' }] }],
+  });
+  expect(parsed.warnings.map((warning) => warning.element)).toEqual([
+    'Pedido.buscar (criterio)',
+    'Pedido.buscar (retorno)',
+  ]);
+});
+
+it('importa extremos referenciados mediante memberEnd y navigableOwnedEnd en atributos XML', () => {
+  const result =
+    parseXmi(`<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20161101">
+    <uml:Model name="Ventas">
+      <packagedElement xmi:type="uml:Class" xmi:id="A" name="Cliente">
+        <ownedAttribute xmi:type="uml:Property" xmi:id="ext1" name="pedidos" type="B" association="AB"/>
+      </packagedElement>
+      <packagedElement xmi:type="uml:Class" xmi:id="B" name="Pedido"/>
+      <packagedElement xmi:type="uml:Association" xmi:id="AB" memberEnd="ext1 ext2" navigableOwnedEnd="ext2">
+        <ownedEnd xmi:type="uml:Property" xmi:id="ext2" name="cliente" type="A" association="AB"/>
+      </packagedElement>
+    </uml:Model>
+  </xmi:XMI>`);
+  expect(result.warnings).toEqual([]);
+  expect(result.relationships).toMatchObject([
+    {
+      sourceName: 'Pedido',
+      targetName: 'Cliente',
+      sourceRole: 'pedidos',
+      targetRole: 'cliente',
+      targetNavigability: 'navigable',
+    },
+  ]);
+});
+
+it('añadir conserva sobrecargas que solo difieren en la multiplicidad', () => {
+  const id = (number: number) => `20000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
+  const operation = (number: number, multiplicity: string): UmlOperation => ({
+    id: id(number),
+    displayName: 'buscar',
+    visibility: 'public',
+    isStatic: false,
+    isAbstract: false,
+    parameters: [
+      { id: id(number + 1), name: 'filtro', type: 'String', direction: 'in', multiplicity },
+    ],
+  });
+  const classifier = {
+    id: id(1),
+    displayName: 'Pedido',
+    codeName: 'Pedido',
+    databaseName: 'pedido',
+    attributes: [],
+  };
+  const semantic = {
+    classes: [{ ...classifier, operations: [operation(2, '1')] }],
+    relationships: [],
+  };
+  const imported = parseXmi(
+    serializeToXmi251(
+      {
+        classes: [{ ...classifier, operations: [operation(4, '1..*')] }],
+        relationships: [],
+      },
+      { modelName: 'Ventas' },
+    ),
+  );
+  const { batch, skipped } = xmiToBatch(imported, { mode: 'ADD', current: semantic, actorId });
+  expect(skipped).toEqual([]);
+  const result = applyBatch({ ...emptyBoardState(), semantic }, batch);
+  expect(result.applied).toBe(true);
+  if (result.applied)
+    expect(
+      result.state.semantic.classes[0]?.operations?.map((o) => o.parameters[0]?.multiplicity),
+    ).toEqual(['1', '1..*']);
+});
+
 for (const serializer of [serializeToXmi, serializeToXmi251, serializeToEnterpriseArchitect]) {
   describe(serializer.name, () => {
     for (const id of VALID_FIXTURE_IDS)

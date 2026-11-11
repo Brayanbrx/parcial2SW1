@@ -1,6 +1,6 @@
 {
   "$schema": "https://plataforma-uml.local/schemas/board-state.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "id": "T03",
   "title": "Barberia",
   "coverage": "Caso de la aplicacion movil: varias claves foraneas en la entidad de registro",

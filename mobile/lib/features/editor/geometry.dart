@@ -11,21 +11,20 @@ const double kRowHeight = 22;
 const double kListPadding = 10;
 
 /// Alto de la tarjeta según cuántos atributos tiene (`altoDeNodo`).
-double nodeHeight(int attributes) =>
-    kHeaderHeight + kListPadding + math.max(attributes, 1) * kRowHeight;
+double nodeHeight(int attributes) => math.max(80, kHeaderHeight + kListPadding + attributes * kRowHeight);
 
 enum Side { left, right, top, bottom, loopSource, loopTarget }
 
 /// Punto de un lado donde se ancla la línea (los `Handle` de React Flow).
 Offset anchorOf(Rect r, Side side) => switch (side) {
-      Side.left => Offset(r.left, r.center.dy),
-      Side.right => Offset(r.right, r.center.dy),
-      Side.top => Offset(r.center.dx, r.top),
-      Side.bottom => Offset(r.center.dx, r.bottom),
-      // Los dos anclajes del bucle de una asociación recursiva (42 % y 58 %).
-      Side.loopSource => Offset(r.left + r.width * 0.42, r.bottom),
-      Side.loopTarget => Offset(r.left + r.width * 0.58, r.bottom),
-    };
+  Side.left => Offset(r.left, r.center.dy),
+  Side.right => Offset(r.right, r.center.dy),
+  Side.top => Offset(r.center.dx, r.top),
+  Side.bottom => Offset(r.center.dx, r.bottom),
+  // Los dos anclajes del bucle de una asociación recursiva (42 % y 58 %).
+  Side.loopSource => Offset(r.left + r.width * 0.42, r.bottom),
+  Side.loopTarget => Offset(r.left + r.width * 0.58, r.bottom),
+};
 
 /// `ladosMasCortos`: el eje dominante decide por dónde sale la línea.
 (Side, Side) shortestSides(Rect source, Rect target, {required bool recursive}) {
@@ -73,7 +72,25 @@ class DiagramGeometry {
   DiagramGeometry(this.model, this.layout, {Map<String, Offset> overrides = const {}}) {
     for (final c in model.classes) {
       final position = overrides[c.id] ?? layout.positions[c.id] ?? Offset.zero;
-      final size = layout.sizes[c.id] ?? Size(kNodeWidth, nodeHeight(c.attributes.length));
+      final lines = [
+        c.name,
+        ...c.attributes.map((a) => a.notation),
+        ...c.operations.map((o) => o.notation),
+        ...c.literals,
+      ];
+      final naturalWidth = math.max(
+        kNodeWidth,
+        math.min(760.0, lines.map((s) => s.length * 7.0 + 32).reduce(math.max)),
+      );
+      final naturalHeight = math.max(
+        80.0,
+        44.0 +
+            (c.keyword == null ? 0 : 24) +
+            (c.attributes.length + c.operations.length + c.literals.length) * 22 +
+            (c.operations.isEmpty ? 0 : 12) +
+            (c.kind == 'ENUMERATION' ? 12 : 0),
+      );
+      final size = layout.sizes[c.id] ?? Size(naturalWidth, naturalHeight);
       rects[c.id] = position & size;
     }
     edges = _route();
@@ -99,9 +116,7 @@ class DiagramGeometry {
         .where((r) => rects.containsKey(r.sourceId) && rects.containsKey(r.targetId))
         .toList();
     final lanes = _parallelLanes(drawable);
-    return [
-      for (final r in drawable) _routeOne(r, lanes[r.id] ?? (index: 0, count: 1)),
-    ];
+    return [for (final r in drawable) _routeOne(r, lanes[r.id] ?? (index: 0, count: 1))];
   }
 
   EdgeRoute _routeOne(UmlRelationship r, ({int index, int count}) lane) {
@@ -159,16 +174,12 @@ class DiagramGeometry {
 
   /// `extremo`: separada de la clase y por encima de la línea, salvo cuando la
   /// línea es casi vertical; ahí estorbaría y se aparta al lado.
-  static Offset _labelNear(Offset from, Offset toward,
-      {double separation = 18, double vertical = -6}) {
+  static Offset _labelNear(Offset from, Offset toward, {double separation = 18, double vertical = -6}) {
     final d = toward - from;
     final length = d.distance == 0 ? 1.0 : d.distance;
     final ux = d.dx / length;
     final uy = d.dy / length;
-    return Offset(
-      from.dx + ux * separation,
-      from.dy + uy * separation + (uy.abs() > 0.8 ? 0 : vertical),
-    );
+    return Offset(from.dx + ux * separation, from.dy + uy * separation + (uy.abs() > 0.8 ? 0 : vertical));
   }
 
   /// Relaciones entre el mismo par de clases: cada una va en su carril.

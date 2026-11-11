@@ -58,10 +58,6 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
         streamRef.current = stream;
         if (videoRef.current !== null) {
           videoRef.current.srcObject = stream;
-          // No basta con tener el flujo: hasta que no llegan los metadatos,
-          // `videoWidth` y `videoHeight` valen cero y la captura saldria como
-          // un lienzo de 0x0. Se habilita el boton cuando hay medidas.
-          videoRef.current.onloadedmetadata = () => setLista(true);
         }
       } catch (causa) {
         if (!cancelado) {
@@ -80,48 +76,61 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
     };
   }, [detener]);
 
+  function cuadroDisponible(event: React.SyntheticEvent<HTMLVideoElement>): void {
+    const video = event.currentTarget;
+    if (vigente.current && video.readyState >= 2 && video.videoWidth && video.videoHeight)
+      setLista(true);
+  }
+
   function tomar(): void {
     const video = videoRef.current;
     if (video === null || !lista || capturaPendiente.current || !vigente.current) return;
 
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      detener();
-      setError('La cámara todavía no entrega imagen. Espera un momento e inténtalo otra vez.');
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      setLista(false);
       return;
     }
 
     const lienzo = document.createElement('canvas');
-    lienzo.width = video.videoWidth;
-    lienzo.height = video.videoHeight;
+    const escala = Math.min(1, 2560 / Math.max(video.videoWidth, video.videoHeight));
+    lienzo.width = Math.max(1, Math.round(video.videoWidth * escala));
+    lienzo.height = Math.max(1, Math.round(video.videoHeight * escala));
     const contexto = lienzo.getContext('2d');
     if (contexto === null) {
       detener();
       setError('No se pudo preparar la imagen de la cámara.');
       return;
     }
-    contexto.drawImage(video, 0, 0);
-    capturaPendiente.current = true;
-    setCapturando(true);
+    try {
+      contexto.drawImage(video, 0, 0, lienzo.width, lienzo.height);
+      capturaPendiente.current = true;
+      setCapturando(true);
 
-    // JPEG y no PNG: la foto de un pizarrón en PNG son varios megabytes y viaja
-    // en base64 dentro de la petición. La calidad de 0,92 no pierde trazo.
-    lienzo.toBlob(
-      (blob) => {
-        // toBlob no se puede abortar: cancelar o salir invalida su resultado.
-        if (!vigente.current) return;
-        capturaPendiente.current = false;
-        setCapturando(false);
-        if (blob === null) {
-          detener();
-          setError('No se pudo capturar la imagen.');
-          return;
-        }
-        const sello = new Date().toISOString().slice(0, 19).replaceAll(':', '-');
-        onCaptura(new File([blob], `captura-${sello}.jpg`, { type: 'image/jpeg' }));
-      },
-      'image/jpeg',
-      0.92,
-    );
+      // JPEG y no PNG: la foto de un pizarrón en PNG son varios megabytes y viaja
+      // en base64 dentro de la petición. La calidad de 0,92 no pierde trazo.
+      lienzo.toBlob(
+        (blob) => {
+          // toBlob no se puede abortar: cancelar o salir invalida su resultado.
+          if (!vigente.current) return;
+          capturaPendiente.current = false;
+          setCapturando(false);
+          if (blob === null) {
+            detener();
+            setError('No se pudo capturar la imagen.');
+            return;
+          }
+          const sello = new Date().toISOString().slice(0, 19).replaceAll(':', '-');
+          onCaptura(new File([blob], `captura-${sello}.jpg`, { type: 'image/jpeg' }));
+        },
+        'image/jpeg',
+        0.92,
+      );
+    } catch {
+      capturaPendiente.current = false;
+      setCapturando(false);
+      detener();
+      setError('No se pudo capturar la imagen. Intenta abrir la cámara otra vez.');
+    }
   }
 
   return (
@@ -134,6 +143,8 @@ export function CapturaCamara({ onCaptura, onCerrar }: CapturaCamaraProps): Reac
             autoPlay
             playsInline
             muted
+            onLoadedData={cuadroDisponible}
+            onCanPlay={cuadroDisponible}
             aria-label="Vista de la cámara"
           />
           <div className="camara-acciones">

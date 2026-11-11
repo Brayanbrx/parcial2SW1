@@ -1,10 +1,12 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import type { Server } from '@hocuspocus/server';
-import { collaborationRoomName, commandBatchSchema, type BoardState } from '@uml/contracts';
+import type { Connection, Server } from '@hocuspocus/server';
+import type { PrismaClient } from '@prisma/client';
+import { collaborationRoomName, commandBatchSchema, roleCanWrite } from '@uml/contracts';
 import { applyBatchToDocument, readBoardState } from '@uml/yjs-adapter';
 import { z } from 'zod';
 import type { CollaborationContext } from './auth/authorize.js';
+import { revalidateRoomAccess } from './auth/room-access.js';
 
 const MAX_BYTES = 256 * 1024;
 
@@ -12,6 +14,8 @@ const bodySchema = z.object({
   projectId: z.string().uuid(),
   boardId: z.string().uuid(),
   batch: commandBatchSchema,
+  recorded: z.boolean().default(false),
+  sessionVersion: z.number().int().nonnegative().default(0),
 });
 
 /**
@@ -27,9 +31,10 @@ export async function handleApplyBatch(options: {
   request: IncomingMessage;
   secret: string | undefined;
   server: Server<CollaborationContext>;
+  prisma: PrismaClient;
   respond: (status: number, body: unknown) => void;
 }): Promise<void> {
-  const { request, secret, server, respond } = options;
+  const { request, secret, server, prisma, respond } = options;
   const supplied = Buffer.from(request.headers.authorization ?? '');
   const expected = Buffer.from(`Bearer ${secret ?? ''}`);
   if (!secret || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
@@ -66,30 +71,57 @@ export async function handleApplyBatch(options: {
     return;
   }
 
-  const { projectId, boardId, batch } = parsed.data;
-  const connection = await server.hocuspocus.openDirectConnection(
-    collaborationRoomName(projectId, boardId),
-    { projectId, boardId } as unknown as CollaborationContext,
-  );
+  const { projectId, boardId, batch, recorded, sessionVersion } = parsed.data;
+  const room = collaborationRoomName(projectId, boardId);
+  const connection = await server.hocuspocus.openDirectConnection(room, {
+    projectId,
+    boardId,
+  } as unknown as CollaborationContext);
+  let status = 200;
+  let body: unknown;
   try {
-    let outcome: ReturnType<typeof applyBatchToDocument> | undefined;
-    let state: BoardState | undefined;
-    await connection.transact((document) => {
-      outcome = applyBatchToDocument(document, batch, 'mobile-api');
-      if (outcome.applied) state = readBoardState(document);
-    });
-    if (!outcome) {
-      respond(500, { error: 'not_applied' });
-      return;
+    const document = server.hocuspocus.documents.get(room);
+    if (!document) throw new Error('No se abrió el documento.');
+    const access = await revalidateRoomAccess(
+      prisma,
+      boardId,
+      document.getConnections() as Connection<CollaborationContext>[],
+      batch.actorId,
+    );
+    const actor = access.members.get(batch.actorId);
+    if (
+      access.projectId !== projectId ||
+      !actor ||
+      !roleCanWrite(actor.role) ||
+      actor.user.sessionVersion !== sessionVersion
+    ) {
+      status = 403;
+      body = { error: 'forbidden' };
+    } else {
+      const fingerprint = createHash('sha256').update(JSON.stringify(batch)).digest('hex');
+      await connection.transact((live) => {
+        // Se guarda junto al cambio. Un reintento tras perder la respuesta puede
+        // llegar antes de que la API haya escrito la auditoría en PostgreSQL.
+        const receipts = live.getMap<string>('mobileBatchReceipts');
+        const previous = receipts.get(batch.batchId);
+        if (previous !== undefined && previous !== fingerprint) {
+          status = 409;
+          body = { error: 'audit_conflict' };
+          return;
+        }
+        const outcome =
+          previous !== undefined || recorded
+            ? { applied: true, issues: [] }
+            : applyBatchToDocument(live, batch, 'mobile-api');
+        if (outcome.applied) {
+          if (!recorded && previous === undefined) receipts.set(batch.batchId, fingerprint);
+          const state = readBoardState(live);
+          body = { ...outcome, model: state.semantic, layout: state.layout };
+        } else body = outcome;
+      });
     }
-    const { applied, issues } = outcome;
-    respond(200, {
-      applied,
-      issues,
-      // Modelo y layout ya con el cambio: el cliente no espera al guardado diferido.
-      ...(applied && state ? { model: state.semantic, layout: state.layout } : {}),
-    });
   } finally {
     await connection.disconnect();
   }
+  respond(status, body);
 }

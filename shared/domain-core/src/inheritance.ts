@@ -26,7 +26,10 @@ function isGeneralization(relationship: UmlRelationship): boolean {
  * distinguen por su notacion y por lo que documentan, no por lo que generan.
  */
 export function isStructuralRelationship(relationship: UmlRelationship): boolean {
-  return !isGeneralization(relationship);
+  return (
+    relationship.kind === undefined ||
+    ['ASSOCIATION', 'AGGREGATION', 'COMPOSITION'].includes(relationship.kind)
+  );
 }
 
 export interface InheritanceGraph {

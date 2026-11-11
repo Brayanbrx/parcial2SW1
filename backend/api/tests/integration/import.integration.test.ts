@@ -379,7 +379,9 @@ describe('importacion y exportacion', () => {
       const respuesta = await api.request('POST', `/boards/${boardId}/import/image`, {
         token: duena.token,
         body: {
-          image: PNG.repeat(30_000).slice(0, 4_000_000),
+          image: Buffer.concat([Buffer.from(PNG, 'base64'), Buffer.alloc(3_000_000)]).toString(
+            'base64',
+          ),
           mediaType: 'image/png',
           mode: 'ADD',
           model: vacio,

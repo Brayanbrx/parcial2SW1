@@ -1,6 +1,7 @@
 import {
   CONCEPTUAL_TYPES,
-  type ConceptualType,
+  multiplicityBounds,
+  type UmlOperation,
   type Multiplicity,
   type SemanticModel,
   type UmlAttribute,
@@ -65,9 +66,29 @@ export function serializeToXmi251(model: SemanticModel, options: SerializeOption
 }
 
 function serialize(model: SemanticModel, options: SerializeOptions, modern: boolean): string {
-  const idDeTipo = new Map<ConceptualType, string>(
+  const idDeTipo = new Map<string, string>(
     CONCEPTUAL_TYPES.map((tipo) => [tipo, `${XMI_ID_PREFIX}primitive_${tipo}`]),
   );
+
+  const primitiveNames = new Set<string>(CONCEPTUAL_TYPES);
+  for (const c of model.classes)
+    for (const type of [
+      ...c.attributes.map((a) => a.type),
+      ...(c.operations ?? []).flatMap((o) => [o.returnType, ...o.parameters.map((p) => p.type)]),
+    ]) {
+      if (
+        type &&
+        type !== 'void' &&
+        !model.classes.some((item) => item.displayName === type || item.codeName === type)
+      )
+        primitiveNames.add(type);
+    }
+  for (const type of primitiveNames)
+    if (!idDeTipo.has(type)) idDeTipo.set(type, `_primitive_extra_${idDeTipo.size}`);
+  for (const c of model.classes) {
+    idDeTipo.set(c.displayName, xmiId(c.id));
+    idDeTipo.set(c.codeName, xmiId(c.id));
+  }
 
   const lineas: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -81,9 +102,9 @@ function serialize(model: SemanticModel, options: SerializeOptions, modern: bool
   ];
 
   // Declaramos los tipos antes de las clases para facilitar la lectura.
-  for (const tipo of CONCEPTUAL_TYPES) {
+  for (const tipo of primitiveNames) {
     lineas.push(
-      `    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="${idDeTipo.get(tipo) as string}" name="${tipo}"/>`,
+      `    <packagedElement xmi:type="uml:PrimitiveType" xmi:id="${idDeTipo.get(tipo) as string}" name="${escapar(tipo)}"/>`,
     );
   }
 
@@ -94,14 +115,21 @@ function serialize(model: SemanticModel, options: SerializeOptions, modern: bool
         idDeTipo,
         model.relationships.filter(
           (relationship) =>
-            relationship.kind === 'GENERALIZATION' && relationship.sourceClassId === umlClass.id,
+            (relationship.kind === 'GENERALIZATION' || relationship.kind === 'REALIZATION') &&
+            relationship.sourceClassId === umlClass.id,
         ),
       ),
     );
   }
 
   for (const relationship of model.relationships) {
-    if (relationship.kind === 'GENERALIZATION') continue;
+    if (relationship.kind === 'GENERALIZATION' || relationship.kind === 'REALIZATION') continue;
+    if (relationship.kind === 'DEPENDENCY') {
+      lineas.push(
+        `    <packagedElement xmi:type="uml:Dependency" xmi:id="${xmiId(relationship.id)}" name="${escapar(relationship.name ?? '')}" client="${xmiId(relationship.sourceClassId)}" supplier="${xmiId(relationship.targetClassId)}"/>`,
+      );
+      continue;
+    }
     lineas.push(...serializarAsociacion(relationship));
   }
 
@@ -120,18 +148,30 @@ function serialize(model: SemanticModel, options: SerializeOptions, modern: bool
 
 function serializarClase(
   umlClass: UmlClass,
-  idDeTipo: ReadonlyMap<ConceptualType, string>,
+  idDeTipo: ReadonlyMap<string, string>,
   generalizations: readonly UmlRelationship[],
 ): readonly string[] {
   const lineas = [
-    `    <packagedElement xmi:type="uml:Class" xmi:id="${xmiId(umlClass.id)}" name="${escapar(umlClass.displayName)}" visibility="public">`,
+    `    <packagedElement xmi:type="uml:${({ CLASS: 'Class', INTERFACE: 'Interface', ENUMERATION: 'Enumeration', DATA_TYPE: 'DataType' } as const)[umlClass.kind ?? 'CLASS']}" xmi:id="${xmiId(umlClass.id)}" name="${escapar(umlClass.displayName)}" visibility="public"${umlClass.isAbstract ? ' isAbstract="true"' : ''}>`,
   ];
 
   for (const atributo of umlClass.attributes) {
     lineas.push(...serializarAtributo(atributo, idDeTipo));
   }
 
+  for (const [index, literal] of (umlClass.literals ?? []).entries())
+    lineas.push(
+      `      <ownedLiteral xmi:type="uml:EnumerationLiteral" xmi:id="${xmiId(umlClass.id)}_literal_${index}" name="${escapar(literal)}"/>`,
+    );
+  for (const operation of umlClass.operations ?? [])
+    lineas.push(...serializarOperacion(operation, idDeTipo));
   for (const relationship of generalizations) {
+    if (relationship.kind === 'REALIZATION') {
+      lineas.push(
+        `      <interfaceRealization xmi:type="uml:InterfaceRealization" xmi:id="${xmiId(relationship.id)}" name="${escapar(relationship.name ?? '')}" contract="${xmiId(relationship.targetClassId)}" client="${xmiId(relationship.sourceClassId)}" supplier="${xmiId(relationship.targetClassId)}"/>`,
+      );
+      continue;
+    }
     lineas.push(
       `      <generalization xmi:type="uml:Generalization" xmi:id="${xmiId(relationship.id)}" general="${xmiId(relationship.targetClassId)}"/>`,
     );
@@ -143,21 +183,68 @@ function serializarClase(
 
 function serializarAtributo(
   atributo: UmlAttribute,
-  idDeTipo: ReadonlyMap<ConceptualType, string>,
+  idDeTipo: ReadonlyMap<string, string>,
 ): readonly string[] {
   // `isID` es UML estandar y significa exactamente "esta propiedad forma parte
   // de la identidad de la clase": es la clave primaria, sin inventar nada.
   const marcaDeClave = atributo.primaryKey ? ' isID="true"' : '';
   const idAtributo = xmiId(atributo.id);
+  const { lower, upper } = limites(atributo.multiplicity ?? (atributo.nullable ? '0..1' : '1'));
 
   return [
-    `      <ownedAttribute xmi:type="uml:Property" xmi:id="${idAtributo}" name="${escapar(atributo.displayName)}" visibility="private"${marcaDeClave}>`,
+    `      <ownedAttribute xmi:type="uml:Property" xmi:id="${idAtributo}" name="${escapar(atributo.displayName)}" visibility="${atributo.visibility ?? 'private'}"${marcaDeClave}${atributo.isStatic ? ' isStatic="true"' : ''}${atributo.isDerived ? ' isDerived="true"' : ''}${atributo.isReadOnly ? ' isReadOnly="true"' : ''}>`,
     `        <type xmi:idref="${idDeTipo.get(atributo.type) as string}"/>`,
     // Un atributo obligatorio tiene cardinalidad minima 1; uno opcional, 0.
-    `        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="${idAtributo}_lower" value="${atributo.nullable ? '0' : '1'}"/>`,
-    `        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="${idAtributo}_upper" value="1"/>`,
+    `        <lowerValue xmi:type="uml:LiteralInteger" xmi:id="${idAtributo}_lower" value="${lower}"/>`,
+    `        <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="${idAtributo}_upper" value="${upper}"/>`,
+    ...(atributo.defaultValue
+      ? [
+          `        <defaultValue xmi:type="uml:OpaqueExpression" xmi:id="${idAtributo}_default"><body>${escapar(atributo.defaultValue)}</body></defaultValue>`,
+        ]
+      : []),
     '      </ownedAttribute>',
   ];
+}
+
+function serializarOperacion(
+  operation: UmlOperation,
+  types: ReadonlyMap<string, string>,
+): string[] {
+  const id = xmiId(operation.id);
+  const lines = [
+    `      <ownedOperation xmi:type="uml:Operation" xmi:id="${id}" name="${escapar(operation.displayName)}" visibility="${operation.visibility}" isStatic="${operation.isStatic}" isAbstract="${operation.isAbstract}">`,
+  ];
+  const parameters = [
+    ...operation.parameters,
+    ...(operation.returnType && operation.returnType !== 'void'
+      ? [
+          {
+            id: `${operation.id}_return`,
+            name: '',
+            direction: 'return',
+            type: operation.returnType,
+            multiplicity: operation.returnMultiplicity,
+          },
+        ]
+      : []),
+  ];
+  for (const p of parameters) {
+    const { lower, upper } = limites(p.multiplicity ?? '1');
+    const pid = xmiId(p.id);
+    lines.push(
+      `        <ownedParameter xmi:type="uml:Parameter" xmi:id="${pid}" name="${escapar(p.name)}" direction="${p.direction}" type="${types.get(p.type)}">`,
+      `          <lowerValue xmi:type="uml:LiteralInteger" xmi:id="${pid}_lower" value="${lower}"/>`,
+      `          <upperValue xmi:type="uml:LiteralUnlimitedNatural" xmi:id="${pid}_upper" value="${upper}"/>`,
+      ...('defaultValue' in p && p.defaultValue
+        ? [
+            `          <defaultValue xmi:type="uml:OpaqueExpression" xmi:id="${pid}_default"><body>${escapar(p.defaultValue)}</body></defaultValue>`,
+          ]
+        : []),
+      '        </ownedParameter>',
+    );
+  }
+  lines.push('      </ownedOperation>');
+  return lines;
 }
 
 function serializarAsociacion(relationship: UmlRelationship): readonly string[] {
@@ -166,20 +253,21 @@ function serializarAsociacion(relationship: UmlRelationship): readonly string[] 
   const extremoDestino = `${id}_tgt`;
 
   return [
-    `    <packagedElement xmi:type="uml:Association" xmi:id="${id}" visibility="public">`,
+    `    <packagedElement xmi:type="uml:Association" xmi:id="${id}" visibility="public"${relationship.name ? ` name="${escapar(relationship.name)}"` : ''}>`,
     `      <memberEnd xmi:idref="${extremoOrigen}"/>`,
     `      <memberEnd xmi:idref="${extremoDestino}"/>`,
+    ...(relationship.sourceNavigability === 'navigable'
+      ? [`      <navigableOwnedEnd xmi:idref="${extremoOrigen}"/>`]
+      : []),
+    ...(relationship.targetNavigability === 'navigable'
+      ? [`      <navigableOwnedEnd xmi:idref="${extremoDestino}"/>`]
+      : []),
     ...extremo({
       id: extremoOrigen,
       nombre: relationship.sourceRoleName ?? '',
       tipo: relationship.sourceClassId,
       asociacion: id,
       multiplicidad: relationship.sourceMultiplicity,
-      ...(relationship.kind === 'COMPOSITION'
-        ? { aggregation: 'composite' as const }
-        : relationship.kind === 'AGGREGATION'
-          ? { aggregation: 'shared' as const }
-          : {}),
     }),
     ...extremo({
       id: extremoDestino,
@@ -187,6 +275,11 @@ function serializarAsociacion(relationship: UmlRelationship): readonly string[] 
       tipo: relationship.targetClassId,
       asociacion: id,
       multiplicidad: relationship.targetMultiplicity,
+      ...(relationship.kind === 'COMPOSITION'
+        ? { aggregation: 'composite' as const }
+        : relationship.kind === 'AGGREGATION'
+          ? { aggregation: 'shared' as const }
+          : {}),
     }),
     '    </packagedElement>',
   ];
@@ -213,16 +306,12 @@ function extremo(datos: {
 
 /** RM-04: las cuatro multiplicidades soportadas, en limites UML. */
 export function limites(multiplicidad: Multiplicity): { lower: string; upper: string } {
-  switch (multiplicidad) {
-    case '1':
-      return { lower: '1', upper: '1' };
-    case '0..1':
-      return { lower: '0', upper: '1' };
-    case '0..*':
-      return { lower: '0', upper: '*' };
-    case '1..*':
-      return { lower: '1', upper: '*' };
-  }
+  const bounds = multiplicityBounds(multiplicidad);
+  if (bounds === null) throw new Error(`Multiplicidad UML inválida: ${multiplicidad}`);
+  return {
+    lower: String(bounds.lower),
+    upper: bounds.upper === Infinity ? '*' : String(bounds.upper),
+  };
 }
 
 /**
@@ -236,13 +325,22 @@ function serializarExtension(model: SemanticModel, layout?: Layout): readonly st
     umlClass.attributes.filter((atributo) => atributo.unique).map((atributo) => atributo.id),
   );
 
-  if (unicos.length === 0 && layout === undefined) return [];
+  const notations = model.relationships.filter(
+    (r) => r.sourceNavigability !== undefined || r.targetNavigability !== undefined,
+  );
 
   return [
     `  <xmi:Extension extender="${EXTENDER_PROPIO}">`,
+    '    <umlNotation version="2.5.1"/>',
     '    <uniqueAttributes>',
     ...unicos.map((id) => `      <attribute xmi:idref="${xmiId(id)}"/>`),
     '    </uniqueAttributes>',
+    '    <relationshipNotations>',
+    ...notations.map(
+      (r) =>
+        `      <relationship xmi:idref="${xmiId(r.id)}"${r.sourceNavigability ? ` sourceNavigability="${r.sourceNavigability}"` : ''}${r.targetNavigability ? ` targetNavigability="${r.targetNavigability}"` : ''}/>`,
+    ),
+    '    </relationshipNotations>',
     '    <layout>',
     ...model.classes.flatMap((c) => {
       const position = layout?.positions[c.id],
@@ -290,7 +388,7 @@ function serializarExtensionEa(model: SemanticModel): readonly string[] {
       lineas.push(
         `          <attribute xmi:idref="${xmiId(atributo.id)}" name="${escapar(atributo.displayName)}" scope="Private">`,
         `            <bounds lower="${lower}" upper="${upper}"/>`,
-        `            <properties type="${atributo.type}" collection="false" duplicates="0" changeability="changeable"/>`,
+        `            <properties type="${escapar(atributo.type)}" collection="false" duplicates="0" changeability="changeable"/>`,
         '          </attribute>',
       );
     }

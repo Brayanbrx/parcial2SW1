@@ -5,28 +5,22 @@ import 'package:uml_mobile/features/editor/geometry.dart';
 import 'package:uml_mobile/features/editor/model.dart';
 
 UmlClass clase(String id, {int atributos = 0}) => UmlClass(
-      id: id,
-      name: id,
-      attributes: [
-        for (var i = 0; i < atributos; i++)
-          UmlAttribute(id: '$id-$i', name: 'a$i', type: 'String', primaryKey: false, nullable: true, unique: false),
-      ],
-    );
+  id: id,
+  name: id,
+  attributes: [
+    for (var i = 0; i < atributos; i++)
+      UmlAttribute(id: '$id-$i', name: 'a$i', type: 'String', primaryKey: false, nullable: true, unique: false),
+  ],
+);
 
-UmlRelationship rel(String id, String s, String t, {String kind = 'ASSOCIATION'}) => UmlRelationship(
-      id: id,
-      kind: kind,
-      sourceId: s,
-      targetId: t,
-      sourceMultiplicity: '1',
-      targetMultiplicity: '0..*',
-    );
+UmlRelationship rel(String id, String s, String t, {String kind = 'ASSOCIATION'}) =>
+    UmlRelationship(id: id, kind: kind, sourceId: s, targetId: t, sourceMultiplicity: '1', targetMultiplicity: '0..*');
 
 void main() {
   test('el alto de una tarjeta sigue la fórmula de la web', () {
-    // altoDeNodo: 34 + 10 + max(n, 1) * 22
-    expect(nodeHeight(0), 66);
-    expect(nodeHeight(1), 66);
+    // altoDeNodo: max(80, 34 + 10 + n * 22)
+    expect(nodeHeight(0), 80);
+    expect(nodeHeight(1), 80);
     expect(nodeHeight(3), 110);
   });
 
@@ -66,24 +60,24 @@ void main() {
     // Línea horizontal anclada a media altura (33): los carriles se separan
     // en vertical, ±12 px.
     expect(edges[0].points, hasLength(4));
-    expect(edges[0].sourceToward.dy, closeTo(33 - 12, 0.001));
-    expect(edges[1].sourceToward.dy, closeTo(33 + 12, 0.001));
+    expect(edges[0].sourceToward.dy, closeTo(40 - 12, 0.001));
+    expect(edges[1].sourceToward.dy, closeTo(40 + 12, 0.001));
   });
 
   test('una relación sola es una línea recta entre los anclajes', () {
     final model = SemanticModel(classes: [clase('A'), clase('B')], relationships: [rel('r', 'A', 'B')]);
     final layout = BoardLayout(positions: {'A': Offset.zero, 'B': const Offset(500, 0)});
     final e = DiagramGeometry(model, layout).edges.single;
-    expect(e.points, [const Offset(240, 33), const Offset(500, 33)]);
+    expect(e.points, [const Offset(240, 40), const Offset(500, 40)]);
     // Multiplicidad del origen: 18 px hacia el destino y 6 px por encima.
-    expect(e.sourceLabel, const Offset(258, 27));
+    expect(e.sourceLabel, const Offset(258, 34));
   });
 
   test('una asociación recursiva dibuja un bucle por debajo', () {
     final model = SemanticModel(classes: [clase('A')], relationships: [rel('r', 'A', 'A')]);
     final e = DiagramGeometry(model, BoardLayout(positions: {'A': Offset.zero})).edges.single;
-    expect(e.points.first, Offset(240 * 0.42, 66));
-    expect(e.points[1], Offset(240 * 0.42, 66 + 58));
+    expect(e.points.first, Offset(240 * 0.42, 80));
+    expect(e.points[1], Offset(240 * 0.42, 80 + 58));
   });
 
   test('ignora relaciones hacia clases que ya no existen', () {

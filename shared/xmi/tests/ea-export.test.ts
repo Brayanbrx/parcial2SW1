@@ -246,9 +246,9 @@ describe('perfil de exportación de Enterprise Architect basado en la muestra re
 
   it('resuelve un memberEnd guardado como ownedAttribute, sin convertirlo en atributo de datos', () => {
     const xml = `<xmi:XMI xmlns:xmi="http://schema.omg.org/spec/XMI/2.1" xmlns:uml="http://schema.omg.org/spec/UML/2.1"><uml:Model name="Navegable">
-      <packagedElement xmi:type="uml:Class" xmi:id="A" name="Pedido"><ownedAttribute xmi:type="uml:Property" xmi:id="endB" association="rel"><type xmi:idref="B"/><lowerValue value="0"/><upperValue value="-1"/></ownedAttribute></packagedElement>
+      <packagedElement xmi:type="uml:Class" xmi:id="A" name="Pedido"><ownedAttribute xmi:type="uml:Property" xmi:id="endB" association="rel" aggregation="composite"><type xmi:idref="B"/><lowerValue value="0"/><upperValue value="-1"/></ownedAttribute></packagedElement>
       <packagedElement xmi:type="uml:Class" xmi:id="B" name="Detalle"/>
-      <packagedElement xmi:type="uml:Association" xmi:id="rel"><memberEnd xmi:idref="endB"/><memberEnd xmi:idref="endA"/><ownedEnd xmi:type="uml:Property" xmi:id="endA" aggregation="composite"><type xmi:idref="A"/></ownedEnd></packagedElement>
+      <packagedElement xmi:type="uml:Association" xmi:id="rel"><memberEnd xmi:idref="endB"/><memberEnd xmi:idref="endA"/><ownedEnd xmi:type="uml:Property" xmi:id="endA"><type xmi:idref="A"/></ownedEnd></packagedElement>
     </uml:Model></xmi:XMI>`;
     const imported = parseXmi(xml);
     expect(imported.warnings).toEqual([]);

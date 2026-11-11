@@ -1,10 +1,7 @@
 import {
   CONCEPTUAL_TYPES,
-  MULTIPLICITIES,
   RELATIONSHIP_KINDS,
   type BoardState,
-  type ConceptualType,
-  type Multiplicity,
   type RelationshipKind,
   type UmlClass,
   type UmlRelationship,
@@ -14,6 +11,8 @@ import { useState } from 'react';
 import { gui, newId, type CommandBody } from './commands.js';
 import { IconoChevron } from '../../components/icons.js';
 import { reorderAttributes } from './attribute-order.js';
+import { ClassifierProperties, AttributeProperties, UmlInput } from './UmlProperties.js';
+import { multiplicityBounds } from '@uml/contracts';
 
 export interface InspectorProps {
   readonly state: BoardState;
@@ -108,8 +107,23 @@ function ClassInspector({
         <span>Tabla</span> <code>{umlClass.databaseName}</code>
       </p>
 
+      <ClassifierProperties
+        key={umlClass.id}
+        umlClass={umlClass}
+        state={state}
+        canWrite={canWrite}
+        run={run}
+      />
+
       <Herencia state={state} umlClass={umlClass} onSelect={onSelect} />
 
+      <datalist id={`tipos-${umlClass.id}`}>
+        {[
+          ...new Set([...CONCEPTUAL_TYPES, ...state.semantic.classes.map((c) => c.displayName)]),
+        ].map((type) => (
+          <option key={type} value={type} />
+        ))}
+      </datalist>
       <h3>Atributos</h3>
       <ul className="lista-atributos">
         {umlClass.attributes.length === 0 && (
@@ -129,26 +143,21 @@ function ClassInspector({
                 )
               }
             />
-            <select
-              aria-label={`Tipo del atributo ${atributo.displayName}`}
+            <UmlInput
+              label={`Tipo del atributo ${atributo.displayName}`}
               value={atributo.type}
               disabled={!canWrite}
-              onChange={(evento) =>
-                run(
-                  gui.updateAttribute(umlClass.id, atributo.id, {
-                    type: evento.target.value as ConceptualType,
-                  }),
-                )
-              }
-            >
-              {CONCEPTUAL_TYPES.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {tipo}
-                </option>
-              ))}
-            </select>
+              list={`tipos-${umlClass.id}`}
+              onCommit={(type) => run(gui.updateAttribute(umlClass.id, atributo.id, { type }))}
+            />
 
-            <span className="marcadores">
+            <AttributeProperties
+              attribute={atributo}
+              classId={umlClass.id}
+              disabled={!canWrite}
+              run={run}
+            />
+            <span className="marcadores" aria-label="Opciones de base de datos">
               <label title="Clave primaria">
                 <input
                   type="checkbox"
@@ -175,6 +184,7 @@ function ClassInspector({
                     run(
                       gui.updateAttribute(umlClass.id, atributo.id, {
                         nullable: !evento.target.checked,
+                        multiplicity: evento.target.checked ? '1' : '0..1',
                       }),
                     )
                   }
@@ -403,9 +413,16 @@ function RelationshipInspector({
         </select>
       </label>
 
+      <UmlInput
+        label="Nombre de relación"
+        value={relationship.name ?? ''}
+        disabled={!canWrite}
+        allowEmpty
+        onCommit={(name) => run(gui.updateRelationship(relationship.id, { name }))}
+      />
       <p className="pista-relacion">{RELATIONSHIP_HELP[relationshipKind]}</p>
 
-      {relationshipKind !== 'GENERALIZATION' && (
+      {!['GENERALIZATION', 'DEPENDENCY', 'REALIZATION'].includes(relationshipKind) && (
         <>
           <h3>Extremos</h3>
           <div className="extremos-relacion">
@@ -414,23 +431,33 @@ function RelationshipInspector({
                 {nombre(relationship.sourceClassId)}
                 {esRecursiva && ' · origen'}
               </legend>
+              <UmlInput
+                label="Multiplicidad origen"
+                value={relationship.sourceMultiplicity}
+                disabled={!canWrite}
+                testId="multiplicidad-origen"
+                validate={(s) => multiplicityBounds(s) !== null}
+                onCommit={(value) => run(gui.changeMultiplicity(relationship.id, value))}
+              />
+
               <label>
-                <span>Multiplicidad</span>
+                <span>Navegabilidad</span>
                 <select
-                  value={relationship.sourceMultiplicity}
+                  aria-label="Navegabilidad origen"
+                  value={relationship.sourceNavigability ?? 'unspecified'}
                   disabled={!canWrite}
-                  data-testid="multiplicidad-origen"
-                  onChange={(evento) =>
+                  onChange={(e) =>
                     run(
-                      gui.changeMultiplicity(relationship.id, evento.target.value as Multiplicity),
+                      gui.updateRelationship(relationship.id, {
+                        sourceNavigability: e.target.value as
+                          'unspecified' | 'navigable' | 'nonNavigable',
+                      }),
                     )
                   }
                 >
-                  {MULTIPLICITIES.map((valor) => (
-                    <option key={valor} value={valor}>
-                      {valor}
-                    </option>
-                  ))}
+                  <option value="unspecified">Sin especificar</option>
+                  <option value="navigable">Navegable</option>
+                  <option value="nonNavigable">No navegable</option>
                 </select>
               </label>
               <label>
@@ -457,27 +484,33 @@ function RelationshipInspector({
                 {nombre(relationship.targetClassId)}
                 {esRecursiva && ' · destino'}
               </legend>
+              <UmlInput
+                label="Multiplicidad destino"
+                value={relationship.targetMultiplicity}
+                disabled={!canWrite}
+                testId="multiplicidad-destino"
+                validate={(s) => multiplicityBounds(s) !== null}
+                onCommit={(value) => run(gui.changeMultiplicity(relationship.id, undefined, value))}
+              />
+
               <label>
-                <span>Multiplicidad</span>
+                <span>Navegabilidad</span>
                 <select
-                  value={relationship.targetMultiplicity}
+                  aria-label="Navegabilidad destino"
+                  value={relationship.targetNavigability ?? 'unspecified'}
                   disabled={!canWrite}
-                  data-testid="multiplicidad-destino"
-                  onChange={(evento) =>
+                  onChange={(e) =>
                     run(
-                      gui.changeMultiplicity(
-                        relationship.id,
-                        undefined,
-                        evento.target.value as Multiplicity,
-                      ),
+                      gui.updateRelationship(relationship.id, {
+                        targetNavigability: e.target.value as
+                          'unspecified' | 'navigable' | 'nonNavigable',
+                      }),
                     )
                   }
                 >
-                  {MULTIPLICITIES.map((valor) => (
-                    <option key={valor} value={valor}>
-                      {valor}
-                    </option>
-                  ))}
+                  <option value="unspecified">Sin especificar</option>
+                  <option value="navigable">Navegable</option>
+                  <option value="nonNavigable">No navegable</option>
                 </select>
               </label>
               <label>
@@ -556,6 +589,8 @@ function clase(base: string, collapsed: boolean | undefined): string {
 }
 
 const RELATIONSHIP_LABELS: Readonly<Record<RelationshipKind, string>> = {
+  DEPENDENCY: 'Dependencia',
+  REALIZATION: 'Realización',
   ASSOCIATION: 'Asociación',
   GENERALIZATION: 'Generalización',
   COMPOSITION: 'Composición',
@@ -563,6 +598,8 @@ const RELATIONSHIP_LABELS: Readonly<Record<RelationshipKind, string>> = {
 };
 
 const RELATIONSHIP_HELP: Readonly<Record<RelationshipKind, string>> = {
+  DEPENDENCY: 'El origen utiliza o depende del destino.',
+  REALIZATION: 'El origen implementa la interfaz de destino.',
   ASSOCIATION: 'Vínculo estructural entre dos clases.',
   GENERALIZATION: 'El origen es la subclase y el destino la superclase.',
   COMPOSITION: 'El origen representa el todo y controla el ciclo de vida de la parte.',

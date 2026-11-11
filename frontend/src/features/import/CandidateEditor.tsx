@@ -2,9 +2,11 @@ import {
   CONCEPTUAL_TYPES,
   MULTIPLICITIES,
   RELATIONSHIP_KINDS,
+  VISIBILITIES,
   type BoardState,
   type Command,
   type CommandBatch,
+  type UmlOperation,
 } from '@uml/contracts';
 
 export function CandidateEditor({
@@ -89,7 +91,9 @@ export function CandidateEditor({
                     )
                   }
                 >
-                  {CONCEPTUAL_TYPES.map((tipo) => (
+                  {[
+                    ...new Set([...CONCEPTUAL_TYPES, ...nombres.values(), command.payload.type]),
+                  ].map((tipo) => (
                     <option key={tipo}>{tipo}</option>
                   ))}
                 </select>
@@ -141,6 +145,75 @@ export function CandidateEditor({
                   />
                   Único
                 </label>
+              </div>
+            );
+          }
+
+          if (command.type === 'ADD_OPERATION') {
+            const operation = command.payload.operation;
+            const update = (changes: Partial<UmlOperation>) =>
+              onChange(command.commandId, (current) =>
+                current.type === 'ADD_OPERATION'
+                  ? {
+                      ...current,
+                      payload: {
+                        ...current.payload,
+                        operation: { ...current.payload.operation, ...changes },
+                      },
+                    }
+                  : current,
+              );
+            return (
+              <div className="fila-candidato atributo-candidato">
+                <span>{nombres.get(command.payload.classId) ?? 'Clase'} · método</span>
+                <input
+                  aria-label={`Nombre de método ${numero}`}
+                  value={operation.displayName}
+                  onChange={(event) => update({ displayName: event.target.value })}
+                />
+                <input
+                  aria-label={`Tipo de retorno ${numero}`}
+                  placeholder="Sin retorno"
+                  value={operation.returnType ?? ''}
+                  onChange={(event) => update({ returnType: event.target.value || undefined })}
+                />
+                <select
+                  aria-label={`Visibilidad del método ${numero}`}
+                  value={operation.visibility}
+                  onChange={(event) =>
+                    update({ visibility: event.target.value as UmlOperation['visibility'] })
+                  }
+                >
+                  {VISIBILITIES.map((visibility) => (
+                    <option key={visibility}>{visibility}</option>
+                  ))}
+                </select>
+                {operation.parameters.map((parameter, index) => (
+                  <div key={parameter.id}>
+                    <input
+                      aria-label={`Nombre del parámetro ${index + 1} del método ${numero}`}
+                      value={parameter.name}
+                      onChange={(event) =>
+                        update({
+                          parameters: operation.parameters.map((p) =>
+                            p.id === parameter.id ? { ...p, name: event.target.value } : p,
+                          ),
+                        })
+                      }
+                    />
+                    <input
+                      aria-label={`Tipo del parámetro ${index + 1} del método ${numero}`}
+                      value={parameter.type}
+                      onChange={(event) =>
+                        update({
+                          parameters: operation.parameters.map((p) =>
+                            p.id === parameter.id ? { ...p, type: event.target.value } : p,
+                          ),
+                        })
+                      }
+                    />
+                  </div>
+                ))}
               </div>
             );
           }
@@ -233,7 +306,13 @@ export function CandidateEditor({
                     )
                   }
                 >
-                  {MULTIPLICITIES.map((multiplicidad) => (
+                  {[
+                    ...new Set([
+                      ...MULTIPLICITIES,
+                      command.payload.sourceMultiplicity,
+                      command.payload.targetMultiplicity,
+                    ]),
+                  ].map((multiplicidad) => (
                     <option key={multiplicidad}>{multiplicidad}</option>
                   ))}
                 </select>
@@ -256,7 +335,13 @@ export function CandidateEditor({
                     )
                   }
                 >
-                  {MULTIPLICITIES.map((multiplicidad) => (
+                  {[
+                    ...new Set([
+                      ...MULTIPLICITIES,
+                      command.payload.sourceMultiplicity,
+                      command.payload.targetMultiplicity,
+                    ]),
+                  ].map((multiplicidad) => (
                     <option key={multiplicidad}>{multiplicidad}</option>
                   ))}
                 </select>
@@ -290,6 +375,14 @@ export function CandidateEditor({
 
 export function etiquetaComando(command: Command, nombres: ReadonlyMap<string, string>): string {
   switch (command.type) {
+    case 'UPDATE_CLASS':
+      return 'Actualizar propiedades UML del clasificador';
+    case 'ADD_OPERATION':
+      return `Añadir operación ${command.payload.operation.displayName}`;
+    case 'UPDATE_OPERATION':
+      return 'Actualizar operación';
+    case 'DELETE_OPERATION':
+      return 'Eliminar operación';
     case 'CREATE_CLASS':
       return `Crear clase ${command.payload.displayName}`;
     case 'RENAME_CLASS':

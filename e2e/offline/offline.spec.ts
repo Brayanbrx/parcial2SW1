@@ -384,7 +384,7 @@ test('confirmar una edición en línea conserva los campos editados por otro col
     const remoteNode = remote.getByTestId('clase-NombreRemoto');
     await localNode.locator('[data-atributo]').filter({ hasText: 'nombre: String' }).dblclick();
     const localField = page.getByRole('textbox', { name: 'Atributo nombre', exact: true });
-    await localField.fill('nombreVisible: String');
+    await localField.fill('- nombreVisible: String');
     await remoteNode.locator('[data-atributo]').filter({ hasText: 'nombre: String' }).dblclick();
     const remoteField = remote.getByRole('textbox', { name: 'Atributo nombre', exact: true });
     await remoteField.fill('nombre: Integer');
@@ -392,7 +392,13 @@ test('confirmar una edición en línea conserva los campos editados por otro col
     await expect(
       page.getByRole('combobox', { name: 'Tipo del atributo nombre', exact: true }),
     ).toHaveValue('Integer');
+    await remote.locator('.uml-attribute summary').click();
+    await remote
+      .locator('.uml-attribute')
+      .getByRole('combobox', { name: 'Visibilidad', exact: true })
+      .selectOption('protected');
     await localField.press('Enter');
+    await expect(localNode.locator('.visibilidad .guion')).toHaveText('#');
     await expect(localNode).toContainText('nombreVisible: Integer');
     await expect(remoteNode).toContainText('nombreVisible: Integer');
   } finally {

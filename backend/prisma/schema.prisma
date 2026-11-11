@@ -55,6 +55,9 @@ model User {
   createdInvites ProjectInvite[]
   generations    Generation[]
   deviceTokens   DeviceToken[]
+  aiDevices      AiDevice[]
+  aiPairings     AiDevicePairing[]
+  aiPreference   UserAiPreference?
 
   @@map("users")
 }
@@ -333,6 +336,7 @@ enum AiReviewMode {
 enum AiSource {
   PROVIDERS
   LOCAL
+  VM
 }
 
 model ProjectAiSettings {
@@ -371,6 +375,7 @@ model TeamMessage {
   errorCode       String?
   // Entrada privada para idempotencia y procesamiento posterior. No forma parte del DTO.
   requestModel    Json?
+  executionTarget Json?
   createdAt       DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
 
@@ -428,6 +433,42 @@ model AiReviewState {
   board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@map("ai_review_states")
+}
+
+/// Credencial limitada a inferencia, vinculada a la versión de sesión del propietario.
+model AiDevice {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  name           String
+  tokenHash      String   @unique
+  sessionVersion Int
+  expiresAt      DateTime @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("ai_devices")
+}
+
+model AiDevicePairing {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  codeHash       String   @unique
+  sessionVersion Int
+  expiresAt      DateTime @db.Timestamptz(3)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_device_pairings")
+}
+
+model UserAiPreference {
+  userId   String  @id @db.Uuid
+  source   String  @default("PROJECT")
+  deviceId String? @db.Uuid
+  model    String?
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_ai_preferences")
 }
 
 /// Dispositivo movil registrado para recibir notificaciones push (FCM).

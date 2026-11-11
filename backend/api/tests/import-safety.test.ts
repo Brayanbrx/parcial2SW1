@@ -18,7 +18,13 @@ const model = {
   ],
   relationships: [],
 };
-const photo = { model, image: 'eA==', mediaType: 'image/png', mode: 'REPLACE' };
+const photo = {
+  model,
+  image:
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  mediaType: 'image/png',
+  mode: 'REPLACE',
+};
 
 const servers: ReturnType<typeof Fastify>[] = [];
 afterEach(async () => {
@@ -47,10 +53,7 @@ describe('seguridad al importar', () => {
     { operations: [], needsClarification: 'La foto no contiene un diagrama de clases.' },
     { operations: [{ op: 'CREATE_CLASS' as const, className: '***' }] },
     {
-      operations: [
-        { op: 'CREATE_CLASS' as const, className: 'Pedido' },
-        { op: 'DELETE_CLASS' as const, className: 'Pedido' },
-      ],
+      operations: [{ op: 'DELETE_CLASS' as const, className: 'Pedido' }],
     },
   ])('una foto sin clases utilizables no prepara borrados ($operations)', async (proposal) => {
     const app = await setup(async () => ({ proposal }));
@@ -75,10 +78,59 @@ describe('seguridad al importar', () => {
     ]);
   });
 
-  it('un XMI que solo contiene una interfaz no ofrece reemplazar las clases existentes', async () => {
+  it('ordena la transcripción de la foto, conserva métodos y omite borrados del modelo', async () => {
+    const app = await setup(async () => ({
+      proposal: {
+        operations: [
+          {
+            op: 'CREATE_RELATIONSHIP',
+            fromClass: 'Cliente',
+            toClass: 'Pedido',
+            fromMultiplicity: '1',
+            toMultiplicity: '0..*',
+          },
+          {
+            op: 'ADD_OPERATION',
+            className: 'Pedido',
+            operationName: 'calcular',
+            returnType: 'Decimal',
+          },
+          { op: 'DELETE_CLASS', className: 'Cliente' },
+          { op: 'CREATE_CLASS', className: 'Pedido' },
+        ],
+      },
+    }));
+    const response = await app.inject({
+      method: 'POST',
+      url: `${base}/image`,
+      payload: { ...photo, mode: 'ADD' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().batch.commands.map((command: { type: string }) => command.type)).toEqual(
+      ['CREATE_CLASS', 'ADD_OPERATION', 'CREATE_RELATIONSHIP'],
+    );
+    expect(response.json().warnings).toContainEqual({
+      element: 'la fotografía',
+      reason: 'Se omitieron cambios ajenos a la transcripción del diagrama.',
+    });
+  });
+
+  it('rechaza una foto con un formato declarado incorrecto antes de consultar al proveedor', async () => {
+    const vision = vi.fn<VisionPort['extractModel']>();
+    const app = await setup(vision);
+    const response = await app.inject({
+      method: 'POST',
+      url: `${base}/image`,
+      payload: { ...photo, mediaType: 'image/jpeg' },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(vision).not.toHaveBeenCalled();
+  });
+
+  it('un XMI sin clasificadores utilizables no ofrece reemplazar las clases existentes', async () => {
     const app = await setup(async () => ({ proposal: { operations: [] } }));
     const xml =
-      '<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model xmi:type="uml:Model" name="Servicios"><packagedElement xmi:type="uml:Interface" xmi:id="i" name="Servicio"/></uml:Model></xmi:XMI>';
+      '<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model xmi:type="uml:Model" name="Servicios"><packagedElement xmi:type="uml:Package" xmi:id="i" name="Servicios"/></uml:Model></xmi:XMI>';
     const response = await app.inject({
       method: 'POST',
       url: `${base}/xmi`,
@@ -90,6 +142,31 @@ describe('seguridad al importar', () => {
       question: expect.stringContaining('no contiene clases'),
     });
     expect(response.json()).not.toHaveProperty('batch');
+  });
+
+  it('ofrece importar una interfaz soportada con confirmación antes de reemplazar', async () => {
+    const app = await setup(async () => ({ proposal: { operations: [] } }));
+    const response = await app.inject({
+      method: 'POST',
+      url: `${base}/xmi`,
+      payload: {
+        model,
+        mode: 'REPLACE',
+        xml: '<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model name="Servicios"><packagedElement xmi:type="uml:Interface" xmi:id="i" name="Servicio"/></uml:Model></xmi:XMI>',
+      },
+    });
+    expect(response.json()).toMatchObject({
+      kind: 'CONFIRMATION',
+      batch: {
+        commands: [
+          expect.objectContaining({ type: 'DELETE_CLASS' }),
+          expect.objectContaining({
+            type: 'CREATE_CLASS',
+            payload: expect.objectContaining({ kind: 'INTERFACE' }),
+          }),
+        ],
+      },
+    });
   });
 
   it('cancela la lectura de la foto cuando el cliente cierra la conexión', async () => {

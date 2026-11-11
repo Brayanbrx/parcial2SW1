@@ -10,6 +10,7 @@ import '../auth/session.dart';
 import 'class_box.dart';
 import 'diagram.dart';
 import 'dialogs.dart';
+import 'uml_dialogs.dart';
 import 'geometry.dart';
 import 'model.dart';
 
@@ -65,11 +66,13 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onStateChange: (state) {
-      final active = state == AppLifecycleState.resumed;
-      if (active && !_foreground) _load(silent: true);
-      _foreground = active;
-    });
+    _lifecycle = AppLifecycleListener(
+      onStateChange: (state) {
+        final active = state == AppLifecycleState.resumed;
+        if (active && !_foreground) _load(silent: true);
+        _foreground = active;
+      },
+    );
     _resolveActor().then((_) => _load());
     // Sin WebSocket: se consulta cada 10 s, solo con la app en primer plano.
     _timer = Timer.periodic(const Duration(seconds: 10), (_) {
@@ -160,13 +163,14 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
     _generation++;
     setState(() => _saving = true);
     try {
-      final result = await ApiClient.instance.post(
-        '/boards/${widget.boardId}/commands',
-        build(BatchBuilder(actor)).build(),
-      ) as Map<String, dynamic>;
+      final result =
+          await ApiClient.instance.post('/boards/${widget.boardId}/commands', build(BatchBuilder(actor)).build())
+              as Map<String, dynamic>;
       if (!mounted) return true;
       setState(() {
-        if (result['model'] != null) _model = SemanticModel.fromJson(result['model']);
+        if (result['model'] != null) {
+          _model = SemanticModel.fromJson(result['model']);
+        }
         _layout = result['layout'] != null && _liveLayout
             ? BoardLayout.fromJson(result['layout'])
             : (_liveLayout ? _layout : BoardLayout.grid(_model.classes));
@@ -199,7 +203,9 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
   String _explain(ApiError e) {
     if (e.code == 'batch_rejected' && e.details is List && (e.details as List).isNotEmpty) {
       final first = (e.details as List).first;
-      if (first is Map && first['message'] is String) return first['message'] as String;
+      if (first is Map && first['message'] is String) {
+        return first['message'] as String;
+      }
     }
     return e.message;
   }
@@ -207,7 +213,13 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
   // --- Clases -----------------------------------------------------------------
 
   Future<void> _createClass() async {
-    final name = await askText(context, title: 'Nueva clase', label: 'Nombre de la clase', hint: 'Cliente', action: 'Crear');
+    final name = await askText(
+      context,
+      title: 'Nueva clase',
+      label: 'Nombre de la clase',
+      hint: 'Cliente',
+      action: 'Crear',
+    );
     if (name == null) return;
     // Donde está mirando el usuario, como `onCreateClass` de la web.
     final center = _tabs.index == 0 ? _diagram.viewportCenter : null;
@@ -216,27 +228,59 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
         ? center - const Offset(kNodeWidth / 2, kHeaderHeight)
         : Offset(40.0 + (n % 3) * 300, 40.0 + (n ~/ 3) * 260);
     final id = newId();
-    final ok = await _apply((b) => b.add('CREATE_CLASS', {
-          'classId': id,
-          'displayName': name,
-          'position': {'x': position.dx.roundToDouble(), 'y': position.dy.roundToDouble()},
-        }));
+    final ok = await _apply(
+      (b) => b.add('CREATE_CLASS', {
+        'classId': id,
+        'displayName': name,
+        'position': {'x': position.dx.roundToDouble(), 'y': position.dy.roundToDouble()},
+      }),
+    );
     if (ok && mounted) setState(() => _selectedId = id);
   }
 
   Future<void> _moveClass(String classId, Offset position) async {
     // Optimista: la caja se queda donde la soltaste mientras se guarda.
     setState(() => _layout = _layout.withPosition(classId, position));
-    await _apply((b) => b.add('MOVE_CLASS', {
-          'classId': classId,
-          'position': {'x': position.dx, 'y': position.dy},
-        }));
+    await _apply(
+      (b) => b.add('MOVE_CLASS', {
+        'classId': classId,
+        'position': {'x': position.dx, 'y': position.dy},
+      }),
+    );
   }
 
   Future<void> _renameClass(UmlClass c) async {
     final name = await askText(context, title: 'Renombrar clase', label: 'Nombre de la clase', initial: c.name);
     if (name == null || name == c.name) return;
     await _apply((b) => b.add('RENAME_CLASS', {'classId': c.id, 'displayName': name}));
+  }
+
+  Future<void> _classifierProperties(UmlClass c) async {
+    final properties = await editClassifier(context, c);
+    if (properties != null) {
+      await _apply((b) => b.add('UPDATE_CLASS', {'classId': c.id, ...properties}));
+    }
+  }
+
+  Future<void> _operation(UmlClass c, [UmlOperation? current]) async {
+    final operation = await editOperation(context, c, current);
+    if (operation == null) return;
+    await _apply((b) {
+      if (operation['isAbstract'] == true && c.kind != 'INTERFACE' && !c.isAbstract) {
+        b.add('UPDATE_CLASS', {'classId': c.id, 'isAbstract': true});
+      }
+      if (current == null) {
+        return b.add('ADD_OPERATION', {'classId': c.id, 'operation': operation});
+      }
+      final changes = Map<String, dynamic>.from(operation)..remove('id');
+      return b.add('UPDATE_OPERATION', {'classId': c.id, 'operationId': current.id, 'changes': changes});
+    });
+  }
+
+  Future<void> _deleteOperation(UmlClass c, UmlOperation operation) async {
+    if (await confirm(context, title: 'Eliminar operación', message: '¿Eliminar ${operation.name} de ${c.name}?')) {
+      await _apply((b) => b.add('DELETE_OPERATION', {'classId': c.id, 'operationId': operation.id}));
+    }
   }
 
   Future<bool> _deleteClass(UmlClass c) async {
@@ -250,36 +294,48 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
   }
 
   Future<void> _addAttribute(UmlClass c) async {
-    final r = await editAttribute(context, title: 'Nuevo atributo en ${c.name}');
+    final r = await editAttribute(
+      context,
+      title: 'Nuevo atributo en ${c.name}',
+      defaultVisibility: c.kind == 'INTERFACE' ? 'public' : 'private',
+    );
     if (r == null) return;
-    await _apply((b) => b.add('ADD_ATTRIBUTE', {
-          'classId': c.id,
-          'attributeId': newId(),
-          'displayName': r.name,
-          'type': r.type,
-          'primaryKey': r.primaryKey,
-          'nullable': r.nullable,
-          'unique': r.unique,
-        }));
+    await _apply(
+      (b) => b.add('ADD_ATTRIBUTE', {
+        'classId': c.id,
+        'attributeId': newId(),
+        'displayName': r.name,
+        'type': r.type,
+        'primaryKey': r.primaryKey,
+        'nullable': r.nullable,
+        'unique': r.unique,
+        ...r.properties,
+      }),
+    );
   }
 
   Future<void> _editAttribute(UmlClass c, UmlAttribute a) async {
     final r = await editAttribute(context, title: 'Editar atributo', current: a);
     if (r == null) return;
-    await _apply((b) => b.add('UPDATE_ATTRIBUTE', {
-          'classId': c.id,
-          'attributeId': a.id,
-          'displayName': r.name,
-          'type': r.type,
-          'primaryKey': r.primaryKey,
-          'nullable': r.nullable,
-          'unique': r.unique,
-        }));
+    await _apply(
+      (b) => b.add('UPDATE_ATTRIBUTE', {
+        'classId': c.id,
+        'attributeId': a.id,
+        'displayName': r.name,
+        'type': r.type,
+        'primaryKey': r.primaryKey,
+        'nullable': r.nullable,
+        'unique': r.unique,
+        ...r.properties,
+      }),
+    );
   }
 
   Future<void> _deleteAttribute(UmlClass c, UmlAttribute a) async {
     final ok = await confirm(context, title: 'Eliminar atributo', message: '¿Eliminar "${a.name}" de ${c.name}?');
-    if (ok) await _apply((b) => b.add('DELETE_ATTRIBUTE', {'classId': c.id, 'attributeId': a.id}));
+    if (ok) {
+      await _apply((b) => b.add('DELETE_ATTRIBUTE', {'classId': c.id, 'attributeId': a.id}));
+    }
   }
 
   // --- Relaciones -------------------------------------------------------------
@@ -291,14 +347,16 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
     }
     final r = await editRelationship(context, _model.classes);
     if (r == null) return;
-    await _apply((b) => b.add('CREATE_RELATIONSHIP', {
-          'relationshipId': newId(),
-          'kind': r.kind,
-          'sourceClassId': r.sourceId,
-          'targetClassId': r.targetId,
-          'sourceMultiplicity': r.sourceMultiplicity,
-          'targetMultiplicity': r.targetMultiplicity,
-        }));
+    await _apply(
+      (b) => b.add('CREATE_RELATIONSHIP', {
+        'relationshipId': newId(),
+        'kind': r.kind,
+        'sourceClassId': r.sourceId,
+        'targetClassId': r.targetId,
+        'sourceMultiplicity': r.sourceMultiplicity,
+        'targetMultiplicity': r.targetMultiplicity,
+      }),
+    );
   }
 
   Future<void> _deleteRelationship(UmlRelationship r) async {
@@ -307,17 +365,34 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
       title: 'Eliminar relación',
       message: '${_model.className(r.sourceId)} → ${_model.className(r.targetId)}',
     );
-    if (ok) await _apply((b) => b.add('DELETE_RELATIONSHIP', {'relationshipId': r.id}));
+    if (ok) {
+      await _apply((b) => b.add('DELETE_RELATIONSHIP', {'relationshipId': r.id}));
+    }
   }
 
   Future<void> _changeMultiplicity(UmlRelationship r) async {
-    final m = await editMultiplicities(context, r);
-    if (m == null) return;
-    await _apply((b) => b.add('CHANGE_MULTIPLICITY', {
+    final fields = await editRelationshipProperties(context, r);
+    if (fields == null) return;
+    await _apply((b) {
+      b.add('UPDATE_RELATIONSHIP', {
+        'relationshipId': r.id,
+        'name': fields['name'],
+        if (r.isStructural) ...{
+          'sourceRoleName': fields['sourceRoleName'] == '' ? null : fields['sourceRoleName'],
+          'targetRoleName': fields['targetRoleName'] == '' ? null : fields['targetRoleName'],
+          'sourceNavigability': fields['sourceNavigability'],
+          'targetNavigability': fields['targetNavigability'],
+        },
+      });
+      if (r.isStructural) {
+        b.add('CHANGE_MULTIPLICITY', {
           'relationshipId': r.id,
-          'sourceMultiplicity': m.$1,
-          'targetMultiplicity': m.$2,
-        }));
+          'sourceMultiplicity': fields['sourceMultiplicity'],
+          'targetMultiplicity': fields['targetMultiplicity'],
+        });
+      }
+      return b;
+    });
   }
 
   // --- UI ---------------------------------------------------------------------
@@ -371,22 +446,21 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
       body: _error != null
           ? ErrorView(message: _error!, onRetry: _load)
           : !_loaded
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  children: [
-                    if (!_canWrite) _banner('Tienes permiso de solo lectura en este proyecto.'),
-                    if (!_liveLayout)
-                      _banner('Este servidor no envía la disposición del diagrama: se muestra en rejilla.'),
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabs,
-                        // El lienzo usa el arrastre: deslizar no cambia de pestaña.
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [_diagramTab(), _classesTab(), _relationsTab(), _activityTab()],
-                      ),
-                    ),
-                  ],
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                if (!_canWrite) _banner('Tienes permiso de solo lectura en este proyecto.'),
+                if (!_liveLayout) _banner('Este servidor no envía la disposición del diagrama: se muestra en rejilla.'),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabs,
+                    // El lienzo usa el arrastre: deslizar no cambia de pestaña.
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [_diagramTab(), _classesTab(), _relationsTab(), _activityTab()],
+                  ),
                 ),
+              ],
+            ),
     );
   }
 
@@ -458,11 +532,15 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Text(plural(_model.classes.length, 'clase', 'clases'),
-                    style: TextStyle(fontSize: 13, color: c.textoSuave)),
+                Text(
+                  plural(_model.classes.length, 'clase', 'clases'),
+                  style: TextStyle(fontSize: 13, color: c.textoSuave),
+                ),
                 const SizedBox(width: 14),
-                Text(plural(_model.relationships.length, 'relación', 'relaciones'),
-                    style: TextStyle(fontSize: 13, color: c.textoSuave)),
+                Text(
+                  plural(_model.relationships.length, 'relación', 'relaciones'),
+                  style: TextStyle(fontSize: 13, color: c.textoSuave),
+                ),
                 const SizedBox(width: 12),
                 if (_canWrite && _liveLayout && _tabs.index == 0)
                   Expanded(
@@ -486,13 +564,15 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
     if (_model.classes.isEmpty) {
       return RefreshIndicator(
         onRefresh: _load,
-        child: ListView(children: const [
-          EmptyState(
-            icon: Icons.table_chart_outlined,
-            title: 'Esta pizarra aún no tiene clases',
-            message: 'Crea la primera con «Nueva clase».',
-          ),
-        ]),
+        child: ListView(
+          children: const [
+            EmptyState(
+              icon: Icons.table_chart_outlined,
+              title: 'Esta pizarra aún no tiene clases',
+              message: 'Crea la primera con «Nueva clase».',
+            ),
+          ],
+        ),
       );
     }
     return RefreshIndicator(
@@ -539,8 +619,14 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
               onEdit: (a) => _editAttribute(cls, a),
               onDelete: (a) => _deleteAttribute(cls, a),
               onRename: () => _renameClass(cls),
+              onProperties: () => _classifierProperties(cls),
+              onAddOperation: () => _operation(cls),
+              onEditOperation: (o) => _operation(cls, o),
+              onDeleteOperation: (o) => _deleteOperation(cls, o),
               onDeleteClass: () async {
-                if (await _deleteClass(cls) && sheetContext.mounted) Navigator.pop(sheetContext);
+                if (await _deleteClass(cls) && sheetContext.mounted) {
+                  Navigator.pop(sheetContext);
+                }
               },
             );
           },
@@ -557,13 +643,15 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
     return RefreshIndicator(
       onRefresh: _load,
       child: rels.isEmpty
-          ? ListView(children: const [
-              EmptyState(
-                icon: Icons.linear_scale,
-                title: 'No hay relaciones',
-                message: 'Une dos clases con «Nueva relación».',
-              ),
-            ])
+          ? ListView(
+              children: const [
+                EmptyState(
+                  icon: Icons.linear_scale,
+                  title: 'No hay relaciones',
+                  message: 'Une dos clases con «Nueva relación».',
+                ),
+              ],
+            )
           : ListView.builder(
               padding: const EdgeInsets.only(bottom: 96),
               itemCount: rels.length,
@@ -571,19 +659,24 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
                 final r = rels[i];
                 final kind = relationshipKinds[r.kind] ?? r.kind;
                 return DecoratedBox(
-                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.borde))),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: c.borde)),
+                  ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-                    leading: SizedBox(width: 40, child: CustomPaint(size: const Size(40, 18), painter: RelationGlyph(r.kind, c))),
+                    leading: SizedBox(
+                      width: 40,
+                      child: CustomPaint(size: const Size(40, 18), painter: RelationGlyph(r.kind, c)),
+                    ),
                     title: Text(
                       '${_model.className(r.sourceId)} → ${_model.className(r.targetId)}',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      r.isGeneralization ? kind : '$kind · ${r.sourceMultiplicity} a ${r.targetMultiplicity}',
+                      !r.isStructural ? kind : '$kind · ${r.sourceMultiplicity} a ${r.targetMultiplicity}',
                       style: TextStyle(color: c.textoSuave),
                     ),
-                    onTap: _canWrite && !_saving && !r.isGeneralization ? () => _changeMultiplicity(r) : null,
+                    onTap: _canWrite && !_saving ? () => _changeMultiplicity(r) : null,
                     trailing: _canWrite
                         ? IconButton(
                             tooltip: 'Eliminar relación',
@@ -607,9 +700,15 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
     return RefreshIndicator(
       onRefresh: _load,
       child: items.isEmpty
-          ? ListView(children: const [
-              EmptyState(icon: Icons.history, title: 'Sin actividad reciente', message: 'Aquí verás quién cambió qué.'),
-            ])
+          ? ListView(
+              children: const [
+                EmptyState(
+                  icon: Icons.history,
+                  title: 'Sin actividad reciente',
+                  message: 'Aquí verás quién cambió qué.',
+                ),
+              ],
+            )
           : ListView.builder(
               itemCount: items.length,
               itemBuilder: (context, i) {
@@ -623,14 +722,23 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
                     .toList();
                 final when = DateTime.tryParse('${a['createdAt']}')?.toLocal();
                 return DecoratedBox(
-                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.borde))),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: c.borde)),
+                  ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     leading: Avatar(name: who, seed: a['actorId'] as String?),
-                    title: Text.rich(TextSpan(children: [
-                      TextSpan(text: who, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      TextSpan(text: ' ${cmds.take(2).join(' y ')}${cmds.length > 2 ? ' y más' : ''}'),
-                    ])),
+                    title: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: who,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          TextSpan(text: ' ${cmds.take(2).join(' y ')}${cmds.length > 2 ? ' y más' : ''}'),
+                        ],
+                      ),
+                    ),
                     subtitle: Text(when == null ? '' : timeAgo(when), style: TextStyle(color: c.textoSuave)),
                   ),
                 );
@@ -650,6 +758,10 @@ class _ClassSheet extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onRename,
+    required this.onProperties,
+    required this.onAddOperation,
+    required this.onEditOperation,
+    required this.onDeleteOperation,
     required this.onDeleteClass,
   });
   final UmlClass umlClass;
@@ -659,6 +771,8 @@ class _ClassSheet extends StatelessWidget {
   final void Function(UmlAttribute) onEdit;
   final void Function(UmlAttribute) onDelete;
   final VoidCallback onRename;
+  final VoidCallback onProperties, onAddOperation;
+  final void Function(UmlOperation) onEditOperation, onDeleteOperation;
   final VoidCallback onDeleteClass;
 
   @override
@@ -668,31 +782,77 @@ class _ClassSheet extends StatelessWidget {
       controller: scroll,
       padding: EdgeInsets.fromLTRB(20, 0, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
       children: [
-        Text('CLASE', style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: c.textoTenue)),
+        Text(
+          classifierKinds[umlClass.kind] ?? 'Clase',
+          style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: c.textoTenue),
+        ),
         const SizedBox(height: 4),
         Text(umlClass.name, style: editorial(context, size: 26)),
         if (umlClass.technicalDiffers)
-          Text('Tabla ${umlClass.databaseName}',
-              style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: c.textoSuave)),
+          Text(
+            'Tabla ${umlClass.databaseName}',
+            style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: c.textoSuave),
+          ),
         const SizedBox(height: 14),
-        Text('ATRIBUTOS', style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: c.textoTenue)),
+        if (umlClass.kind == 'ENUMERATION') Text('Literales: ${umlClass.literals.join(', ')}'),
+        for (final operation in umlClass.operations)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(operation.notation),
+            onTap: canWrite ? () => onEditOperation(operation) : null,
+            trailing: canWrite
+                ? IconButton(
+                    tooltip: 'Eliminar operación ${operation.name}',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => onDeleteOperation(operation),
+                  )
+                : null,
+          ),
+        if (canWrite)
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton(onPressed: onProperties, child: const Text('Propiedades UML')),
+              OutlinedButton(onPressed: onAddOperation, child: const Text('+ Operación')),
+            ],
+          ),
+        Text(
+          'ATRIBUTOS',
+          style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: c.textoTenue),
+        ),
         const SizedBox(height: 4),
         if (umlClass.attributes.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text('sin atributos', style: TextStyle(fontStyle: FontStyle.italic, color: c.claseTenue)),
+            child: Text(
+              'sin atributos',
+              style: TextStyle(fontStyle: FontStyle.italic, color: c.claseTenue),
+            ),
           ),
         for (final a in umlClass.attributes)
           DecoratedBox(
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.borde))),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: c.borde)),
+            ),
             child: ListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
-              leading: Icon(a.primaryKey ? Icons.key : Icons.remove, size: 18, color: a.primaryKey ? c.avisoTexto : c.claseTenue),
-              title: Text.rich(TextSpan(children: [
-                TextSpan(text: a.name, style: const TextStyle(fontSize: 15)),
-                TextSpan(text: ': ${a.type}', style: TextStyle(fontSize: 15, color: c.claseTenue)),
-              ])),
+              leading: Icon(
+                a.primaryKey ? Icons.key : Icons.remove,
+                size: 18,
+                color: a.primaryKey ? c.avisoTexto : c.claseTenue,
+              ),
+              title: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: a.name, style: const TextStyle(fontSize: 15)),
+                    TextSpan(
+                      text: ': ${a.type}',
+                      style: TextStyle(fontSize: 15, color: c.claseTenue),
+                    ),
+                  ],
+                ),
+              ),
               subtitle: Text(
                 [
                   if (a.primaryKey) 'Clave primaria',
@@ -719,10 +879,17 @@ class _ClassSheet extends StatelessWidget {
             runSpacing: 8,
             children: [
               FilledButton.icon(onPressed: onAdd, icon: const Icon(Icons.add, size: 18), label: const Text('Atributo')),
-              OutlinedButton.icon(onPressed: onRename, icon: const Icon(Icons.edit_outlined, size: 18), label: const Text('Renombrar')),
+              OutlinedButton.icon(
+                onPressed: onRename,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Renombrar'),
+              ),
               OutlinedButton.icon(
                 onPressed: onDeleteClass,
-                style: OutlinedButton.styleFrom(foregroundColor: c.errorTexto, side: BorderSide(color: c.error)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.errorTexto,
+                  side: BorderSide(color: c.error),
+                ),
                 icon: const Icon(Icons.delete_outline, size: 18),
                 label: const Text('Eliminar'),
               ),
@@ -749,13 +916,28 @@ class RelationGlyph extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4
       ..strokeJoin = StrokeJoin.round;
-    canvas.drawLine(Offset(2, y), Offset(size.width - 2, y), stroke);
+    if (kind == 'DEPENDENCY' || kind == 'REALIZATION') {
+      for (var x = 2.0; x < size.width - 2; x += 8) {
+        canvas.drawLine(Offset(x, y), Offset((x + 5).clamp(2, size.width - 2).toDouble(), y), stroke);
+      }
+    } else {
+      canvas.drawLine(Offset(2, y), Offset(size.width - 2, y), stroke);
+    }
     Path? marker;
     var filled = false;
     switch (kind) {
-      case 'GENERALIZATION':
+      case 'GENERALIZATION' || 'REALIZATION':
         final x = size.width - 2;
         marker = Path()..addPolygon([Offset(x, y), Offset(x - 11, y - 6), Offset(x - 11, y + 6)], true);
+      case 'DEPENDENCY':
+        final x = size.width - 2;
+        canvas.drawPath(
+          Path()
+            ..moveTo(x - 10, y - 5)
+            ..lineTo(x, y)
+            ..lineTo(x - 10, y + 5),
+          stroke,
+        );
       case 'COMPOSITION' || 'AGGREGATION':
         marker = Path()..addPolygon([Offset(2, y), Offset(9, y - 5), Offset(16, y), Offset(9, y + 5)], true);
         filled = kind == 'COMPOSITION';

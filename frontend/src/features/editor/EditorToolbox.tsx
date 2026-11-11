@@ -68,7 +68,7 @@ export function EditorToolbox(props: EditorToolboxProps): React.JSX.Element {
                 tool="CLASS"
                 activeTool={props.activeTool}
                 label="Clase"
-                description="Crear una entidad en la pizarra"
+                description="Clase, interfaz, enumeración o tipo de datos"
                 shortcut="C"
                 disabled={!props.canWrite}
                 onSelect={props.onToolChange}
@@ -198,17 +198,22 @@ function ToolIcon({ kind }: { readonly kind: EditorTool | 'SEARCH' }): React.JSX
   }
 
   const marker =
-    kind === 'GENERALIZATION' ? (
+    kind === 'GENERALIZATION' || kind === 'REALIZATION' ? (
       <path className="marker" d="m19 8 4 4-4 4Z" />
     ) : kind === 'COMPOSITION' ? (
       <path className="marker filled" d="m4 12 4-4 4 4-4 4Z" />
     ) : kind === 'AGGREGATION' ? (
       <path className="marker" d="m4 12 4-4 4 4-4 4Z" />
+    ) : kind === 'DEPENDENCY' ? (
+      <path className="marker" d="m18 7 5 5-5 5" fill="none" />
     ) : null;
 
   return (
     <svg viewBox="0 0 27 24" aria-hidden="true">
-      <path d="M4 12h19" />
+      <path
+        d="M4 12h19"
+        strokeDasharray={kind === 'DEPENDENCY' || kind === 'REALIZATION' ? '4 2' : undefined}
+      />
       {marker}
     </svg>
   );

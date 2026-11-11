@@ -12,6 +12,7 @@ export default defineConfig({
     // composicion (plan maestro 4.3).
     proxy: {
       '/api': {
+        ws: true,
         target: process.env['VITE_API_TARGET'] ?? 'http://localhost:3001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api(?=\/|$)/, '') || '/',

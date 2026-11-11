@@ -239,7 +239,7 @@ if ($SaltarEnv) {
     $valores = [ordered]@{
         AI_LOCAL_BASE_URL          = 'http://host.docker.internal:11434/v1'
         AI_LOCAL_MODEL             = $Nombre
-        AI_LOCAL_TIMEOUT_MS        = '60000'
+        AI_LOCAL_TIMEOUT_MS        = '300000'
         AI_LOCAL_CONTEXT_WINDOW    = "$Contexto"
         AI_LOCAL_MAX_OUTPUT_TOKENS = '4096'
         AI_LOCAL_REASONING         = 'none'

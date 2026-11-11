@@ -1,6 +1,6 @@
 {
   "$schema": "https://plataforma-uml.local/schemas/board-state.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "id": "T06",
   "title": "Inscripciones",
   "coverage": "Muchos a muchos con atributos, resuelto con entidad intermedia (RM-01)",

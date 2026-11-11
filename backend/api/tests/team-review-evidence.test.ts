@@ -151,3 +151,33 @@ describe('prueba de contenido del moderador', () => {
     expect(reviewText([issue], true)).not.toContain('intermedia');
   });
 });
+
+describe('evidencia de clasificadores y operaciones UML', () => {
+  it('no da por aplicada una operación ni sus cambios si solo existe la clase', () => {
+    const id = randomUUID();
+    const add = command('ADD_OPERATION', {
+      classId: a,
+      operation: { id, displayName: 'calcular', parameters: [] },
+    });
+    expect(hasBatchEvidence(base, [add])).toBe(false);
+    const withOperation = apply([add], base);
+    expect(hasBatchEvidence(withOperation, [add])).toBe(true);
+    const update = command('UPDATE_OPERATION', {
+      classId: a,
+      operationId: id,
+      changes: { visibility: 'protected' },
+    });
+    expect(hasBatchEvidence(withOperation, [update])).toBe(false);
+    expect(hasBatchEvidence(apply([update], withOperation), [update])).toBe(true);
+    expect(touchedElements([update])).toEqual(new Set([a, id]));
+  });
+  it('comprueba el tipo de clasificador y sus literales', () => {
+    const update = command('UPDATE_CLASS', {
+      classId: a,
+      kind: 'ENUMERATION',
+      literals: ['ACTIVO', 'INACTIVO'],
+    });
+    expect(hasBatchEvidence(base, [update])).toBe(false);
+    expect(hasBatchEvidence(apply([update], base), [update])).toBe(true);
+  });
+});

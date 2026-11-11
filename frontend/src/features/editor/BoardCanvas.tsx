@@ -21,6 +21,7 @@ import { AsociacionEdge, type AsociacionEdgeType } from './AsociacionEdge.js';
 import { ClassNode, type ClassNodeType } from './ClassNode.js';
 import { toolLabel, type EditorTool } from './editor-tools.js';
 import type { Participant } from './useBoardDocument.js';
+import { classifierSize } from './uml-layout.js';
 
 const nodeTypes = { umlClass: ClassNode };
 const edgeTypes = { asociacion: AsociacionEdge };
@@ -81,6 +82,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const avisos = new Set<string>();
 
     for (const hallazgo of issues) {
+      if (hallazgo.scope === 'GENERATION') continue;
       const destino = hallazgo.severity === 'ERROR' ? errores : avisos;
       for (const id of hallazgo.elementIds) destino.add(id);
     }
@@ -120,13 +122,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           // los nodos que declaran tamano** — sin esto salia un recuadro vacio.
           // El tamano elegido a mano manda sobre el calculado. Si no, anadir
           // un atributo desharia el ajuste que alguien acaba de hacer.
-          width: medida?.width ?? ANCHO_NODO,
-          height: medida?.height ?? altoDeNodo(umlClass.attributes.length),
+          width: medida?.width ?? classifierSize(umlClass).width,
+          height: medida?.height ?? classifierSize(umlClass).height,
           selected: umlClass.id === selectedId,
           draggable: canWrite,
           ariaLabel: `Clase ${umlClass.displayName}, ${umlClass.attributes.length} ${umlClass.attributes.length === 1 ? 'atributo' : 'atributos'}`,
           data: {
             umlClass,
+            typeNames: state.semantic.classes.flatMap((item) => [item.displayName, item.codeName]),
             canWrite,
             primaryKeyId,
             hasError: conError.has(umlClass.id),
@@ -175,6 +178,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           rolOrigen: relacion.sourceRoleName,
           rolDestino: relacion.targetRoleName,
           kind: relacion.kind ?? 'ASSOCIATION',
+          name: relacion.name,
+          sourceNavigability: relacion.sourceNavigability,
+          targetNavigability: relacion.targetNavigability,
           parallelIndex: carril.index,
           parallelCount: carril.count,
         },
@@ -320,7 +326,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       onPaneClick={(event) => {
         if (activeTool === 'CLASS' && canWrite) {
           const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-          props.onCreateClass({ x: point.x - ANCHO_NODO / 2, y: point.y - 48 });
+          props.onCreateClass({ x: point.x - 240 / 2, y: point.y - 48 });
           return;
         }
         props.onSelect(null);
@@ -422,28 +428,11 @@ function agruparRelacionesParalelas(
   return resultado;
 }
 
-/** Ancho fijo de la tarjeta de clase, en pixeles del diagrama. */
-const ANCHO_NODO = 240;
-const ALTO_CABECERA = 34;
-const ALTO_FILA = 22;
-const RELLENO_LISTA = 10;
-
-/**
- * Alto de la tarjeta segun cuantos atributos tiene.
- *
- * Es una estimacion, no una medida: React Flow necesita el numero **antes** de
- * dibujar. Si se queda corto la tarjeta se recorta, asi que la lista de
- * atributos se deja desplazable dentro de su alto.
- */
-function altoDeNodo(atributos: number): number {
-  return ALTO_CABECERA + RELLENO_LISTA + Math.max(atributos, 1) * ALTO_FILA;
-}
-
 function cajaDeNodo(nodo: ClassNodeType): Rect {
   return {
     ...nodo.position,
-    width: nodo.width ?? ANCHO_NODO,
-    height: nodo.height ?? altoDeNodo(nodo.data.umlClass.attributes.length),
+    width: nodo.width ?? classifierSize(nodo.data.umlClass).width,
+    height: nodo.height ?? classifierSize(nodo.data.umlClass).height,
   };
 }
 
@@ -474,11 +463,12 @@ function ladosMasCortos(
   const centro = (classId: string): { x: number; y: number } => {
     const posicion = layout.positions[classId] ?? { x: 0, y: 0 };
     const medida = layout.sizes[classId];
-    const atributos = clases.find((item) => item.id === classId)?.attributes.length ?? 0;
+    const c = clases.find((item) => item.id === classId);
+    const natural = c ? classifierSize(c) : { width: 240, height: 80 };
 
     return {
-      x: posicion.x + (medida?.width ?? ANCHO_NODO) / 2,
-      y: posicion.y + (medida?.height ?? altoDeNodo(atributos)) / 2,
+      x: posicion.x + (medida?.width ?? natural.width) / 2,
+      y: posicion.y + (medida?.height ?? natural.height) / 2,
     };
   };
 

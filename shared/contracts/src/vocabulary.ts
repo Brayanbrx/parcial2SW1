@@ -6,12 +6,16 @@
  */
 
 /** RA-09: todo modelo persistido declara la version de su esquema. */
-export const SCHEMA_VERSION = '1.0.0' as const;
+export const SCHEMA_VERSION = '1.1.0' as const;
 
 /** Vocabulario cerrado de comandos (plan maestro 4.7). RA-06: nunca mutacion arbitraria. */
 export const COMMAND_TYPES = [
   'CREATE_CLASS',
   'RENAME_CLASS',
+  'UPDATE_CLASS',
+  'ADD_OPERATION',
+  'UPDATE_OPERATION',
+  'DELETE_OPERATION',
   'DELETE_CLASS',
   'MOVE_CLASS',
   'ADD_ATTRIBUTE',
@@ -30,7 +34,32 @@ export type BatchOrigin = (typeof BATCH_ORIGINS)[number];
 
 /** RM-04: multiplicidades soportadas. */
 export const MULTIPLICITIES = ['1', '0..1', '0..*', '1..*'] as const;
-export type Multiplicity = (typeof MULTIPLICITIES)[number];
+export type Multiplicity = string;
+
+export const VISIBILITIES = ['public', 'private', 'protected', 'package'] as const;
+export type Visibility = (typeof VISIBILITIES)[number];
+export const VISIBILITY_SYMBOLS: Readonly<Record<Visibility, string>> = {
+  public: '+',
+  private: '-',
+  protected: '#',
+  package: '~',
+};
+export const CLASSIFIER_KINDS = ['CLASS', 'INTERFACE', 'ENUMERATION', 'DATA_TYPE'] as const;
+export type ClassifierKind = (typeof CLASSIFIER_KINDS)[number];
+
+/** UML 7.5: a nonnegative integer or an ordered lower..upper range. */
+export function multiplicityBounds(value: string): { lower: number; upper: number } | null {
+  if (value === '*') return { lower: 0, upper: Infinity };
+  if (!/^(0|[1-9]\d*)(?:\.\.(?:0|[1-9]\d*|\*))?$/.test(value)) return null;
+  const [lowerText, upperText] = value.split('..');
+  const lower = Number(lowerText);
+  const upper = upperText === '*' ? Infinity : Number(upperText ?? lowerText);
+  return Number.isSafeInteger(lower) &&
+    (upper === Infinity || Number.isSafeInteger(upper)) &&
+    lower <= upper
+    ? { lower, upper }
+    : null;
+}
 
 /**
  * Relaciones UML que expone el editor simplificado.
@@ -44,6 +73,8 @@ export const RELATIONSHIP_KINDS = [
   'GENERALIZATION',
   'COMPOSITION',
   'AGGREGATION',
+  'DEPENDENCY',
+  'REALIZATION',
 ] as const;
 export type RelationshipKind = (typeof RELATIONSHIP_KINDS)[number];
 
@@ -54,7 +85,7 @@ export const COLLECTION_MULTIPLICITIES = [
 ] as const satisfies readonly Multiplicity[];
 
 export function isCollectionMultiplicity(multiplicity: Multiplicity): boolean {
-  return (COLLECTION_MULTIPLICITIES as readonly Multiplicity[]).includes(multiplicity);
+  return (multiplicityBounds(multiplicity)?.upper ?? 0) > 1;
 }
 
 /** RTM-01: tipos conceptuales soportados. */
@@ -69,6 +100,11 @@ export const CONCEPTUAL_TYPES = [
   'UUID',
 ] as const;
 export type ConceptualType = (typeof CONCEPTUAL_TYPES)[number];
+export const UML_PRIMITIVE_TYPES: readonly string[] = [
+  ...CONCEPTUAL_TYPES,
+  'Real',
+  'UnlimitedNatural',
+];
 
 /** Roles por proyecto (plan maestro 5.5). */
 export const PROJECT_ROLES = ['OWNER', 'EDITOR', 'VIEWER'] as const;

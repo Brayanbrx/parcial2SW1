@@ -7,8 +7,13 @@ type Expectation = { fields: Fields | null; classId?: string };
 function isSemanticCommand(command: Command): boolean {
   if (command.type === 'MOVE_CLASS') return false;
   if (command.type === 'UPDATE_ATTRIBUTE' && command.payload.beforeAttributeId !== undefined) {
-    const { displayName, type, nullable, unique, primaryKey } = command.payload;
-    return [displayName, type, nullable, unique, primaryKey].some((value) => value !== undefined);
+    const {
+      classId: _classId,
+      attributeId: _attributeId,
+      beforeAttributeId: _before,
+      ...fields
+    } = command.payload;
+    return Object.values(fields).some((value) => value !== undefined);
   }
   return true;
 }
@@ -25,6 +30,7 @@ export function hasBatchEvidence(model: SemanticModel, commands: readonly Comman
   if (!isSemanticBatch(commands)) return false;
   const classes = new Map<string, Expectation>();
   const attributes = new Map<string, Expectation>();
+  const operations = new Map<string, Expectation>();
   const relationships = new Map<string, Expectation>();
   const put = (
     map: Map<string, Expectation>,
@@ -55,12 +61,46 @@ export function hasBatchEvidence(model: SemanticModel, commands: readonly Comman
             names(command.payload.displayName, 'CLASS'),
             command.type === 'CREATE_CLASS',
           );
+          if (command.type === 'CREATE_CLASS')
+            put(classes, command.payload.classId, {
+              kind: command.payload.kind,
+              isAbstract: command.payload.isAbstract,
+              literals: command.payload.literals,
+            });
+          break;
+        case 'UPDATE_CLASS': {
+          const { classId, ...fields } = command.payload;
+          put(classes, classId, fields);
+          break;
+        }
+        case 'ADD_OPERATION':
+          put(
+            operations,
+            command.payload.operation.id,
+            { ...command.payload.operation },
+            true,
+            command.payload.classId,
+          );
+          break;
+        case 'UPDATE_OPERATION':
+          put(
+            operations,
+            command.payload.operationId,
+            command.payload.changes,
+            false,
+            command.payload.classId,
+          );
+          break;
+        case 'DELETE_OPERATION':
+          put(operations, command.payload.operationId, null, true, command.payload.classId);
           break;
         case 'DELETE_CLASS': {
           const id = command.payload.classId;
           put(classes, id, null);
           for (const [key, value] of attributes)
             if (value.classId === id) put(attributes, key, null, true, id);
+          for (const [key, value] of operations)
+            if (value.classId === id) put(operations, key, null, true, id);
           for (const [key, value] of relationships) {
             const actual = model.relationships.find((r) => r.id === key);
             if (
@@ -82,6 +122,12 @@ export function hasBatchEvidence(model: SemanticModel, commands: readonly Comman
               primaryKey: p.primaryKey ?? false,
               nullable: p.nullable ?? true,
               unique: p.unique ?? false,
+              visibility: p.visibility,
+              isStatic: p.isStatic,
+              multiplicity: p.multiplicity,
+              defaultValue: p.defaultValue,
+              isDerived: p.isDerived,
+              isReadOnly: p.isReadOnly,
             },
             true,
             p.classId,
@@ -144,7 +190,9 @@ export function hasBatchEvidence(model: SemanticModel, commands: readonly Comman
         Object.entries(expected).every(
           ([key, value]) =>
             value === undefined ||
-            (key === 'kind' ? (actual[key] ?? 'ASSOCIATION') : (actual[key] ?? null)) === value,
+            JSON.stringify(
+              key === 'kind' ? (actual[key] ?? 'ASSOCIATION') : (actual[key] ?? null),
+            ) === JSON.stringify(value),
         );
   return (
     [...classes].every(([id, e]) =>
@@ -156,6 +204,12 @@ export function hasBatchEvidence(model: SemanticModel, commands: readonly Comman
     [...attributes].every(([id, e]) =>
       matches(
         model.classes.find((c) => c.id === e.classId)?.attributes.find((a) => a.id === id),
+        e.fields,
+      ),
+    ) &&
+    [...operations].every(([id, e]) =>
+      matches(
+        model.classes.find((c) => c.id === e.classId)?.operations?.find((o) => o.id === id),
         e.fields,
       ),
     ) &&
@@ -176,6 +230,8 @@ export function touchedElements(commands: readonly Command[]): Set<string> {
       const p = command.payload;
       if ('relationshipId' in p) return [p.relationshipId];
       if ('attributeId' in p) return [p.classId, p.attributeId];
+      if ('operationId' in p) return [p.classId, p.operationId];
+      if ('operation' in p) return [p.classId, p.operation.id];
       return [p.classId];
     }),
   );

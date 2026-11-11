@@ -1,11 +1,17 @@
 import { z } from 'zod';
+import { BATCH_ORIGINS, VISIBILITIES, RELATIONSHIP_KINDS } from './vocabulary.js';
 import {
-  BATCH_ORIGINS,
-  CONCEPTUAL_TYPES,
-  MULTIPLICITIES,
-  RELATIONSHIP_KINDS,
-} from './vocabulary.js';
-import { idSchema, positionSchema, sizeSchema } from './model.js';
+  idSchema,
+  positionSchema,
+  sizeSchema,
+  classifierPropertiesSchema,
+  memberPropertiesSchema,
+  operationSchema,
+  parameterSchema,
+  multiplicitySchema,
+  umlTypeSchema,
+  relationshipSchema,
+} from './model.js';
 
 /**
  * Comandos y lotes (plan maestro 4.7).
@@ -21,7 +27,7 @@ import { idSchema, positionSchema, sizeSchema } from './model.js';
 
 const createClass = z.object({
   type: z.literal('CREATE_CLASS'),
-  payload: z.object({
+  payload: classifierPropertiesSchema.extend({
     classId: idSchema,
     displayName: z.string().min(1),
     position: positionSchema.optional(),
@@ -34,6 +40,42 @@ const renameClass = z.object({
     classId: idSchema,
     displayName: z.string().min(1),
   }),
+});
+
+const updateClass = z.object({
+  type: z.literal('UPDATE_CLASS'),
+  payload: classifierPropertiesSchema.extend({ classId: idSchema }),
+});
+const addOperation = z.object({
+  type: z.literal('ADD_OPERATION'),
+  payload: z.object({
+    classId: idSchema,
+    operation: operationSchema,
+    beforeOperationId: idSchema.optional(),
+  }),
+});
+const updateOperation = z.object({
+  type: z.literal('UPDATE_OPERATION'),
+  payload: z.object({
+    classId: idSchema,
+    operationId: idSchema,
+    autoParameterId: idSchema.optional(),
+    changes: operationSchema
+      .omit({ id: true })
+      .partial()
+      .extend({
+        // Update payloads must never inherit creation defaults (Zod 4 applies
+        // defaults inside optional fields as well).
+        visibility: z.enum(VISIBILITIES).optional(),
+        isStatic: z.boolean().optional(),
+        isAbstract: z.boolean().optional(),
+        parameters: z.array(parameterSchema).optional(),
+      }),
+  }),
+});
+const deleteOperation = z.object({
+  type: z.literal('DELETE_OPERATION'),
+  payload: z.object({ classId: idSchema, operationId: idSchema }),
 });
 
 const deleteClass = z.object({
@@ -64,11 +106,11 @@ const moveClass = z.object({
 
 const addAttribute = z.object({
   type: z.literal('ADD_ATTRIBUTE'),
-  payload: z.object({
+  payload: memberPropertiesSchema.extend({
     classId: idSchema,
     attributeId: idSchema,
     displayName: z.string().min(1),
-    type: z.enum(CONCEPTUAL_TYPES),
+    type: umlTypeSchema,
     primaryKey: z.boolean().optional(),
     nullable: z.boolean().optional(),
     unique: z.boolean().optional(),
@@ -79,11 +121,11 @@ const addAttribute = z.object({
 
 const updateAttribute = z.object({
   type: z.literal('UPDATE_ATTRIBUTE'),
-  payload: z.object({
+  payload: memberPropertiesSchema.extend({
     classId: idSchema,
     attributeId: idSchema,
     displayName: z.string().min(1).optional(),
-    type: z.enum(CONCEPTUAL_TYPES).optional(),
+    type: umlTypeSchema.optional(),
     primaryKey: z.boolean().optional(),
     nullable: z.boolean().optional(),
     unique: z.boolean().optional(),
@@ -102,13 +144,13 @@ const deleteAttribute = z.object({
 
 const createRelationship = z.object({
   type: z.literal('CREATE_RELATIONSHIP'),
-  payload: z.object({
+  payload: relationshipSchema.omit({ id: true }).extend({
     relationshipId: idSchema,
     kind: z.enum(RELATIONSHIP_KINDS).optional(),
     sourceClassId: idSchema,
     targetClassId: idSchema,
-    sourceMultiplicity: z.enum(MULTIPLICITIES),
-    targetMultiplicity: z.enum(MULTIPLICITIES),
+    sourceMultiplicity: multiplicitySchema,
+    targetMultiplicity: multiplicitySchema,
     sourceRoleName: z.string().min(1).optional(),
     targetRoleName: z.string().min(1).optional(),
   }),
@@ -118,6 +160,9 @@ const createRelationship = z.object({
 const updateRelationship = z.object({
   type: z.literal('UPDATE_RELATIONSHIP'),
   payload: z.object({
+    name: z.string().optional(),
+    sourceNavigability: relationshipSchema.shape.sourceNavigability,
+    targetNavigability: relationshipSchema.shape.targetNavigability,
     relationshipId: idSchema,
     kind: z.enum(RELATIONSHIP_KINDS).optional(),
     sourceRoleName: z.string().min(1).nullable().optional(),
@@ -134,8 +179,8 @@ const changeMultiplicity = z.object({
   type: z.literal('CHANGE_MULTIPLICITY'),
   payload: z.object({
     relationshipId: idSchema,
-    sourceMultiplicity: z.enum(MULTIPLICITIES).optional(),
-    targetMultiplicity: z.enum(MULTIPLICITIES).optional(),
+    sourceMultiplicity: multiplicitySchema.optional(),
+    targetMultiplicity: multiplicitySchema.optional(),
   }),
 });
 
@@ -150,6 +195,10 @@ const commandEnvelope = z.object({
 export const commandSchema = z.discriminatedUnion('type', [
   createClass.merge(commandEnvelope),
   renameClass.merge(commandEnvelope),
+  updateClass.merge(commandEnvelope),
+  addOperation.merge(commandEnvelope),
+  updateOperation.merge(commandEnvelope),
+  deleteOperation.merge(commandEnvelope),
   deleteClass.merge(commandEnvelope),
   moveClass.merge(commandEnvelope),
   addAttribute.merge(commandEnvelope),

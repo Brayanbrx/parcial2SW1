@@ -1,8 +1,13 @@
 import { isDeepStrictEqual } from 'node:util';
 import { commandBatchSchema, roleCanWrite, type CommandBatch } from '@uml/contracts';
 import type { PrismaClient } from '@prisma/client';
-import { conflict, forbidden } from '../../lib/http-error.js';
-import { expireProposalIfDue, nextTeamTimestamp, withTeamBoard } from './persistence.js';
+import { conflict, forbidden, HttpError } from '../../lib/http-error.js';
+import {
+  expireProposalIfDue,
+  nextTeamTimestamp,
+  withTeamBoard,
+  type TeamTransaction,
+} from './persistence.js';
 import type { PublishTeamEvent } from './events.js';
 
 /** El orden del conjunto puede variar. Solo dispatch puede añadir position a
@@ -34,6 +39,74 @@ export function matchesProposal(expected: CommandBatch, received: CommandBatch):
   });
 }
 
+const mismatch = () => conflict('audit_conflict', 'El lote no coincide con el registro esperado.');
+const auditPayload = (batch: CommandBatch) => ({
+  commands: batch.commands,
+  issuedAt: batch.issuedAt,
+});
+
+async function checkProposal(
+  tx: TeamTransaction,
+  boardId: string,
+  userId: string,
+  batch: CommandBatch,
+  raw: unknown,
+  emit: PublishTeamEvent,
+) {
+  const proposal = await tx.aiProposal.findUnique({
+    where: { boardId_batchId: { boardId, batchId: batch.batchId } },
+  });
+  if (!proposal) return null;
+  if (proposal.requesterId !== userId) throw forbidden();
+  if (await expireProposalIfDue(tx, proposal, emit))
+    return conflict('invalid_transition', 'La propuesta ya venció.');
+  const expected = commandBatchSchema.safeParse(proposal.batch);
+  if (!expected.success || !isDeepStrictEqual(raw, batch) || !matchesProposal(expected.data, batch))
+    return mismatch();
+  if (proposal.status !== 'READY' && proposal.status !== 'APPLIED')
+    return conflict('invalid_transition', 'La propuesta no está lista o ya venció.');
+  return proposal;
+}
+
+function sameAudit(
+  saved: { actorId: string | null; origin: string; payload: unknown },
+  userId: string,
+  batch: CommandBatch,
+) {
+  return (
+    saved.actorId === userId &&
+    saved.origin === batch.origin &&
+    isDeepStrictEqual(saved.payload, auditPayload(batch))
+  );
+}
+
+/** El móvil consulta el registro antes de que el lote pueda cambiar la sala. */
+export async function checkAuditBeforeApply(
+  prisma: PrismaClient,
+  boardId: string,
+  userId: string,
+  batch: CommandBatch,
+  raw: unknown,
+  publish: PublishTeamEvent,
+) {
+  return withTeamBoard<boolean>(
+    prisma,
+    boardId,
+    userId,
+    async (tx, { role, emit }) => {
+      if (!roleCanWrite(role)) throw forbidden();
+      const proposal = await checkProposal(tx, boardId, userId, batch, raw, emit);
+      if (proposal instanceof HttpError) return proposal;
+      const saved = await tx.auditOperation.findUnique({
+        where: { boardId_batchId: { boardId, batchId: batch.batchId } },
+      });
+      if (saved && !sameAudit(saved, userId, batch)) return mismatch();
+      return saved !== null;
+    },
+    publish,
+  );
+}
+
 export async function recordAudit(
   prisma: PrismaClient,
   boardId: string,
@@ -48,28 +121,9 @@ export async function recordAudit(
     userId,
     async (tx, { role, emit }) => {
       if (!roleCanWrite(role)) throw forbidden();
-      const proposal = await tx.aiProposal.findUnique({
-        where: { boardId_batchId: { boardId, batchId: batch.batchId } },
-      });
-      const mismatch = () =>
-        conflict('audit_conflict', 'El lote no coincide con el registro esperado.');
-      if (proposal) {
-        if (proposal.requesterId !== userId) throw forbidden();
-        if (await expireProposalIfDue(tx, proposal, emit))
-          return conflict('invalid_transition', 'La propuesta ya venció.');
-        const expected = commandBatchSchema.safeParse(proposal.batch);
-        // El esquema legado elimina campos extra: no permitir que eso oculte una
-        // diferencia al reconocer una propuesta de equipo.
-        if (
-          !expected.success ||
-          !isDeepStrictEqual(raw, batch) ||
-          !matchesProposal(expected.data, batch)
-        )
-          return mismatch();
-        if (proposal.status !== 'READY' && proposal.status !== 'APPLIED')
-          return conflict('invalid_transition', 'La propuesta no está lista o ya venció.');
-      }
-      const payload = { commands: batch.commands, issuedAt: batch.issuedAt };
+      const proposal = await checkProposal(tx, boardId, userId, batch, raw, emit);
+      if (proposal instanceof HttpError) return proposal;
+      const payload = auditPayload(batch);
       const inserted = await tx.auditOperation.createMany({
         data: [
           {
@@ -85,12 +139,7 @@ export async function recordAudit(
       const saved = await tx.auditOperation.findUniqueOrThrow({
         where: { boardId_batchId: { boardId, batchId: batch.batchId } },
       });
-      if (
-        saved.actorId !== userId ||
-        saved.origin !== batch.origin ||
-        !isDeepStrictEqual(saved.payload, payload)
-      )
-        return mismatch();
+      if (!sameAudit(saved, userId, batch)) return mismatch();
       let changed = false;
       if (proposal?.status === 'READY') {
         const updated = await tx.aiProposal.updateMany({

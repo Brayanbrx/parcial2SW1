@@ -1,6 +1,6 @@
 {
   "$schema": "https://plataforma-uml.local/schemas/board-state.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "id": "T04",
   "title": "Inventario de activos",
   "coverage": "Varias claves foraneas sobre una entidad y una relacion opcional",

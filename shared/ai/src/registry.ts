@@ -244,8 +244,8 @@ const schema = z
     /** Vacio = sin modelo local; el proyecto no puede elegirlo. */
     AI_LOCAL_BASE_URL: localEndpoint('AI_LOCAL_BASE_URL'),
     AI_LOCAL_MODEL: z.string().trim().min(1).max(200).optional(),
-    /** Por intento. Debe dejar tiempo de la cadena para caer a los proveedores. */
-    AI_LOCAL_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+    /** Por intento local, antes de la cadena de respaldo. */
+    AI_LOCAL_TIMEOUT_MS: z.coerce.number().int().positive().max(1_800_000).default(300_000),
     /** Contexto que el servidor local carga (OLLAMA_CONTEXT_LENGTH en Ollama). */
     AI_LOCAL_CONTEXT_WINDOW: z.coerce.number().int().min(4096).max(1_048_576).default(16_384),
     AI_LOCAL_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(32768).default(4096),
@@ -290,14 +290,6 @@ const schema = z
       });
     }
     if (config.AI_LOCAL_BASE_URL !== undefined) {
-      if (config.AI_LOCAL_TIMEOUT_MS >= config.AI_CHAIN_TIMEOUT_MS) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['AI_LOCAL_TIMEOUT_MS'],
-          message:
-            'AI_LOCAL_TIMEOUT_MS debe ser menor que AI_CHAIN_TIMEOUT_MS para poder caer a los proveedores.',
-        });
-      }
       if (config.AI_LOCAL_MAX_OUTPUT_TOKENS >= config.AI_LOCAL_CONTEXT_WINDOW / 2) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -538,7 +530,7 @@ export function createAiPorts(
               capabilities.contextWindow,
               config.AI_LOCAL_CONTEXT_WINDOW - config.AI_LOCAL_MAX_OUTPUT_TOKENS,
             ),
-            timeoutMs: capabilities.timeoutMs,
+            timeoutMs: Math.min(2_147_483_647, config.AI_LOCAL_TIMEOUT_MS + capabilities.timeoutMs),
             jsonMode: capabilities.jsonMode,
           }),
         );

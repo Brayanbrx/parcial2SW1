@@ -1,7 +1,7 @@
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import { createAiPorts, describeAiChains, loadAiConfig } from '@uml/ai';
-import { SCHEMA_VERSION } from '@uml/contracts';
+import { aiExecutionTargetSchema, SCHEMA_VERSION } from '@uml/contracts';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { loadConfig, type Config } from './config.js';
@@ -13,6 +13,11 @@ import { auditRoutes } from './modules/audit/routes.js';
 import { teamAiRoutes } from './modules/team-ai/routes.js';
 import { createTeamEventPublisher } from './modules/team-ai/events.js';
 import { createTeamWorker } from './modules/team-ai/worker.js';
+import {
+  aiDeviceRoutes,
+  buildAiConnections,
+  authorizeAiTarget,
+} from './modules/ai-devices/routes.js';
 import { createTeamModerator } from './modules/team-ai/moderator.js';
 import type { ReviewTiming } from './modules/team-ai/review-scheduler.js';
 import { createTeamProcessor, type TeamProcessor } from './modules/team-ai/orchestrator.js';
@@ -31,6 +36,12 @@ import { prismaPlugin } from './plugins/prisma.js';
 import { securityPlugin } from './plugins/security.js';
 
 export const SERVICE_NAME = 'api';
+
+function connectorKey(value: unknown) {
+  const target = aiExecutionTargetSchema.safeParse(value).data;
+  if (target?.source === 'VM') return 'vm';
+  if (target?.source === 'DEVICE') return target.deviceId;
+}
 
 /**
  * Construye la aplicacion sin escucharla. Separar construccion de escucha es lo
@@ -124,6 +135,11 @@ export async function buildApp(
   await app.register(aiRoutes, { ports: aiPorts });
   await app.register(importRoutes, { ports: aiPorts });
   await app.register(generationRoutes, { config });
+  const aiConnections = buildAiConnections(app, config);
+  app.addHook('preClose', async () => {
+    aiConnections.close();
+  });
+  await app.register(aiDeviceRoutes, { connections: aiConnections });
   const events = createTeamEventPublisher(config, app.log);
   app.addHook('onClose', () => events.close());
   const worker =
@@ -141,8 +157,39 @@ export async function buildApp(
                 personalLimit: config.TEAM_AI_PERSONAL_TURNS,
               },
               maxInputTokens: config.TEAM_AI_MAX_INPUT_TOKENS,
+              async executionPort(target, userId) {
+                await authorizeAiTarget(app.prisma, aiConnections, userId, target);
+                return aiConnections.port(target);
+              },
             }),
-          timeoutMs: config.TEAM_AI_TIMEOUT_MS,
+          timeoutMs(job) {
+            const target = aiExecutionTargetSchema.safeParse(job.executionTarget).data;
+            if (target?.source === 'DEVICE' || target?.source === 'VM')
+              return Math.min(
+                2_147_483_647,
+                config.TEAM_AI_TIMEOUT_MS + aiConnections.processingBudgetMs(target.source),
+              );
+            if (target?.source === 'LOCAL' && aiPorts.local?.capabilities)
+              return Math.min(
+                2_147_483_647,
+                Math.max(config.TEAM_AI_TIMEOUT_MS, aiPorts.local.capabilities.timeoutMs + 15_000),
+              );
+            return config.TEAM_AI_TIMEOUT_MS;
+          },
+          admission(job, activeJobs) {
+            const key = connectorKey(job.executionTarget);
+            if (key === undefined) return 'ready';
+            const capacity = aiConnections.capacity(key);
+            if (capacity === undefined) return 'ready';
+            const running = [...activeJobs.values()].filter(
+              (active) => connectorKey(active.executionTarget) === key,
+            ).length;
+            if (running < capacity) return 'ready';
+            const waitMs = aiConnections.processingBudgetMs(key === 'vm' ? 'VM' : 'DEVICE') / 2;
+            return Date.now() - job.createdAt.getTime() >= waitMs ? 'expired' : 'wait';
+          },
+          concurrencyPerBoard: config.TEAM_AI_BOARD_CONCURRENCY,
+          maxConcurrency: config.TEAM_AI_MAX_CONCURRENCY,
           log: app.log,
         });
   if (worker) {
@@ -167,6 +214,7 @@ export async function buildApp(
   await app.register(auditRoutes, { publish: events.publish, moderator, push });
   await app.register(mobileEditRoutes, { config, publish: events.publish, moderator, push });
   await app.register(teamAiRoutes, {
+    aiConnections,
     config,
     publish: events.publish,
     worker,

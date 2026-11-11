@@ -13,6 +13,8 @@ import {
   clarificationText,
   type CommandBatch,
   type SemanticModel,
+  type AiExecutionTarget,
+  aiExecutionTargetSchema,
 } from '@uml/contracts';
 import { evaluateAiProposal, validateModel } from '@uml/domain-core';
 import type { TeamMessage, PrismaClient } from '@prisma/client';
@@ -38,6 +40,10 @@ export function createTeamProcessor(
     prisma: PrismaClient;
     limits: ContextLimits;
     maxInputTokens: number;
+    executionPort?(
+      target: Extract<AiExecutionTarget, { source: 'VM' | 'DEVICE' }>,
+      userId: string,
+    ): Promise<LlmPort>;
   },
 ): TeamProcessor {
   return async (job, signal) => {
@@ -57,7 +63,14 @@ export function createTeamProcessor(
     if (settings?.enabled === false) throw new Error('ai_disabled');
     if (job.mode === 'REVIEW' && settings?.reviewMode === 'OFF')
       throw new Error('team_ai_review_disabled');
-    const { portFor } = createTaskRouter(ports, settings?.aiSource ?? 'PROVIDERS');
+    const target = job.executionTarget
+      ? aiExecutionTargetSchema.parse(job.executionTarget)
+      : undefined;
+    const source = target?.source ?? settings?.aiSource ?? 'PROVIDERS';
+    const external = target?.source === 'VM' || target?.source === 'DEVICE' ? target : undefined;
+    if (source === 'VM' && !external) throw new Error('ai_engine_unavailable');
+    if (external && !options?.executionPort) throw new Error('ai_engine_unavailable');
+    const { portFor } = createTaskRouter(ports, source === 'LOCAL' ? 'LOCAL' : 'PROVIDERS');
     const teaching: TeachingPolicy | undefined =
       job.mode === 'INSTRUCT'
         ? undefined
@@ -75,9 +88,9 @@ export function createTeamProcessor(
     if (!options && job.replyToId) throw new Error('team_ai_invalid_context');
     const loaded = options ? await loadTeamHistory(options.prisma, job, options.limits) : undefined;
     signal.throwIfAborted();
-    let port = portFor(
-      job.mode === 'INSTRUCT' ? 'instruct' : job.mode === 'REVIEW' ? 'review' : 'mentor',
-    );
+    let port = external
+      ? await options!.executionPort!(external, job.authorId!)
+      : portFor(job.mode === 'INSTRUCT' ? 'instruct' : job.mode === 'REVIEW' ? 'review' : 'mentor');
     const context = loaded?.context ?? [];
     const contextFor = (selected: LlmPort) =>
       loaded && options
@@ -108,7 +121,7 @@ export function createTeamProcessor(
       // El modelo local tiene una ventana menor que la nube: si la solicitud no
       // cabe en ella, responde la cadena de proveedores en lugar de fallar.
       const tooLarge = error instanceof TeamContextError && error.code === 'team_ai_input_budget';
-      if (!tooLarge || port === ports.llm) throw error;
+      if (!tooLarge || external || port === ports.llm) throw error;
       port = ports.llm;
       team = contextFor(port);
     }

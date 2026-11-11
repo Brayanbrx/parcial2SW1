@@ -10,6 +10,8 @@ const relationshipKinds = {
   'GENERALIZATION': 'Generalización',
   'COMPOSITION': 'Composición',
   'AGGREGATION': 'Agregación',
+  'DEPENDENCY': 'Dependencia',
+  'REALIZATION': 'Realización',
 };
 
 class UmlAttribute {
@@ -20,6 +22,12 @@ class UmlAttribute {
     required this.primaryKey,
     required this.nullable,
     required this.unique,
+    this.visibility = 'private',
+    this.isStatic = false,
+    this.isDerived = false,
+    this.isReadOnly = false,
+    this.multiplicity,
+    this.defaultValue,
   });
   final String id;
   final String name;
@@ -27,15 +35,26 @@ class UmlAttribute {
   final bool primaryKey;
   final bool nullable;
   final bool unique;
+  final String visibility;
+  final bool isStatic, isDerived, isReadOnly;
+  final String? multiplicity, defaultValue;
+  String get notation =>
+      '${visibilitySymbols[visibility] ?? '-'} ${isDerived ? '/' : ''}$name: $type [${multiplicity ?? (nullable ? '0..1' : '1')}]${defaultValue == null || defaultValue!.isEmpty ? '' : ' = $defaultValue'}${isReadOnly ? ' {readOnly}' : ''}';
 
   factory UmlAttribute.fromJson(Map<String, dynamic> j) => UmlAttribute(
-        id: j['id'] as String,
-        name: j['displayName'] as String,
-        type: j['type'] as String,
-        primaryKey: j['primaryKey'] == true,
-        nullable: j['nullable'] != false,
-        unique: j['unique'] == true,
-      );
+    id: j['id'] as String,
+    name: j['displayName'] as String,
+    type: j['type'] as String,
+    primaryKey: j['primaryKey'] == true,
+    nullable: j['nullable'] != false,
+    unique: j['unique'] == true,
+    visibility: j['visibility'] as String? ?? 'private',
+    isStatic: j['isStatic'] == true,
+    isDerived: j['isDerived'] == true,
+    isReadOnly: j['isReadOnly'] == true,
+    multiplicity: j['multiplicity'] as String?,
+    defaultValue: j['defaultValue'] as String?,
+  );
 }
 
 class UmlClass {
@@ -43,28 +62,48 @@ class UmlClass {
     required this.id,
     required this.name,
     required this.attributes,
+    this.kind = 'CLASS',
+    this.isAbstract = false,
+    this.literals = const [],
+    this.operations = const [],
     String? codeName,
     String? databaseName,
-  })  : codeName = codeName ?? name,
-        databaseName = databaseName ?? name;
+  }) : codeName = codeName ?? name,
+       databaseName = databaseName ?? name;
   final String id;
   final String name;
   final String codeName;
   final String databaseName;
   final List<UmlAttribute> attributes;
+  final String kind;
+  final bool isAbstract;
+  final List<String> literals;
+  final List<UmlOperation> operations;
+  String? get keyword => switch (kind) {
+    'INTERFACE' => 'interface',
+    'ENUMERATION' => 'enumeration',
+    'DATA_TYPE' => 'dataType',
+    _ => null,
+  };
 
   /// La web muestra el nombre de tabla debajo solo cuando el técnico difiere.
   bool get technicalDiffers => codeName != name;
 
   factory UmlClass.fromJson(Map<String, dynamic> j) => UmlClass(
-        id: j['id'] as String,
-        name: j['displayName'] as String,
-        codeName: j['codeName'] as String?,
-        databaseName: j['databaseName'] as String?,
-        attributes: ((j['attributes'] as List?) ?? [])
-            .map((a) => UmlAttribute.fromJson(a as Map<String, dynamic>))
-            .toList(),
-      );
+    id: j['id'] as String,
+    name: j['displayName'] as String,
+    kind: j['kind'] as String? ?? 'CLASS',
+    isAbstract: j['isAbstract'] == true,
+    literals: ((j['literals'] as List?) ?? []).cast<String>(),
+    operations: ((j['operations'] as List?) ?? [])
+        .map((o) => UmlOperation(Map<String, dynamic>.from(o as Map)))
+        .toList(),
+    codeName: j['codeName'] as String?,
+    databaseName: j['databaseName'] as String?,
+    attributes: ((j['attributes'] as List?) ?? [])
+        .map((a) => UmlAttribute.fromJson(a as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class UmlRelationship {
@@ -77,6 +116,9 @@ class UmlRelationship {
     required this.targetMultiplicity,
     this.sourceRole,
     this.targetRole,
+    this.name,
+    this.sourceNavigability,
+    this.targetNavigability,
   });
   final String id;
   final String kind;
@@ -86,19 +128,64 @@ class UmlRelationship {
   final String targetMultiplicity;
   final String? sourceRole;
   final String? targetRole;
+  final String? name, sourceNavigability, targetNavigability;
 
   bool get isGeneralization => kind == 'GENERALIZATION';
+  bool get isStructural => !['GENERALIZATION', 'DEPENDENCY', 'REALIZATION'].contains(kind);
 
   factory UmlRelationship.fromJson(Map<String, dynamic> j) => UmlRelationship(
-        id: j['id'] as String,
-        kind: (j['kind'] as String?) ?? 'ASSOCIATION',
-        sourceId: j['sourceClassId'] as String,
-        targetId: j['targetClassId'] as String,
-        sourceMultiplicity: j['sourceMultiplicity'] as String,
-        targetMultiplicity: j['targetMultiplicity'] as String,
-        sourceRole: j['sourceRoleName'] as String?,
-        targetRole: j['targetRoleName'] as String?,
-      );
+    id: j['id'] as String,
+    kind: (j['kind'] as String?) ?? 'ASSOCIATION',
+    sourceId: j['sourceClassId'] as String,
+    targetId: j['targetClassId'] as String,
+    sourceMultiplicity: j['sourceMultiplicity'] as String,
+    targetMultiplicity: j['targetMultiplicity'] as String,
+    sourceRole: j['sourceRoleName'] as String?,
+    targetRole: j['targetRoleName'] as String?,
+    name: j['name'] as String?,
+    sourceNavigability: j['sourceNavigability'] as String?,
+    targetNavigability: j['targetNavigability'] as String?,
+  );
+}
+
+const visibilitySymbols = {'public': '+', 'private': '-', 'protected': '#', 'package': '~'};
+const classifierKinds = {
+  'CLASS': 'Clase',
+  'INTERFACE': 'Interfaz',
+  'ENUMERATION': 'Enumeración',
+  'DATA_TYPE': 'Tipo de datos',
+};
+
+bool validMultiplicity(String value) {
+  if (value == '*') return true;
+  if (!RegExp(r'^(0|[1-9]\d*)(?:\.\.(?:0|[1-9]\d*|\*))?$').hasMatch(value)) {
+    return false;
+  }
+  final parts = value.split('..');
+  final lower = int.tryParse(parts.first);
+  final upper = parts.last == '*' ? null : int.tryParse(parts.last);
+  return lower != null &&
+      lower <= 9007199254740991 &&
+      (parts.last == '*' || upper != null && upper <= 9007199254740991 && lower <= upper);
+}
+
+class UmlOperation {
+  UmlOperation(this.data);
+  final Map<String, dynamic> data;
+  String get id => data['id'] as String;
+  String get name => data['displayName'] as String;
+  bool get isStatic => data['isStatic'] == true;
+  bool get isAbstract => data['isAbstract'] == true;
+  String get notation {
+    final params = ((data['parameters'] as List?) ?? [])
+        .map(
+          (p) =>
+              '${p['direction'] == 'out' || p['direction'] == 'inout' ? "${p['direction']} " : ''}${p['name']}: ${p['type']}${p['multiplicity'] != null && p['multiplicity'] != '1' ? " [${p['multiplicity']}]" : ''}${p['defaultValue'] != null && p['defaultValue'] != '' ? " = ${p['defaultValue']}" : ''}',
+        )
+        .join(', ');
+    final type = data['returnType'];
+    return '${visibilitySymbols[data['visibility']] ?? '+'} $name($params)${type == null || type == 'void' ? '' : ': $type'}${type == null || type == 'void' || data['returnMultiplicity'] == null || data['returnMultiplicity'] == '1' ? '' : " [${data['returnMultiplicity']}]"}';
+  }
 }
 
 class SemanticModel {
@@ -111,9 +198,7 @@ class SemanticModel {
   factory SemanticModel.fromJson(dynamic json) {
     if (json is! Map) return SemanticModel.empty();
     return SemanticModel(
-      classes: ((json['classes'] as List?) ?? [])
-          .map((c) => UmlClass.fromJson(c as Map<String, dynamic>))
-          .toList(),
+      classes: ((json['classes'] as List?) ?? []).map((c) => UmlClass.fromJson(c as Map<String, dynamic>)).toList(),
       relationships: ((json['relationships'] as List?) ?? [])
           .map((r) => UmlRelationship.fromJson(r as Map<String, dynamic>))
           .toList(),
@@ -165,10 +250,11 @@ class BoardLayout {
       BoardLayout(positions: {...positions, classId: position}, sizes: sizes);
 
   /// Para servidores sin `GET /boards/:id/state`: una rejilla de tres columnas.
-  factory BoardLayout.grid(List<UmlClass> classes) => BoardLayout(positions: {
-        for (var i = 0; i < classes.length; i++)
-          classes[i].id: Offset(40.0 + (i % 3) * 300, 40.0 + (i ~/ 3) * 260),
-      });
+  factory BoardLayout.grid(List<UmlClass> classes) => BoardLayout(
+    positions: {
+      for (var i = 0; i < classes.length; i++) classes[i].id: Offset(40.0 + (i % 3) * 300, 40.0 + (i ~/ 3) * 260),
+    },
+  );
 }
 
 /// Lo que devuelve `GET /boards/:id/state`: modelo y layout vivos.
@@ -204,26 +290,26 @@ class BatchBuilder {
   }
 
   Map<String, dynamic> build() => {
-        'batchId': newId(),
-        'origin': 'GUI',
-        'actorId': actorId,
-        'issuedAt': _issuedAt,
-        'commands': _commands,
-      };
+    'batchId': newId(),
+    'origin': 'GUI',
+    'actorId': actorId,
+    'issuedAt': _issuedAt,
+    'commands': _commands,
+  };
 }
 
 /// Resumen en español de los tipos de comando del historial de auditoría.
 String commandLabel(String type) => switch (type) {
-      'CREATE_CLASS' => 'creó una clase',
-      'RENAME_CLASS' => 'renombró una clase',
-      'DELETE_CLASS' => 'eliminó una clase',
-      'MOVE_CLASS' => 'movió una clase',
-      'ADD_ATTRIBUTE' => 'agregó un atributo',
-      'UPDATE_ATTRIBUTE' => 'modificó un atributo',
-      'DELETE_ATTRIBUTE' => 'eliminó un atributo',
-      'CREATE_RELATIONSHIP' => 'creó una relación',
-      'UPDATE_RELATIONSHIP' => 'modificó una relación',
-      'DELETE_RELATIONSHIP' => 'eliminó una relación',
-      'CHANGE_MULTIPLICITY' => 'cambió una multiplicidad',
-      _ => 'hizo un cambio',
-    };
+  'CREATE_CLASS' => 'creó una clase',
+  'RENAME_CLASS' => 'renombró una clase',
+  'DELETE_CLASS' => 'eliminó una clase',
+  'MOVE_CLASS' => 'movió una clase',
+  'ADD_ATTRIBUTE' => 'agregó un atributo',
+  'UPDATE_ATTRIBUTE' => 'modificó un atributo',
+  'DELETE_ATTRIBUTE' => 'eliminó un atributo',
+  'CREATE_RELATIONSHIP' => 'creó una relación',
+  'UPDATE_RELATIONSHIP' => 'modificó una relación',
+  'DELETE_RELATIONSHIP' => 'eliminó una relación',
+  'CHANGE_MULTIPLICITY' => 'cambió una multiplicidad',
+  _ => 'hizo un cambio',
+};

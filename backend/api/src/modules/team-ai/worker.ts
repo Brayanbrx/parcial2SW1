@@ -20,7 +20,13 @@ export function createTeamWorker(options: {
   prisma: PrismaClient;
   publish: PublishTeamEvent;
   process: TeamProcessor;
-  timeoutMs: number;
+  timeoutMs: number | ((job: TeamMessage) => number);
+  concurrencyPerBoard?: number;
+  maxConcurrency?: number;
+  admission?(
+    job: TeamMessage,
+    activeJobs: ReadonlyMap<string, TeamMessage>,
+  ): 'ready' | 'wait' | 'expired';
   log: Pick<FastifyBaseLogger, 'warn'>;
 }) {
   const { prisma, publish } = options;
@@ -106,29 +112,44 @@ export function createTeamWorker(options: {
 
   const queue = createBoardQueue<TeamMessage, TeamWorkResult>({
     timeoutMs: options.timeoutMs,
+    ...(options.concurrencyPerBoard === undefined
+      ? {}
+      : { concurrencyPerBoard: options.concurrencyPerBoard }),
+    ...(options.maxConcurrency === undefined ? {} : { maxConcurrency: options.maxConcurrency }),
     onError: logError,
-    async claim(boardId) {
+    async claim(boardId, activeJobs) {
       return transaction(boardId, async (tx, projectId, emit) => {
         // Si falló la escritura final por BD, no volver a llamar al proveedor.
         const stranded = await tx.teamMessage.findMany({
           where: { boardId, status: 'PROCESSING' },
         });
         for (const job of stranded)
-          await transition(tx, job, 'INTERRUPTED', emit, 'team_ai_interrupted');
+          if (!activeJobs.has(job.id))
+            await transition(tx, job, 'INTERRUPTED', emit, 'team_ai_interrupted');
         const jobs = await tx.teamMessage.findMany({
           where: { boardId, status: 'QUEUED' },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         });
+        let blocked = false;
         for (const job of jobs) {
           const errorCode = await accessError(tx, projectId, job);
           if (errorCode) {
             await transition(tx, job, 'FAILED', emit, errorCode);
             continue;
           }
+          const admission = options.admission?.(job, activeJobs);
+          if (admission === 'wait') {
+            blocked = true;
+            continue;
+          }
+          if (admission === 'expired') {
+            await transition(tx, job, 'FAILED', emit, 'team_ai_timeout');
+            continue;
+          }
           if (await transition(tx, job, 'PROCESSING', emit))
             return { ...job, status: 'PROCESSING' as const };
         }
-        return null;
+        return blocked ? ('blocked' as const) : null;
       });
     },
     async process(job, signal) {
@@ -172,6 +193,7 @@ export function createTeamWorker(options: {
             authorKind: 'AI',
             addressedToId: current.authorId,
             replyToId: job.id,
+            ...(job.executionTarget ? { executionTarget: job.executionTarget } : {}),
             kind: result.kind,
             text: result.text,
             createdAt: now,
@@ -267,10 +289,11 @@ function errorCode(error: unknown): string {
   if (error instanceof TeamContextError) return error.code;
   if (
     error instanceof HttpError &&
-    ['invalid_clarification', 'team_ai_context_limit'].includes(error.code)
+    ['invalid_clarification', 'team_ai_context_limit', 'ai_engine_unavailable'].includes(error.code)
   )
     return error.code;
-  if (error instanceof ProviderUnavailableError) return 'ai_provider_unavailable';
+  if (error instanceof ProviderUnavailableError)
+    return error.provider === 'connector' ? 'ai_engine_unavailable' : 'ai_provider_unavailable';
   if (error instanceof ProviderContractError) return 'ai_provider_contract';
   const known = [
     'ai_disabled',

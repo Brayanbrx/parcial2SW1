@@ -28,11 +28,12 @@ type Call = {
 describe('paso 6: worker real, API y PostgreSQL', () => {
   let api: Harness;
   let owner: Awaited<ReturnType<Harness['signUp']>>;
+  let editor: Awaited<ReturnType<Harness['signUp']>>;
   let projectId: string, boardId: string;
   const calls: Call[] = [];
-  const post = (change = {}) =>
+  const post = (change = {}, token = owner.token) =>
     api.request('POST', `/boards/${boardId}/team-ai/messages`, {
-      token: owner.token,
+      token,
       body: {
         clientRequestId: randomUUID(),
         mode: 'ASK',
@@ -47,7 +48,7 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
     await vi.waitFor(async () => expect((await state(id)).status).toBe(status), { timeout: 8000 });
   };
   const waitCalls = async (count: number) => {
-    await vi.waitFor(() => expect(calls).toHaveLength(count), { timeout: 8000 });
+    await vi.waitFor(() => expect(calls.length).toBeGreaterThanOrEqual(count), { timeout: 8000 });
   };
 
   beforeAll(async () => {
@@ -56,7 +57,12 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
         process: (job, signal) =>
           new Promise((resolve, reject) => calls.push({ job, signal, resolve, reject })),
       },
-      env: { AI_CHAIN_TIMEOUT_MS: '1500', TEAM_AI_TIMEOUT_MS: '1500' },
+      env: {
+        AI_CHAIN_TIMEOUT_MS: '1500',
+        TEAM_AI_TIMEOUT_MS: '1500',
+        TEAM_AI_BOARD_CONCURRENCY: '2',
+        TEAM_AI_MAX_CONCURRENCY: '4',
+      },
     });
     owner = await api.signUp('worker@test.invalid');
     const project = await api.request('POST', '/projects', {
@@ -64,6 +70,10 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
       body: { displayName: 'Worker' },
     });
     projectId = project.body.id as string;
+    editor = await api.signUp('parallel-editor@test.invalid');
+    await api.app.prisma.projectMember.create({
+      data: { projectId, userId: editor.userId, role: 'EDITOR' },
+    });
   });
   afterAll(async () => {
     await api?.stop();
@@ -74,28 +84,31 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
     boardId = (await api.app.prisma.board.create({ data: { projectId, displayName: 'Cola' } })).id;
   });
 
-  it('dos POST simultáneos conservan FIFO; otro board no espera y el resultado tiene identidad durable', async () => {
+  it('atiende a dos desarrolladores a la vez en la misma pizarra y conserva cada destinatario al terminar en otro orden', async () => {
     const firstBoard = boardId;
-    const responses = await Promise.all([post({ text: 'Primera' }), post({ text: 'Segunda' })]);
+    const responses = await Promise.all([
+      post({ text: 'Primera' }),
+      post({ text: 'Segunda' }, editor.token),
+    ]);
     expect(responses.map((r) => r.status)).toEqual([202, 202]);
-    await waitCalls(1);
+    await waitCalls(2);
     const ordered = await api.app.prisma.teamMessage.findMany({
       where: { boardId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    expect(calls[0]!.job.id).toBe(ordered[0]!.id);
-    expect((await state(ordered[1]!.id)).status).toBe('QUEUED');
+    expect(calls.map((c) => c.job.id)).toEqual(ordered.map((m) => m.id));
+    expect(ordered.map((m) => m.status)).toEqual(['PROCESSING', 'PROCESSING']);
     boardId = (await api.app.prisma.board.create({ data: { projectId, displayName: 'Paralela' } }))
       .id;
     const parallel = await post();
-    await waitCalls(2);
-    calls[1]!.resolve(answer);
-    await waitState(parallel.body.id as string, 'DONE');
-    calls[0]!.resolve(answer);
     await waitCalls(3);
-    expect(calls[2]!.job.id).toBe(ordered[1]!.id);
     calls[2]!.resolve(answer);
+    await waitState(parallel.body.id as string, 'DONE');
+    calls[1]!.resolve(answer);
     await waitState(ordered[1]!.id, 'DONE');
+    expect((await state(ordered[0]!.id)).status).toBe('PROCESSING');
+    calls[0]!.resolve(answer);
+    await waitState(ordered[0]!.id, 'DONE');
     const history = await api.request('GET', `/boards/${firstBoard}/team-ai/messages`, {
       token: owner.token,
     });
@@ -103,7 +116,7 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
     expect(ai).toHaveLength(2);
     for (const message of ai) {
       expect(teamMessageSchema.safeParse(message).success).toBe(true);
-      expect(message.addressedToId).toBe(owner.userId);
+      expect(message.addressedToId).toBe(ordered.find((m) => m.id === message.replyToId)!.authorId);
       expect(ordered.map((m) => m.id)).toContain(message.replyToId);
     }
   });
@@ -146,7 +159,8 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
 
   it('OFF bloquea revisión en vuelo y en cola sin afectar el historial', async () => {
     const first = await post({ mode: 'REVIEW' });
-    await waitCalls(1);
+    const second = await post({ mode: 'REVIEW' });
+    await waitCalls(2);
     const queued = await post({ mode: 'REVIEW' });
     await api.request('PUT', `/projects/${projectId}/ai-settings`, {
       token: owner.token,
@@ -159,11 +173,12 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
       },
     });
     calls[0]!.resolve({ kind: 'REVIEW', text: 'Respuesta tardía', solutionMode: 'ON_REQUEST' });
-    for (const response of [first, queued]) {
+    calls[1]!.resolve({ kind: 'REVIEW', text: 'Respuesta tardía', solutionMode: 'ON_REQUEST' });
+    for (const response of [first, second, queued]) {
       await waitState(response.body.id as string, 'FAILED');
       expect((await state(response.body.id as string)).errorCode).toBe('team_ai_review_disabled');
     }
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(await api.app.prisma.teamMessage.count({ where: { boardId, authorKind: 'AI' } })).toBe(
       0,
     );
@@ -188,18 +203,24 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
     )(calls[0]!.job, calls[0]!.signal);
     expect(lateProposal.proposal).toBeDefined();
     const second = await post();
+    await waitCalls(2);
+    const queued = await post();
     const cancel = (id: string) =>
       api.request('POST', `/boards/${boardId}/team-ai/messages/${id}/cancel`, {
         token: owner.token,
       });
-    expect((await cancel(second.body.id as string)).body.status).toBe('CANCELLED');
+    expect((await cancel(queued.body.id as string)).body.status).toBe('CANCELLED');
     expect((await cancel(first.body.id as string)).body.status).toBe('CANCELLED');
     expect(calls[0]!.signal.aborted).toBe(true);
+    expect(calls[1]!.signal.aborted).toBe(false);
     calls[0]!.resolve(lateProposal);
-    const third = await post();
-    await waitCalls(2);
     calls[1]!.resolve(answer);
+    const third = await post();
+    await waitCalls(3);
+    calls[2]!.resolve(answer);
+    await waitState(second.body.id as string, 'DONE');
     await waitState(third.body.id as string, 'DONE');
+    expect((await state(queued.body.id as string)).status).toBe('CANCELLED');
     expect((await state(first.body.id as string)).status).toBe('CANCELLED');
     expect(
       await api.app.prisma.teamMessage.count({ where: { replyToId: first.body.id as string } }),
@@ -259,14 +280,17 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
 
   it('revalida enabled antes de publicar y antes de consumir el siguiente', async () => {
     const first = await post();
-    await waitCalls(1);
     const second = await post();
+    await waitCalls(2);
+    const queued = await post();
     await api.app.prisma.projectAiSettings.create({ data: { projectId, enabled: false } });
     calls[0]!.resolve(answer);
+    calls[1]!.resolve(answer);
     await waitState(first.body.id as string, 'FAILED');
     await waitState(second.body.id as string, 'FAILED');
+    await waitState(queued.body.id as string, 'FAILED');
     expect((await state(first.body.id as string)).errorCode).toBe('ai_disabled');
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(await api.app.prisma.teamMessage.count({ where: { boardId, authorKind: 'AI' } })).toBe(
       0,
     );
@@ -324,13 +348,91 @@ describe('paso 6: worker real, API y PostgreSQL', () => {
     expect(await api.app.prisma.boardDocument.findUnique({ where: { boardId } })).toBeNull();
   });
 
+  it('dos instrucciones en vuelo conservan autor, lote y snapshot propios sin modificar el diagrama', async () => {
+    const snapshot = {
+      classes: [
+        {
+          id: randomUUID(),
+          displayName: 'Cliente',
+          codeName: 'Cliente',
+          databaseName: 'cliente',
+          attributes: [],
+        },
+      ],
+      relationships: [],
+    };
+    const first = await post({ mode: 'INSTRUCT', text: 'Crea la clase Persona' });
+    const second = await post(
+      { mode: 'INSTRUCT', text: 'Crea la clase Producto', model: snapshot },
+      editor.token,
+    );
+    await waitCalls(2);
+    const processor = createTeamProcessor(createAiPorts(loadAiConfig({ AI_LLM_PROVIDER: 'mock' })));
+    const results = await Promise.all(calls.map((call) => processor(call.job, call.signal)));
+    calls[1]!.resolve(results[1]!);
+    await waitState(second.body.id as string, 'DONE');
+    expect((await state(first.body.id as string)).status).toBe('PROCESSING');
+    calls[0]!.resolve(results[0]!);
+    await waitState(first.body.id as string, 'DONE');
+    const proposals = await api.app.prisma.aiProposal.findMany({ where: { boardId } });
+    expect(proposals).toHaveLength(2);
+    expect(new Set(proposals.map((p) => p.batchId)).size).toBe(2);
+    for (const [response, actorId, expected] of [
+      [first, owner.userId, model],
+      [second, editor.userId, snapshot],
+    ] as const) {
+      const detail = await api.request(
+        'GET',
+        `/boards/${boardId}/team-ai/messages/${response.body.id}`,
+        { token: owner.token },
+      );
+      expect(detail.status).toBe(200);
+      const proposal = aiProposalSchema.parse(detail.body.proposal);
+      expect(proposal.requesterId).toBe(actorId);
+      expect(proposal.batch.actorId).toBe(actorId);
+      expect(proposal.expectedSemantic).toEqual(expected);
+    }
+    expect(await api.app.prisma.auditOperation.count({ where: { boardId } })).toBe(0);
+    expect(await api.app.prisma.boardDocument.findUnique({ where: { boardId } })).toBeNull();
+  });
+
+  it('recupera PROCESSING huérfano sin interrumpir otra inferencia activa en esa pizarra', async () => {
+    const first = await post();
+    await waitCalls(1);
+    const orphan = await api.app.prisma.teamMessage.create({
+      data: {
+        boardId,
+        authorKind: 'USER',
+        authorId: owner.userId,
+        clientRequestId: randomUUID(),
+        mode: 'ASK',
+        inputMode: 'TEXT',
+        kind: 'QUESTION',
+        text: 'Escritura final interrumpida',
+        requestModel: model,
+        status: 'PROCESSING',
+      },
+    });
+    const second = await post();
+    await waitCalls(2);
+    expect((await state(orphan.id)).status).toBe('INTERRUPTED');
+    expect((await state(first.body.id as string)).status).toBe('PROCESSING');
+    expect(calls[0]!.signal.aborted).toBe(false);
+    calls[0]!.resolve(answer);
+    calls[1]!.resolve(answer);
+    await waitState(first.body.id as string, 'DONE');
+    await waitState(second.body.id as string, 'DONE');
+  });
+
   // Se ejecuta al final: cierra el consumidor real y reinicia sobre la misma BD.
   it('cierre aborta activos; arranque recupera QUEUED/PROCESSING a INTERRUPTED y conserva terminales', async () => {
     const first = await post();
     await waitCalls(1);
     const second = await post();
+    await waitCalls(2);
     await api.app.close();
     expect(calls[0]!.signal.aborted).toBe(true);
+    expect(calls[1]!.signal.aborted).toBe(true);
     // El cliente Prisma del harness puede reconectar tras close para comprobar persistencia.
     await waitState(first.body.id as string, 'INTERRUPTED');
     await waitState(second.body.id as string, 'INTERRUPTED');

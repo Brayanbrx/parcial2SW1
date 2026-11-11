@@ -370,7 +370,7 @@ function BoardSession({
       if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       // A modal owns keyboard interaction, including Escape and tool shortcuts.
-      if (target?.closest('dialog[open], [data-tour-ui]')) return;
+      if (document.querySelector('dialog[open]') || target?.closest('[data-tour-ui]')) return;
       if (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
@@ -413,6 +413,8 @@ function BoardSession({
         c: 'CLASS',
         '1': 'ASSOCIATION',
         '2': 'GENERALIZATION',
+        '5': 'DEPENDENCY',
+        '6': 'REALIZATION',
         '3': 'COMPOSITION',
         '4': 'AGGREGATION',
       };

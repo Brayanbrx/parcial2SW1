@@ -1,4 +1,4 @@
-import { roleCanWrite, SCHEMA_VERSION } from '@uml/contracts';
+import { SCHEMA_VERSION } from '@uml/contracts';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import {
@@ -19,6 +19,7 @@ import { loadBoardDocument, storeBoardDocument } from './persistence/board-store
 import { handleTeamAiEvent } from './team-ai-events.js';
 import { handleApplyBatch } from './apply-batch.js';
 import { handleBoardState } from './board-state.js';
+import { revalidateRoomAccess } from './auth/room-access.js';
 
 export const SERVICE_NAME = 'collab';
 
@@ -191,54 +192,14 @@ export function buildCollabServer(config: Config): CollabServer {
           data.connection,
         ]),
       ];
-      const board = await prisma.board.findUnique({
-        where: { id: data.context.boardId },
-        select: {
-          projectId: true,
-          project: {
-            select: {
-              members: {
-                where: {
-                  userId: { in: connections.map((connection) => connection.context.userId) },
-                },
-                select: { userId: true, role: true, user: { select: { sessionVersion: true } } },
-              },
-            },
-          },
-        },
-      });
-      const roles = new Map(board?.project.members.map((member) => [member.userId, member.role]));
-      const versions = new Map(
-        board?.project.members.map((member) => [member.userId, member.user.sessionVersion]),
-      );
-      for (const connection of connections) {
-        const role = roles.get(connection.context.userId);
-        const expired =
-          connection.context.expiresAt <= Date.now() ||
-          (role !== undefined &&
-            versions.get(connection.context.userId) !== connection.context.sessionVersion);
-        if (expired || role === undefined || board?.projectId !== connection.context.projectId) {
-          connection.close({
-            code: expired ? 4401 : 4403,
-            reason: expired ? 'token-invalido' : 'sin-acceso-a-la-pizarra',
-          });
-        } else {
-          const readOnly = !roleCanWrite(role);
-          if (connection.readOnly !== readOnly) {
-            connection.readOnly = readOnly;
-            // El cliente debe descartar su réplica con cambios rechazados y
-            // resincronizar antes de volver a mostrar el documento como vivo.
-            connection.sendStateless(JSON.stringify({ type: 'access-changed', readOnly }));
-          }
-        }
-      }
+      const access = await revalidateRoomAccess(prisma, data.context.boardId, connections);
       // Una desconexion normal puede ocurrir mientras SQL responde. Sus ultimos
       // mensajes recibidos siguen siendo validos y deben alcanzar la persistencia.
       if (
         data.context.expiresAt <= Date.now() ||
-        versions.get(data.context.userId) !== data.context.sessionVersion ||
-        !roles.has(data.context.userId) ||
-        board?.projectId !== data.context.projectId
+        access.members.get(data.context.userId)?.user.sessionVersion !==
+          data.context.sessionVersion ||
+        access.projectId !== data.context.projectId
       ) {
         throw new UnauthorizedConnection(
           'sin-acceso-a-la-pizarra',
@@ -290,6 +251,7 @@ export function buildCollabServer(config: Config): CollabServer {
             request: data.request,
             secret: config.COLLAB_INTERNAL_SECRET,
             server,
+            prisma,
             respond: responder,
           });
         } catch {
@@ -336,22 +298,10 @@ export function buildCollabServer(config: Config): CollabServer {
   let revocationTimer: ReturnType<typeof setInterval> | undefined;
   let revocationCheck: Promise<void> | undefined;
   async function closeRevokedSessions(): Promise<void> {
-    const connections = [...server.hocuspocus.documents.values()].flatMap(
-      (document) => document.getConnections() as Connection<CollaborationContext>[],
-    );
-    if (connections.length === 0) return;
-    const users = await prisma.user.findMany({
-      where: { id: { in: [...new Set(connections.map((c) => c.context.userId))] } },
-      select: { id: true, sessionVersion: true },
-    });
-    const versions = new Map(users.map((user) => [user.id, user.sessionVersion]));
-    for (const connection of connections) {
-      if (
-        connection.context.expiresAt <= Date.now() ||
-        versions.get(connection.context.userId) !== connection.context.sessionVersion
-      ) {
-        connection.close({ code: 4401, reason: 'token-invalido' });
-      }
+    for (const document of server.hocuspocus.documents.values()) {
+      const connections = document.getConnections() as Connection<CollaborationContext>[];
+      if (connections.length)
+        await revalidateRoomAccess(prisma, parseRoomName(document.name).boardId, connections);
     }
   }
 

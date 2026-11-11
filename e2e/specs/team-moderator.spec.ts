@@ -16,7 +16,8 @@ test('moderador real: N:M nueva se comparte con autor; MOVE y recarga no duplica
       .dragTo(ana.page.getByTestId('clase-Materia').locator('.react-flow__handle-left'));
     await expect(beto.page.locator('.react-flow__edge')).toHaveCount(1);
     await beto.page.locator('.react-flow__edge').first().click();
-    await beto.page.getByTestId('multiplicidad-origen').selectOption('0..*');
+    await beto.page.getByTestId('multiplicidad-origen').fill('0..*');
+    await beto.page.getByTestId('multiplicidad-origen').press('Tab');
     for (const actor of [ana, beto]) {
       await expect(actor.page.getByTestId('panel-validacion')).toContainText('muchos a muchos');
       await actor.page.getByTestId('pestana-asistente').click();

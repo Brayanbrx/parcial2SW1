@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { ConceptualType, Layout, SemanticModel, UmlRelationship } from '@uml/contracts';
+import {
+  multiplicityBounds,
+  type ConceptualType,
+  type Layout,
+  type SemanticModel,
+  type UmlRelationship,
+} from '@uml/contracts';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { serializeToXmi, xmiId, type SerializeOptions } from './serialize.js';
 
@@ -29,6 +35,7 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@',
   parseAttributeValue: false,
+  parseTagValue: false,
 });
 const builder = new XMLBuilder({
   ignoreAttributes: false,
@@ -61,7 +68,10 @@ export function serializeToEnterpriseArchitect(
 
   for (const element of [
     ...model.classes,
-    ...model.classes.flatMap((c) => c.attributes),
+    ...model.classes.flatMap((c) => [
+      ...c.attributes,
+      ...(c.operations ?? []).flatMap((o) => [o, ...o.parameters]),
+    ]),
     ...model.relationships,
   ]) {
     references.set(xmiId(element.id), eaId(element.id));
@@ -72,7 +82,7 @@ export function serializeToEnterpriseArchitect(
     references.set(`${xmiId(relationship.id)}_tgt`, `EAID_dst${base}`);
   }
   for (const primitive of primitiveTypes) {
-    const name = EA_TYPES[primitive['@name'] as ConceptualType];
+    const name = EA_TYPES[primitive['@name'] as ConceptualType] ?? String(primitive['@name']);
     references.set(primitive['@xmi:id'] as string, `EAJava_${name}`);
     primitive['@name'] = name;
     primitive['@visibility'] = 'public';
@@ -113,7 +123,11 @@ export function serializeToEnterpriseArchitect(
   // antes de los metadatos propios para que importe diagrama y propiedades.
   root['xmi:Extension'] = [extension, ...extensions.filter((item) => item !== extension)];
   extension['@extenderID'] = '6.5';
-  const classExtensions = members.filter((element) => element['@xmi:type'] === 'uml:Class');
+  const classExtensions = members.filter((element) =>
+    ['uml:Class', 'uml:Interface', 'uml:Enumeration', 'uml:DataType'].includes(
+      element['@xmi:type'] as string,
+    ),
+  );
   extension['elements'] = {
     element: [
       {
@@ -129,14 +143,14 @@ export function serializeToEnterpriseArchitect(
     if (umlClass === undefined) continue;
     const classElement: XmlElement = {
       '@xmi:idref': element['@xmi:id'] as string,
-      '@xmi:type': 'uml:Class',
+      '@xmi:type': element['@xmi:type'] as string,
       '@name': element['@name'] as string,
       '@scope': 'public',
       model: { '@package': packageId, '@ea_eleType': 'element' },
       properties: {
-        '@sType': 'Class',
+        '@sType': String(element['@xmi:type']).replace('uml:', ''),
         '@scope': 'public',
-        '@isAbstract': 'false',
+        '@isAbstract': String(umlClass.isAbstract ?? false),
         '@isActive': 'false',
       },
       code: { '@gentype': 'Java' },
@@ -147,17 +161,24 @@ export function serializeToEnterpriseArchitect(
     const nativeAttributes: XmlElement[] = [];
     for (const [index, attribute] of umlClass.attributes.entries()) {
       const properties: XmlElement = {
-        '@type': EA_TYPES[attribute.type],
+        '@type': EA_TYPES[attribute.type as ConceptualType] ?? attribute.type,
         '@collection': 'false',
-        '@static': '0',
+        '@static': attribute.isStatic ? '1' : '0',
         '@duplicates': '0',
-        '@changeability': 'changeable',
+        '@changeability': attribute.isReadOnly ? 'frozen' : 'changeable',
       };
       const id = eaId(attribute.id);
       nativeAttributes.push({
         '@xmi:idref': id,
         '@name': attribute.displayName,
-        '@scope': 'Private',
+        '@scope': (
+          {
+            public: 'Public',
+            private: 'Private',
+            protected: 'Protected',
+            package: 'Package',
+          } as const
+        )[attribute.visibility ?? 'private'],
         initial: '',
         documentation: '',
         model: { '@ea_guid': `{${id.slice(5).replaceAll('_', '-')}}` },
@@ -165,8 +186,14 @@ export function serializeToEnterpriseArchitect(
         coords: { '@ordered': '0' },
         containment: { '@containment': 'Not Specified', '@position': String(index) },
         bounds: {
-          '@lower': attribute.nullable ? '0' : '1',
-          '@upper': '1',
+          '@lower': String(
+            multiplicityBounds(attribute.multiplicity ?? (attribute.nullable ? '0..1' : '1'))
+              ?.lower ?? 0,
+          ),
+          '@upper':
+            multiplicityBounds(attribute.multiplicity ?? '1')?.upper === Infinity
+              ? '-1'
+              : String(multiplicityBounds(attribute.multiplicity ?? '1')?.upper ?? 1),
         },
         tags: {
           tag: [
@@ -237,7 +264,19 @@ function list(value: XmlElement[string] | undefined): XmlElement[] {
 function rewriteReferences(node: XmlElement, references: ReadonlyMap<string, string>): void {
   for (const [key, value] of Object.entries(node)) {
     if (typeof value === 'string') {
-      if (['@xmi:id', '@xmi:idref', '@general', '@association', '@type'].includes(key)) {
+      if (
+        [
+          '@xmi:id',
+          '@xmi:idref',
+          '@general',
+          '@association',
+          '@type',
+          '@client',
+          '@supplier',
+          '@contract',
+          '@implementingClassifier',
+        ].includes(key)
+      ) {
         node[key] = references.get(value) ?? value;
       }
     } else {
@@ -252,7 +291,10 @@ function rewriteReferences(node: XmlElement, references: ReadonlyMap<string, str
 }
 
 function connector(relationship: UmlRelationship, model: SemanticModel): XmlElement {
-  const isGeneralization = relationship.kind === 'GENERALIZATION';
+  const isGeneralization =
+    relationship.kind === 'GENERALIZATION' ||
+    relationship.kind === 'REALIZATION' ||
+    relationship.kind === 'DEPENDENCY';
   const aggregation =
     relationship.kind === 'COMPOSITION'
       ? 'composite'
@@ -284,7 +326,14 @@ function connector(relationship: UmlRelationship, model: SemanticModel): XmlElem
         '@aggregation': source ? aggregation : 'none',
         '@containment': 'Unspecified',
       },
-      modifiers: { '@isOrdered': 'false', '@changeable': 'none', '@isNavigable': 'false' },
+      modifiers: {
+        '@isOrdered': 'false',
+        '@changeable': 'none',
+        '@isNavigable': String(
+          (source ? relationship.sourceNavigability : relationship.targetNavigability) ===
+            'navigable',
+        ),
+      },
     };
   };
   return {
@@ -293,7 +342,11 @@ function connector(relationship: UmlRelationship, model: SemanticModel): XmlElem
     target: end(false),
     properties: {
       '@ea_type': isGeneralization
-        ? 'Generalization'
+        ? relationship.kind === 'REALIZATION'
+          ? 'Realisation'
+          : relationship.kind === 'DEPENDENCY'
+            ? 'Dependency'
+            : 'Generalization'
         : aggregation === 'none'
           ? 'Association'
           : 'Aggregation',

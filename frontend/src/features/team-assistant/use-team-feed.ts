@@ -104,6 +104,11 @@ export function useTeamFeed(
     stale,
     loading,
     refresh: () => connection.current?.refresh() ?? Promise.resolve(),
+    async refreshSnapshot() {
+      const feed = connection.current;
+      await feed?.refresh(true);
+      return feed?.snapshot() ?? empty;
+    },
     retry: () => connection.current?.retry() ?? Promise.resolve(),
   };
 }

@@ -24,6 +24,8 @@ import {
   type SpeechPort,
 } from '@uml/ai';
 import { withRequestCancellation } from '../../lib/request-cancellation.js';
+import type { AiConnections } from '../ai-devices/connections.js';
+import { projectVmEngine, requireProjectVm, resolveAiTarget } from '../ai-devices/routes.js';
 import type { Config } from '../../config.js';
 import type { PublishTeamEvent } from './events.js';
 import type { TeamWorker } from './worker.js';
@@ -144,6 +146,7 @@ export async function teamAiRoutes(
     localSpeech,
     localSpeechModel = null,
     speechTimeoutMs = 120_000,
+    aiConnections,
   }: {
     config: Config;
     publish: PublishTeamEvent;
@@ -156,6 +159,7 @@ export async function teamAiRoutes(
     localSpeech?: SpeechPort | undefined;
     localSpeechModel?: string | null;
     speechTimeoutMs?: number;
+    aiConnections?: AiConnections;
   },
 ): Promise<void> {
   app.addHook('preHandler', app.authenticate);
@@ -178,7 +182,13 @@ export async function teamAiRoutes(
         }
       );
     });
-    return { ...settings, localModel, localSpeechModel, speechTimeoutMs };
+    return {
+      ...settings,
+      localModel,
+      localSpeechModel,
+      speechTimeoutMs,
+      ...(await projectVmEngine(aiConnections, userId)),
+    };
   });
   app.put('/projects/:projectId/ai-settings', async (request) => {
     const { projectId } = projectParams.parse(request.params);
@@ -194,6 +204,8 @@ export async function teamAiRoutes(
       const project = await lockProject(tx, projectId, userId, true);
       if (project.role !== 'OWNER') throw forbidden();
       const previous = await tx.projectAiSettings.findUnique({ where: { projectId } });
+      if (body.aiSource === 'VM' && previous?.aiSource !== 'VM')
+        await requireProjectVm(aiConnections, userId);
       if (
         previous &&
         Object.entries(body).every(([key, value]) => previous[key as keyof typeof body] === value)
@@ -207,7 +219,13 @@ export async function teamAiRoutes(
       });
     });
     if (changed) publish({ type: 'ai.settings', projectId });
-    return { ...settings, localModel, localSpeechModel, speechTimeoutMs };
+    return {
+      ...settings,
+      localModel,
+      localSpeechModel,
+      speechTimeoutMs,
+      ...(await projectVmEngine(aiConnections, userId)),
+    };
   });
 
   /** Transcribe una grabación del panel. Con «Modelo local» prueba primero Whisper local. */
@@ -346,6 +364,16 @@ export async function teamAiRoutes(
               mentions,
               status: 'QUEUED',
               requestModel: body.model,
+              ...(aiConnections
+                ? {
+                    executionTarget: await resolveAiTarget(
+                      tx,
+                      aiConnections,
+                      userId,
+                      settings?.aiSource ?? 'PROVIDERS',
+                    ),
+                  }
+                : {}),
               createdAt: now,
               updatedAt: now,
             },

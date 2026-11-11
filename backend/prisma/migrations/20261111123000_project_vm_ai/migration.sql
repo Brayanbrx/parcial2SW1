@@ -1,0 +1,1 @@
+ALTER TYPE "AiSource" ADD VALUE 'VM';

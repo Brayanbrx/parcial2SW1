@@ -74,6 +74,14 @@ export function summarizeCommand(command: Command, proposal: AiProposal): string
         'clase nueva')
       : '';
   switch (command.type) {
+    case 'UPDATE_CLASS':
+      return 'Actualizar propiedades UML del clasificador';
+    case 'ADD_OPERATION':
+      return `Añadir operación ${command.payload.operation.displayName}`;
+    case 'UPDATE_OPERATION':
+      return 'Actualizar operación';
+    case 'DELETE_OPERATION':
+      return 'Eliminar operación';
     case 'CREATE_CLASS':
       return `Crear clase ${command.payload.displayName}`;
     case 'RENAME_CLASS':

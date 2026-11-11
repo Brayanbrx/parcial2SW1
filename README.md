@@ -5,6 +5,11 @@ diagramas de clases UML. Varios usuarios editan la misma pizarra a la vez, por
 interfaz gráfica o por asistente de texto y voz, y desde una pizarra seleccionada
 se genera un backend Spring Boot con PostgreSQL listo para compilar y ejecutar.
 
+El editor web y móvil incorpora [notación de clases UML 2.5.1](docs/uml-251-clases.md):
+operaciones, visibilidad, abstractos/estáticos, interfaces, enumeraciones, tipos
+propios, dependencia, realización, navegabilidad y rangos de multiplicidad.
+La validación distingue errores UML de restricciones del generador.
+
 Documento maestro: [`docs/referencia/plan-integral-plataforma-uml.md`](docs/referencia/plan-integral-plataforma-uml.md).
 Entrega: **23 de septiembre**. Alcance congelado.
 
@@ -42,6 +47,8 @@ El botón **Ayuda** de la barra superior está disponible en Mis proyectos, en c
 
 En una pizarra, abre **Asistente → Aprender a usar la IA**. La guía interactiva explica Consultar e Instruir, cómo escribir o dictar una solicitud y cómo revisar una propuesta antes de aplicarla. Incluye ejemplos adaptados al diagrama que se cargan como borradores, una práctica sin cambios reales y ayuda para errores frecuentes. No envía solicitudes de IA durante la práctica; recuerda en este navegador cuando completas la guía y permite repasarla. Está disponible en la plataforma web.
 
+La IA atiende solicitudes de varios desarrolladores en paralelo dentro de una misma pizarra. Por defecto procesa hasta **3 solicitudes por pizarra** y **6 en total por instancia de la API**; el resto espera en cola. El panel muestra a quiénes está respondiendo. Cada respuesta conserva su destinatario y cada propuesta conserva su modelo de referencia para detectar conflictos al aplicarla. El operador puede ajustar `TEAM_AI_BOARD_CONCURRENCY` y `TEAM_AI_MAX_CONCURRENCY` en el entorno y recrear la API. Esto también se aplica al motor local; la ejecución efectiva del modelo depende de la capacidad y configuración de su servidor. Véase [ADR-028](docs/adr/ADR-028-ia-simultanea.md).
+
 ```bash
 # 1. Requisitos: Node 22.15, Docker con Compose v2+
 node --version        # v22.15.0
@@ -73,6 +80,8 @@ npm run dev:web      # http://localhost:5173  (proxy a las dos anteriores)
 ```
 
 ### IA local opcional (texto y voz)
+
+Para que cada participante use su propio hardware, abre **Asistente → Mi motor de IA** y vincula su computadora con el conector descargable. También puedes elegir **IA de VM** para usar la sesión instalada en el servidor. La preferencia es personal y conserva las políticas del proyecto. Instalación, servicio y despliegue: [IA personal y de VM](infra/IA-REMOTA.md).
 
 Por defecto la IA usa los proveedores en la nube. En una máquina Windows con GPU NVIDIA se puede añadir un modelo local de texto y un Whisper local para la voz:
 

@@ -67,6 +67,7 @@ COPY --from=build /app/backend/api/dist backend/api/dist
 # contenedor, y la unica forma de detectarlo era generar desde el navegador
 # contra la plataforma levantada.
 COPY templates/ templates/
+COPY scripts/ai-connector.mjs scripts/ai-connector.mjs
 
 USER node
 EXPOSE 3001

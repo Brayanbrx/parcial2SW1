@@ -1,5 +1,7 @@
 import {
   CONCEPTUAL_TYPES,
+  VISIBILITY_SYMBOLS,
+  operationNotation,
   MIN_CLASS_HEIGHT,
   MIN_CLASS_WIDTH,
   type UmlAttribute,
@@ -21,6 +23,7 @@ import { gui, newId } from './commands.js';
 
 export interface ClassNodeData extends Record<string, unknown> {
   readonly umlClass: UmlClass;
+  readonly typeNames?: readonly string[];
   /** Quien no puede escribir tampoco redimensiona. */
   readonly canWrite: boolean;
   /** Clave primaria resuelta, para marcarla aunque no este declarada. */
@@ -66,9 +69,7 @@ export function ClassNode({
     updateNodeInternals(id);
   }, [id, data, selected, width, height, updateNodeInternals]);
 
-  const { umlClass, primaryKeyId, hasError, hasWarning, isRelationshipSource, editedBy, canWrite } =
-    data;
-  const tecnicoDistinto = umlClass.codeName !== umlClass.displayName;
+  const { umlClass, hasError, hasWarning, isRelationshipSource, editedBy, canWrite } = data;
   const edicion = useCanvasEditing();
   const editable = canWrite && edicion !== null;
   const seleccionada = selected === true;
@@ -162,7 +163,22 @@ export function ClassNode({
 
       {/* Compartimento del nombre. En UML va centrado y en negrita, y es lo
           unico que lleva la caja cuando la clase no tiene atributos. */}
-      <header>
+      <header className={umlClass.isAbstract ? 'uml-abstract' : undefined}>
+        {umlClass.kind && umlClass.kind !== 'CLASS' && (
+          <span className="uml-keyword">
+            «
+            {
+              (
+                {
+                  INTERFACE: 'interface',
+                  ENUMERATION: 'enumeration',
+                  DATA_TYPE: 'dataType',
+                } as const
+              )[umlClass.kind]
+            }
+            »
+          </span>
+        )}
         {editando === 'nombre' ? (
           <EntradaEnLinea
             etiqueta="Nombre de la clase"
@@ -184,9 +200,6 @@ export function ClassNode({
             {umlClass.displayName}
           </span>
         )}
-        {tecnicoDistinto && editando !== 'nombre' && (
-          <span className="tecnico">{umlClass.databaseName}</span>
-        )}
         {editedBy !== null && (
           <span className="editando" style={{ background: editedBy.color }}>
             {editedBy.displayName}
@@ -194,13 +207,19 @@ export function ClassNode({
         )}
       </header>
 
+      {umlClass.kind === 'ENUMERATION' && (
+        <ul className="uml-compartment uml-enumeration" aria-label="Literales">
+          {(umlClass.literals ?? []).map((literal, index) => (
+            <li key={index}>{literal}</li>
+          ))}
+        </ul>
+      )}
       <ul className="atributos" ref={lista}>
-        {umlClass.attributes.length === 0 && <li className="vacio">sin atributos</li>}
         {umlClass.attributes.map((atributo, indice) => (
           <AttributeRow
             key={atributo.id}
             attribute={atributo}
-            isPrimaryKey={atributo.id === primaryKeyId}
+            typeNames={data.typeNames ?? []}
             editable={editable}
             selected={seleccionada}
             editing={editando === atributo.id}
@@ -214,10 +233,17 @@ export function ClassNode({
             onEdit={() => setEditando(atributo.id)}
             onCommit={(texto, original) => {
               setEditando(null);
-              const leido = parseAttributeText(texto);
+              const leido = parseAttributeText(texto, data.typeNames);
               if (leido === null || leido.unknownType !== null) return;
-              const inicial = parseAttributeText(original);
-              const cambios: { displayName?: string; type?: UmlAttribute['type'] } = {};
+              const inicial = parseAttributeText(original, data.typeNames);
+              const cambios: Partial<Pick<UmlAttribute, 'displayName' | 'type' | 'visibility'>> =
+                {};
+              if (
+                leido.visibility !== undefined &&
+                leido.visibility !== inicial?.visibility &&
+                leido.visibility !== atributo.visibility
+              )
+                cambios.visibility = leido.visibility;
               if (leido.name !== inicial?.name && leido.name !== atributo.displayName)
                 cambios.displayName = leido.name;
               if (
@@ -253,6 +279,19 @@ export function ClassNode({
         ))}
       </ul>
 
+      {(umlClass.operations?.length ?? 0) > 0 && (
+        <ul className="uml-compartment uml-operations" aria-label="Operaciones">
+          {umlClass.operations?.map((operation) => (
+            <li
+              key={operation.id}
+              data-testid={`operacion-${operation.id}`}
+              className={`${operation.isAbstract ? 'uml-abstract' : ''} ${operation.isStatic ? 'uml-static' : ''}`}
+            >
+              {operationNotation(operation)}
+            </li>
+          ))}
+        </ul>
+      )}
       {/* Fuera de la tarjeta (que recorta su contenido): una barra contextual
           bajo la clase seleccionada para seguir escribiendo atributos. */}
       {editable && (
@@ -265,11 +304,17 @@ export function ClassNode({
                 marcador="nombre: Tipo  (Enter para añadir otro)"
                 continuo
                 onConfirmar={(texto) => {
-                  const leido = parseAttributeText(texto);
+                  const leido = parseAttributeText(texto, data.typeNames);
                   if (leido === null) return false;
                   if (leido.unknownType !== null) return false;
                   edicion?.run(
-                    gui.addAttribute(umlClass.id, newId(), leido.name, leido.type ?? 'String'),
+                    gui.addAttribute(
+                      umlClass.id,
+                      newId(),
+                      leido.name,
+                      leido.type ?? 'String',
+                      leido.visibility,
+                    ),
                   );
                   return true;
                 }}
@@ -298,7 +343,7 @@ export function ClassNode({
 
 function AttributeRow({
   attribute,
-  isPrimaryKey,
+  typeNames,
   editable,
   selected,
   editing,
@@ -314,7 +359,7 @@ function AttributeRow({
   onDragEnd,
 }: {
   attribute: UmlAttribute;
-  isPrimaryKey: boolean;
+  typeNames: readonly string[];
   editable: boolean;
   selected: boolean;
   editing: boolean;
@@ -334,9 +379,9 @@ function AttributeRow({
       <li className="editando-atributo">
         <EntradaEnLinea
           etiqueta={`Atributo ${attribute.displayName}`}
-          inicial={`${attribute.displayName}: ${attribute.type}`}
+          inicial={`${VISIBILITY_SYMBOLS[attribute.visibility ?? 'private']} ${attribute.displayName}: ${attribute.type}`}
           onConfirmar={(texto, original) => {
-            const leido = parseAttributeText(texto);
+            const leido = parseAttributeText(texto, typeNames);
             if (leido?.unknownType) return false;
             onCommit(texto, original);
             return true;
@@ -351,7 +396,7 @@ function AttributeRow({
   return (
     <li
       data-atributo={attribute.id}
-      className={dropMark === null ? undefined : `soltar-${dropMark}`}
+      className={`${attribute.isStatic ? 'uml-static' : ''} ${dropMark === null ? '' : `soltar-${dropMark}`}`}
       tabIndex={editable && selected ? 0 : undefined}
       onDoubleClick={editable ? onEdit : undefined}
       onKeyDown={
@@ -402,36 +447,27 @@ function AttributeRow({
           }}
           onDragEnd={onDragEnd}
         >
-          <span className="guion">-</span>
+          <span className="guion">{VISIBILITY_SYMBOLS[attribute.visibility ?? 'private']}</span>
           <span className="agarre">⠿</span>
         </span>
       ) : (
         <span className="visibilidad" aria-hidden="true">
-          -
+          {VISIBILITY_SYMBOLS[attribute.visibility ?? 'private']}
         </span>
       )}
       <span className="campo">
+        {attribute.isDerived ? '/' : ''}
         {attribute.displayName}
         <span className="separador">: </span>
         <span className="tipo">{attribute.type}</span>
-        {!attribute.nullable && !isPrimaryKey && (
-          <abbr className="obligatorio" title="obligatorio">
-            {' '}
-            *
-          </abbr>
-        )}
+        <span className="uml-multiplicity">
+          {' '}
+          [{attribute.multiplicity ?? (attribute.nullable ? '0..1' : '1')}]
+        </span>
+        {attribute.defaultValue && <span> = {attribute.defaultValue}</span>}
+        {attribute.isReadOnly && <span> {'{readOnly}'}</span>}
       </span>
       <span className="marcas">
-        {isPrimaryKey && (
-          <abbr className="pk" title="clave primaria">
-            PK
-          </abbr>
-        )}
-        {attribute.unique && !isPrimaryKey && (
-          <abbr className="uq" title="unico">
-            U
-          </abbr>
-        )}
         {editable && selected && (
           <button
             type="button"

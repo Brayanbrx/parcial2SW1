@@ -91,7 +91,7 @@ test('tres cuentas comparten feed durable, configuración OWNER y consulta VIEWE
     await dialog
       .getByRole('combobox', { name: 'Respuestas', exact: true })
       .selectOption('HINTS_ONLY');
-    await dialog.getByLabel('Habilitar nuevas solicitudes').uncheck();
+    await dialog.getByLabel('Activar asistente').uncheck();
     await dialog.getByRole('button', { name: 'Guardar configuración' }).click();
     await expect(dialog).not.toBeVisible();
     await expect(

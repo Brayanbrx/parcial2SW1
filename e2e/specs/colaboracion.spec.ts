@@ -153,7 +153,8 @@ test.describe('dos navegadores sobre la misma pizarra', () => {
 
       await escenario.ana.page.locator('.react-flow__edge').first().click();
       await expect(escenario.ana.page.getByTestId('inspector-relacion')).toBeVisible();
-      await escenario.ana.page.getByTestId('multiplicidad-destino').selectOption('0..1');
+      await escenario.ana.page.getByTestId('multiplicidad-destino').fill('0..1');
+      await escenario.ana.page.getByTestId('multiplicidad-destino').press('Tab');
 
       await expect(escenario.beto.page.locator('.react-flow__edge').first()).toContainText('0..1');
     } finally {
@@ -360,7 +361,8 @@ test.describe('validacion en pantalla', () => {
       await origen.dragTo(destino);
 
       await actor.page.locator('.react-flow__edge').first().click();
-      await actor.page.getByTestId('multiplicidad-origen').selectOption('0..*');
+      await actor.page.getByTestId('multiplicidad-origen').fill('0..*');
+      await actor.page.getByTestId('multiplicidad-origen').press('Tab');
 
       // RM-01: la herramienta detecta la N:M y dice como modelarla, en lugar de
       // impedir dibujarla.

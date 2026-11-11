@@ -3998,3 +3998,113 @@ button.toolbox-item.active {
   font-family: var(--mono);
   color: var(--acento);
 }
+
+/* UML class notation: compartments, abstract/static members and editable properties. */
+.nodo-clase header {
+  flex-wrap: wrap;
+}
+.nodo-clase .uml-keyword {
+  flex-basis: 100%;
+  text-align: center;
+  font-style: normal;
+  font-weight: normal;
+}
+.uml-abstract {
+  font-style: italic;
+}
+.uml-static .campo,
+.uml-operations .uml-static {
+  text-decoration: underline;
+}
+.nodo-clase .uml-compartment {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  overflow: auto;
+  flex-shrink: 0;
+  max-height: 100%;
+}
+.nodo-clase .uml-compartment li {
+  white-space: nowrap;
+  line-height: 1.65;
+}
+.nodo-clase .uml-operations {
+  border-top: 1px solid var(--clase-borde);
+}
+.nodo-clase .uml-enumeration {
+  border-bottom: 1px solid var(--clase-borde);
+}
+.marcador-relacion.navegabilidad {
+  fill: none;
+}
+.uml-properties,
+.uml-operation,
+.uml-parameter,
+.uml-attribute {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.uml-operation,
+.uml-attribute {
+  padding: 0.5rem;
+  border: 1px solid var(--clase-borde);
+  border-radius: 4px;
+}
+.uml-operation summary,
+.uml-attribute summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.uml-operation:not([open]) > :not(summary),
+.uml-attribute:not([open]) > :not(summary) {
+  display: none;
+}
+.uml-checkbox {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+}
+.uml-checkbox input {
+  width: auto;
+}
+.uml-field {
+  min-width: 0;
+}
+.uml-field input[aria-invalid='true'] {
+  outline: 2px solid #b3261e;
+}
+.uml-field small {
+  color: #b3261e;
+}
+.uml-add {
+  display: flex;
+  gap: 0.5rem;
+}
+.uml-add input {
+  min-width: 0;
+  flex: 1;
+}
+.uml-literals {
+  list-style: none;
+  padding: 0;
+}
+.uml-literals li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: end;
+}
+.lista-atributos > li > .uml-attribute {
+  grid-column: 1 / -1;
+}
+
+.lista-atributos > li > .uml-field {
+  grid-column: 2;
+  grid-row: 1;
+}
+.lista-atributos > li > .marcadores {
+  grid-column: 1 / -1;
+}
+.lista-atributos > li > .quitar {
+  grid-row: 1;
+}

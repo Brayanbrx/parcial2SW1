@@ -98,7 +98,10 @@ test('combina cambios concurrentes del nombre y tipo de un atributo y los conser
       .fill('edad');
     await beto.page
       .getByRole('combobox', { name: 'Tipo del atributo dato', exact: true })
-      .selectOption('Integer');
+      .fill('Integer');
+    await beto.page
+      .getByRole('combobox', { name: 'Tipo del atributo dato', exact: true })
+      .press('Tab');
     await ana.page.context().setOffline(false);
     for (const actor of [ana, beto]) {
       await expect(actor.page.getByTestId('estado-conexion')).toHaveText('En vivo');

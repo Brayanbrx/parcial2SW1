@@ -11,16 +11,30 @@ import type * as Y from 'yjs';
 import {
   appendAttribute,
   attributesArray,
+  bindMemberType,
   classesMap,
+  deleteOperation,
   deletePosition,
   ensureAttributeRanks,
   findAttributeIndex,
+  forgetMemberType,
+  indexUmlTypes,
+  preserveClassTypeReferences,
+  rememberTypeName,
   readBoardState,
   relationshipsMap,
   setPosition,
   writeAttributeOrder,
   writeEmptyClass,
   writeRelationship,
+  operationsMap,
+  writeOperation,
+  CLASSIFIER_FIELDS,
+  MEMBER_FIELDS,
+  RELATIONSHIP_FIELDS,
+  metaMap,
+  writeOperationParameters,
+  type UmlTypeIndex,
 } from './document.js';
 
 /**
@@ -64,9 +78,12 @@ export function applyBatchToDocument(
     return { applied: false, issues: outcome.issues };
   }
 
+  const types = indexUmlTypes(outcome.state.semantic.classes);
   doc.transact(() => {
+    if (metaMap(doc).get('schemaVersion') !== outcome.state.schemaVersion)
+      metaMap(doc).set('schemaVersion', outcome.state.schemaVersion);
     for (const command of batch.commands) {
-      writeCommand(doc, command, outcome.state.semantic);
+      writeCommand(doc, command, outcome.state.semantic, types);
     }
     writeAttributeMoves(doc, batch.commands, outcome.state.semantic);
   }, origin);
@@ -104,7 +121,12 @@ function writeAttributeMoves(doc: Y.Doc, commands: readonly Command[], model: Se
  * un comando posterior del mismo lote lo elimino, y entonces no hay nada que
  * escribir. Esos casos se saltan en lugar de fallar.
  */
-function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): void {
+function writeCommand(
+  doc: Y.Doc,
+  command: Command,
+  resultado: SemanticModel,
+  types: UmlTypeIndex,
+): void {
   switch (command.type) {
     case 'CREATE_CLASS': {
       const umlClass = findClass(resultado, command.payload.classId);
@@ -126,17 +148,80 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
       const node = classesMap(doc).get(umlClass.id);
       if (node === undefined) return;
 
-      // RA-04: el identificador no cambia, asi que ninguna relacion se rompe.
+      preserveClassTypeReferences(doc, umlClass.id);
       node.set('displayName', umlClass.displayName);
+      rememberTypeName(doc, umlClass.id, umlClass.displayName);
       node.set('codeName', umlClass.codeName);
       node.set('databaseName', umlClass.databaseName);
       return;
     }
 
+    case 'UPDATE_CLASS': {
+      const target = findClass(resultado, command.payload.classId);
+      const node = classesMap(doc).get(command.payload.classId);
+      if (target === undefined || node === undefined) return;
+      for (const field of CLASSIFIER_FIELDS)
+        if (command.payload[field] !== undefined) node.set(field, target[field]);
+      return;
+    }
+
+    case 'ADD_OPERATION': {
+      const target = findClass(resultado, command.payload.classId);
+      const operation = target?.operations?.find((o) => o.id === command.payload.operation.id);
+      if (operation !== undefined) {
+        writeOperation(
+          doc,
+          command.payload.classId,
+          operation,
+          command.payload.beforeOperationId,
+          types,
+        );
+        classesMap(doc).get(command.payload.classId)?.set('hasOperations', true);
+      }
+      return;
+    }
+
+    case 'UPDATE_OPERATION': {
+      const operation = findClass(resultado, command.payload.classId)?.operations?.find(
+        (o) => o.id === command.payload.operationId,
+      );
+      const node = operationsMap(doc).get(command.payload.operationId);
+      if (operation === undefined || node === undefined) return;
+      for (const field of Object.keys(
+        command.payload.changes,
+      ) as (keyof typeof command.payload.changes)[]) {
+        if (field === 'parameters') {
+          writeOperationParameters(
+            node,
+            operation.parameters,
+            types,
+            command.payload.autoParameterId,
+          );
+          continue;
+        }
+        const value = operation[field];
+        if (value !== undefined) node.set(field, structuredClone(value));
+        if (field === 'returnType') bindMemberType(doc, operation.id, operation.returnType, types);
+      }
+      return;
+    }
+
+    case 'DELETE_OPERATION':
+      deleteOperation(doc, command.payload.operationId);
+      return;
+
     case 'DELETE_CLASS': {
       const { classId } = command.payload;
+      const classifier = classesMap(doc).get(classId);
+      if (classifier) {
+        rememberTypeName(doc, classId, classifier.get('displayName'));
+        for (const attribute of attributesArray(classifier).toArray())
+          forgetMemberType(doc, attribute.get('id') as string);
+      }
       classesMap(doc).delete(classId);
       deletePosition(doc, classId);
+      for (const [id, operation] of operationsMap(doc))
+        if (operation.get('classId') === classId) deleteOperation(doc, id);
 
       // Las relaciones que tocaban la clase se van con ella. Se toman del
       // resultado del dominio: las que ya no estan ahi son las que sobran.
@@ -158,7 +243,10 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
       const attribute = findClass(resultado, command.payload.classId)?.attributes.find(
         (item) => item.id === command.payload.attributeId,
       );
-      if (attribute !== undefined) appendAttribute(node, attribute);
+      if (attribute !== undefined) {
+        appendAttribute(node, attribute);
+        bindMemberType(doc, attribute.id, attribute.type, types);
+      }
       return;
     }
 
@@ -183,9 +271,11 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
           target.set(field, attribute[field]);
         }
       }
-      for (const field of ['type', 'primaryKey', 'nullable', 'unique'] as const) {
+      for (const field of ['type', 'primaryKey', 'nullable', 'unique', ...MEMBER_FIELDS] as const) {
         if (command.payload[field] !== undefined) target.set(field, attribute[field]);
       }
+      if (command.payload.type !== undefined)
+        bindMemberType(doc, attribute.id, attribute.type, types);
       return;
     }
 
@@ -199,6 +289,7 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
       for (let index = entries.length - 1; index >= 0; index--) {
         if (entries[index]?.get('id') === command.payload.attributeId) attributes.delete(index, 1);
       }
+      forgetMemberType(doc, command.payload.attributeId);
       return;
     }
 
@@ -219,7 +310,12 @@ function writeCommand(doc: Y.Doc, command: Command, resultado: SemanticModel): v
       if (node === undefined) return;
 
       if (command.type === 'UPDATE_RELATIONSHIP') {
-        for (const field of ['kind', 'sourceRoleName', 'targetRoleName'] as const) {
+        for (const field of [
+          'kind',
+          'sourceRoleName',
+          'targetRoleName',
+          ...RELATIONSHIP_FIELDS,
+        ] as const) {
           if (command.payload[field] === undefined) continue;
           const value = relationship[field];
           if (value === undefined) node.delete(field);

@@ -20,6 +20,8 @@ import {
   rootOf,
   type InheritanceGraph,
 } from './inheritance.js';
+import { validateUmlModel } from './validate-uml.js';
+export { validateUmlModel } from './validate-uml.js';
 
 /**
  * Validador del modelo canonico (RF-017, CA-017.1 y CA-017.2).
@@ -50,6 +52,13 @@ function issue(input: IssueInput): ValidationIssue {
 }
 
 export function validateModel(model: SemanticModel): ValidationIssue[] {
+  const uml = validateUmlModel(model);
+  const umlCodes = new Set(uml.map((item) => item.code));
+  return [...uml, ...validateGenerationModel(model).filter((item) => !umlCodes.has(item.code))];
+}
+
+/** Restrictions of the Spring/PostgreSQL projection, independent of UML validity. */
+export function validateGenerationModel(model: SemanticModel): ValidationIssue[] {
   // El grafo de herencia se construye una vez y lo comparten las tres partes
   // que dependen de el: la clave primaria de una subclase, los miembros que
   // hereda y las relaciones que no debe volver a emitir.
@@ -61,7 +70,33 @@ export function validateModel(model: SemanticModel): ValidationIssue[] {
     ...validateInheritance(model, inheritance),
     ...validateRelationships(model, inheritance),
     ...validateOrphanClasses(model),
-  ];
+    ...model.classes.flatMap((c) => {
+      const unsupported =
+        (c.kind !== undefined && c.kind !== 'CLASS') ||
+        c.isAbstract === true ||
+        (c.operations?.length ?? 0) > 0 ||
+        c.attributes.some(
+          (a) =>
+            a.isStatic ||
+            a.isDerived ||
+            a.isReadOnly ||
+            Boolean(a.defaultValue) ||
+            (a.multiplicity !== undefined && a.multiplicity !== (a.nullable ? '0..1' : '1')) ||
+            (a.visibility !== undefined && a.visibility !== 'private'),
+        );
+      return unsupported
+        ? [
+            issue({
+              code: 'GENERATION_UNSUPPORTED_UML',
+              elementIds: [c.id],
+              message: `«${c.displayName}» contiene elementos UML que el generador Spring/PostgreSQL todavía no transforma.`,
+              suggestion:
+                'Puedes seguir editando y exportar XMI. Para generar, utiliza una pizarra de entidades compatible con el generador.',
+            }),
+          ]
+        : [];
+    }),
+  ].map((item) => ({ ...item, scope: 'GENERATION' as const }));
 }
 
 // ---------------------------------------------------------------------------
@@ -578,9 +613,9 @@ function validateRelationship(
       issues.push(
         issue({
           code: 'UNSUPPORTED_MULTIPLICITY',
-          message: `La multiplicidad "${String(multiplicidad)}" no esta soportada.`,
+          message: `El generador no transforma la multiplicidad "${String(multiplicidad)}". El editor sí permite rangos UML válidos.`,
           elementIds: [relationship.id],
-          suggestion: `Multiplicidades soportadas: ${MULTIPLICITIES.join(', ')}.`,
+          suggestion: `Multiplicidades del generador: ${MULTIPLICITIES.join(', ')}. Puedes conservar el modelo y exportarlo como XMI.`,
         }),
       );
     }

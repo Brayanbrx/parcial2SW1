@@ -1,5 +1,6 @@
 import {
   SCHEMA_VERSION,
+  UML_PRIMITIVE_TYPES,
   emptyBoardState,
   type BoardState,
   type Layout,
@@ -9,6 +10,8 @@ import {
   type UmlAttribute,
   type UmlClass,
   type UmlRelationship,
+  type UmlOperation,
+  type UmlParameter,
 } from '@uml/contracts';
 import * as Y from 'yjs';
 
@@ -33,13 +36,262 @@ export const CLASSES_KEY = 'classes';
 export const RELATIONSHIPS_KEY = 'relationships';
 export const LAYOUT_KEY = 'layout';
 export const META_KEY = 'meta';
+export const OPERATIONS_KEY = 'operations';
+export const CLASSIFIER_FIELDS = ['kind', 'isAbstract', 'literals'] as const;
+export const MEMBER_FIELDS = [
+  'visibility',
+  'isStatic',
+  'multiplicity',
+  'defaultValue',
+  'isDerived',
+  'isReadOnly',
+] as const;
+export const RELATIONSHIP_FIELDS = ['name', 'sourceNavigability', 'targetNavigability'] as const;
 export const POSITIONS_KEY = 'positions';
 export const ATTRIBUTES_KEY = 'attributes';
 const LEGACY_ATTRIBUTE_ORDER_KEY = 'attributeOrder';
 const INITIAL_ATTRIBUTE_RANK_KEY = 'initialOrderRank';
 const ATTRIBUTE_RANK_KEY = 'orderRank';
+const TYPE_BINDINGS_KEY = 'typeBindings';
+const TYPE_NAMES_KEY = 'typeDisplayNames';
 
 type YMapAny = Y.Map<unknown>;
+type ClassType = { classId: string; displayName: string };
+type TypeBinding = ClassType & { name: string };
+export type UmlTypeIndex = ReadonlyMap<string, ClassType | null>;
+
+function typeBindings(doc: Y.Doc): Y.Map<TypeBinding> {
+  return doc.getMap<TypeBinding>(TYPE_BINDINGS_KEY);
+}
+
+export function indexUmlTypes(classes: readonly UmlClass[]): UmlTypeIndex {
+  const types = new Map<string, ClassType | null>();
+  for (const { id, displayName, codeName } of classes) {
+    for (const name of new Set([displayName, codeName])) {
+      if (name === 'void' || UML_PRIMITIVE_TYPES.includes(name)) continue;
+      types.set(name, types.has(name) ? null : { classId: id, displayName });
+    }
+  }
+  return types;
+}
+
+export function bindMemberType(
+  doc: Y.Doc,
+  id: string,
+  name: string | undefined,
+  types: UmlTypeIndex,
+): void {
+  const bindings = typeBindings(doc);
+  const target = name === undefined ? null : types.get(name);
+  if (target && name !== undefined) {
+    const previous = bindings.get(id);
+    if (previous?.name !== name || previous.classId !== target.classId)
+      bindings.set(id, { ...target, name });
+  } else {
+    bindings.delete(id);
+  }
+}
+
+export function forgetMemberType(doc: Y.Doc, id: string): void {
+  typeBindings(doc).delete(id);
+}
+
+export function rememberTypeName(doc: Y.Doc, id: string, name: unknown): void {
+  if (typeof name !== 'string') return;
+  const names = doc.getMap<string>(TYPE_NAMES_KEY);
+  if (names.get(id) !== name) names.set(id, name);
+}
+
+function memberType<T extends string | undefined>(doc: Y.Doc | null, id: string, raw: T): T {
+  if (!doc || raw === undefined) return raw;
+  const binding = typeBindings(doc).get(id);
+  if (binding?.name !== raw) return raw;
+  const classifiers = classesMap(doc);
+  const live = classifiers.get(binding.classId);
+  const displayName =
+    live?.get('displayName') ?? doc.getMap<string>(TYPE_NAMES_KEY).get(binding.classId);
+  const name =
+    typeof displayName === 'string' && displayName !== binding.displayName ? displayName : raw;
+  if (
+    !live &&
+    [...classifiers.values()].some(
+      (classifier) => classifier.get('displayName') === name || classifier.get('codeName') === name,
+    )
+  ) {
+    return `${name.slice(0, 160)} · tipo eliminado (${binding.classId.slice(0, 8)})` as T;
+  }
+  return name as T;
+}
+
+function visitMemberTypes(model: SemanticModel, visit: (id: string, type?: string) => void): void {
+  for (const classifier of model.classes) {
+    for (const attribute of classifier.attributes) visit(attribute.id, attribute.type);
+    for (const operation of classifier.operations ?? []) {
+      visit(operation.id, operation.returnType);
+      for (const parameter of operation.parameters) visit(parameter.id, parameter.type);
+    }
+  }
+}
+
+/** Los documentos anteriores guardaban nombres. Vincularlos antes de renombrar
+ * evita reescribir los campos que otro participante puede estar editando. */
+export function preserveClassTypeReferences(doc: Y.Doc, classId: string): void {
+  const model = readSemanticModel(doc);
+  const types = indexUmlTypes(model.classes);
+  visitMemberTypes(model, (id, type) => {
+    if (type === undefined || types.get(type)?.classId !== classId) return;
+    const binding = typeBindings(doc).get(id);
+    if (!binding || memberType(doc, id, binding.name) !== type)
+      bindMemberType(doc, id, type, types);
+  });
+}
+
+export function operationsMap(doc: Y.Doc): Y.Map<YMapAny> {
+  return doc.getMap<YMapAny>(OPERATIONS_KEY);
+}
+
+export function writeOperation(
+  doc: Y.Doc,
+  classId: string,
+  operation: UmlOperation,
+  beforeOperationId?: string,
+  types?: UmlTypeIndex,
+): void {
+  const node = new Y.Map<unknown>();
+  for (const [field, value] of Object.entries(operation))
+    if (value !== undefined && field !== 'parameters') node.set(field, structuredClone(value));
+  node.set('parameters', new Y.Map<YMapAny>());
+  node.set('classId', classId);
+  const existing = [...operationsMap(doc).values()]
+    .filter((item) => item.get('classId') === classId)
+    .sort((a, b) => compareIds(a.get('orderRank') as string, b.get('orderRank') as string));
+  const before = existing.findIndex((item) => item.get('id') === beforeOperationId);
+  const index = before < 0 ? existing.length : before;
+  node.set(
+    'orderRank',
+    rankBetween(
+      existing[index - 1]?.get('orderRank') as string | undefined,
+      existing[index]?.get('orderRank') as string | undefined,
+      operation.id,
+    ),
+  );
+  operationsMap(doc).set(operation.id, node);
+  if (types) bindMemberType(doc, operation.id, operation.returnType, types);
+  writeOperationParameters(node, operation.parameters, types);
+}
+
+export function deleteOperation(doc: Y.Doc, id: string): void {
+  const operations = operationsMap(doc);
+  const operation = operations.get(id);
+  if (operation) {
+    for (const parameter of readOperationParameters(operation)) forgetMemberType(doc, parameter.id);
+    forgetMemberType(doc, id);
+    operations.delete(id);
+  }
+}
+
+function parameterNodes(node: YMapAny): YMapAny[] {
+  const parameters = node.get('parameters');
+  if (!(parameters instanceof Y.Map)) return [];
+  return [...(parameters as Y.Map<YMapAny>).values()].sort((a, b) =>
+    compareIds(a.get('orderRank') as string, b.get('orderRank') as string),
+  );
+}
+
+export function readOperationParameters(node: YMapAny): UmlParameter[] {
+  const legacy = node.get('parameters');
+  if (Array.isArray(legacy))
+    return (legacy as UmlParameter[]).map((p) => ({
+      ...structuredClone(p),
+      type: memberType(node.doc, p.id, p.type),
+    }));
+  const entries = parameterNodes(node).map((p) => {
+    const { orderRank: _rank, autoName, ...fields } = p.toJSON();
+    const parameter = fields as UmlParameter;
+    return { parameter, autoName: autoName === true };
+  });
+  const reserved = new Set(entries.map(({ parameter }) => parameter.name));
+  const used = new Set(
+    entries.filter(({ autoName }) => !autoName).map(({ parameter }) => parameter.name),
+  );
+  let next = 1;
+  return entries.map(({ parameter, autoName }) => {
+    let name = parameter.name;
+    // Desempata en el mismo orden de parámetros en todas las réplicas.
+    // Los nombres escritos por una persona se conservan, incluso si chocan.
+    if (autoName && used.has(name)) {
+      while (reserved.has(`parametro${next}`) || used.has(`parametro${next}`)) next++;
+      name = `parametro${next++}`;
+    }
+    used.add(name);
+    return { ...parameter, name, type: memberType(node.doc, parameter.id, parameter.type) };
+  });
+}
+
+/** Only changed parameter fields are written, so independent edits merge. */
+export function writeOperationParameters(
+  node: YMapAny,
+  parameters: readonly UmlParameter[],
+  types?: UmlTypeIndex,
+  autoParameterId?: string,
+): void {
+  const doc = node.doc;
+  const previous = new Map(readOperationParameters(node).map((p) => [p.id, p]));
+  const wanted = new Set(parameters.map((p) => p.id));
+  if (doc)
+    for (const parameter of previous.values())
+      if (!wanted.has(parameter.id)) forgetMemberType(doc, parameter.id);
+  let target = node.get('parameters') as Y.Map<YMapAny>;
+  if (!(target instanceof Y.Map)) {
+    target = new Y.Map<YMapAny>();
+    node.set('parameters', target);
+  }
+  for (const id of [...target.keys()]) if (!wanted.has(id)) target.delete(id);
+  let lower: string | undefined;
+  for (const [index, parameter] of parameters.entries()) {
+    let item = target.get(parameter.id);
+    if (item === undefined) {
+      item = new Y.Map<unknown>();
+      target.set(parameter.id, item);
+      if (parameter.id === autoParameterId) item.set('autoName', true);
+    }
+    const currentRank = item.get('orderRank') as string | undefined;
+    if (currentRank === undefined || (lower !== undefined && currentRank <= lower)) {
+      const next = parameters
+        .slice(index + 1)
+        .map((p) => target.get(p.id)?.get('orderRank') as string | undefined)
+        .find((rank) => rank !== undefined && (lower === undefined || rank > lower));
+      item.set('orderRank', rankBetween(lower, next, parameter.id));
+    }
+    lower = item.get('orderRank') as string;
+    for (const key of [...item.keys()])
+      if (key !== 'orderRank' && key !== 'autoName' && !(key in parameter)) item.delete(key);
+    for (const [key, value] of Object.entries(parameter)) {
+      if (key === 'type') {
+        if (
+          memberType(doc, parameter.id, item.get('type') as string | undefined) !== parameter.type
+        ) {
+          item.set('type', parameter.type);
+          if (doc && types) bindMemberType(doc, parameter.id, parameter.type, types);
+        }
+      } else if (key === 'name' && item.has('name')) {
+        if (previous.get(parameter.id)?.name !== parameter.name) {
+          item.set('name', parameter.name);
+          item.delete('autoName');
+        }
+      } else if (value !== undefined && item.get(key) !== value) item.set(key, value);
+    }
+  }
+}
+
+function optionalFields<K extends string>(
+  node: YMapAny,
+  keys: readonly K[],
+): Partial<Record<K, unknown>> {
+  return Object.fromEntries(
+    keys.filter((key) => node.has(key)).map((key) => [key, node.get(key)]),
+  ) as Partial<Record<K, unknown>>;
+}
 
 export function classesMap(doc: Y.Doc): Y.Map<YMapAny> {
   return doc.getMap<YMapAny>(CLASSES_KEY);
@@ -102,7 +354,7 @@ export function readBoardState(doc: Y.Doc): BoardState {
 export function readSemanticModel(doc: Y.Doc): SemanticModel {
   const classes = [...classesMap(doc).entries()]
     .sort(([left], [right]) => compareIds(left, right))
-    .map(([, value]) => readClass(value));
+    .map(([, value]) => readClass(value, doc));
 
   const relationships = [...relationshipsMap(doc).entries()]
     .sort(([left], [right]) => compareIds(left, right))
@@ -133,26 +385,49 @@ function readLayout(doc: Y.Doc): Layout {
   return { positions, sizes, ...(viewport === undefined ? {} : { viewport }) };
 }
 
-function readClass(node: YMapAny): UmlClass {
+function readClass(node: YMapAny, doc: Y.Doc): UmlClass {
+  const operations = [...operationsMap(doc).values()]
+    .filter((operation) => operation.get('classId') === node.get('id'))
+    .sort(
+      (a, b) =>
+        compareIds(a.get('orderRank') as string, b.get('orderRank') as string) ||
+        compareIds(a.get('id') as string, b.get('id') as string),
+    )
+    .map((operation) => {
+      const { classId: _classId, orderRank: _order, ...fields } = operation.toJSON();
+      const { returnType, ...other } = fields as UmlOperation;
+      return {
+        ...other,
+        ...(returnType === undefined ? {} : { returnType: memberType(doc, other.id, returnType) }),
+        parameters: readOperationParameters(operation),
+      };
+    });
   return {
     id: node.get('id') as string,
     displayName: node.get('displayName') as string,
     codeName: node.get('codeName') as string,
     databaseName: node.get('databaseName') as string,
-    attributes: orderedAttributes(node).map(({ attribute }) => readAttribute(attribute)),
+    attributes: orderedAttributes(node).map(({ attribute }) => readAttribute(attribute, doc)),
+    ...(optionalFields(node, CLASSIFIER_FIELDS) as Pick<
+      UmlClass,
+      (typeof CLASSIFIER_FIELDS)[number]
+    >),
+    ...(operations.length > 0 || node.get('hasOperations') === true ? { operations } : {}),
   };
 }
 
-function readAttribute(node: YMapAny): UmlAttribute {
+function readAttribute(node: YMapAny, doc: Y.Doc): UmlAttribute {
+  const id = node.get('id') as string;
   return {
-    id: node.get('id') as string,
+    id,
     displayName: node.get('displayName') as string,
     codeName: node.get('codeName') as string,
     databaseName: node.get('databaseName') as string,
-    type: node.get('type') as UmlAttribute['type'],
+    type: memberType(doc, id, node.get('type') as UmlAttribute['type']),
     primaryKey: node.get('primaryKey') === true,
     nullable: node.get('nullable') === true,
     unique: node.get('unique') === true,
+    ...(optionalFields(node, MEMBER_FIELDS) as Pick<UmlAttribute, (typeof MEMBER_FIELDS)[number]>),
   };
 }
 
@@ -170,6 +445,10 @@ function readRelationship(node: YMapAny): UmlRelationship {
     targetMultiplicity: node.get('targetMultiplicity') as UmlRelationship['targetMultiplicity'],
     ...(sourceRoleName === undefined ? {} : { sourceRoleName }),
     ...(targetRoleName === undefined ? {} : { targetRoleName }),
+    ...(optionalFields(node, RELATIONSHIP_FIELDS) as Pick<
+      UmlRelationship,
+      (typeof RELATIONSHIP_FIELDS)[number]
+    >),
   };
 }
 
@@ -194,6 +473,9 @@ export function writeClass(target: Y.Map<YMapAny>, umlClass: UmlClass): void {
   node.set('displayName', umlClass.displayName);
   node.set('codeName', umlClass.codeName);
   node.set('databaseName', umlClass.databaseName);
+  for (const field of CLASSIFIER_FIELDS)
+    if (umlClass[field] !== undefined) node.set(field, umlClass[field]);
+  if (umlClass.operations !== undefined) node.set('hasOperations', true);
 
   const attributes = new Y.Array<YMapAny>();
   node.set(ATTRIBUTES_KEY, attributes);
@@ -201,6 +483,11 @@ export function writeClass(target: Y.Map<YMapAny>, umlClass: UmlClass): void {
   // La clase se inserta antes de llenar los atributos: Y.Array solo acepta
   // contenido una vez que su documento la conoce.
   target.set(umlClass.id, node);
+  if (target.doc !== null) {
+    rememberTypeName(target.doc, umlClass.id, umlClass.displayName);
+    for (const operation of umlClass.operations ?? [])
+      writeOperation(target.doc, umlClass.id, operation);
+  }
   for (const attribute of umlClass.attributes) {
     attributes.push([attributeNode(attribute)]);
   }
@@ -208,7 +495,7 @@ export function writeClass(target: Y.Map<YMapAny>, umlClass: UmlClass): void {
 
 /** La clase con sus tres nombres y ningun atributo. */
 export function writeEmptyClass(target: Y.Map<YMapAny>, umlClass: UmlClass): void {
-  writeClass(target, { ...umlClass, attributes: [] });
+  writeClass(target, { ...umlClass, attributes: [], operations: undefined });
 }
 
 export function attributeNode(attribute: UmlAttribute): YMapAny {
@@ -226,6 +513,8 @@ export function applyAttributeFields(node: YMapAny, attribute: UmlAttribute): vo
   node.set('primaryKey', attribute.primaryKey);
   node.set('nullable', attribute.nullable);
   node.set('unique', attribute.unique);
+  for (const field of MEMBER_FIELDS)
+    if (attribute[field] !== undefined) node.set(field, attribute[field]);
 }
 
 export function writeRelationship(target: Y.Map<YMapAny>, relationship: UmlRelationship): void {
@@ -242,6 +531,8 @@ export function applyRelationshipFields(node: YMapAny, relationship: UmlRelation
   node.set('targetClassId', relationship.targetClassId);
   node.set('sourceMultiplicity', relationship.sourceMultiplicity);
   node.set('targetMultiplicity', relationship.targetMultiplicity);
+  for (const field of RELATIONSHIP_FIELDS)
+    if (relationship[field] !== undefined) node.set(field, relationship[field]);
 
   // `delete` y no `set(undefined)`: un rol ausente no debe aparecer en la
   // proyeccion como una clave con valor indefinido.
@@ -400,6 +691,8 @@ export function seedDocument(doc: Y.Doc, state: BoardState = emptyBoardState()):
 
     const classes = classesMap(doc);
     for (const umlClass of state.semantic.classes) writeClass(classes, umlClass);
+    const types = indexUmlTypes(state.semantic.classes);
+    visitMemberTypes(state.semantic, (id, type) => bindMemberType(doc, id, type, types));
 
     const relationships = relationshipsMap(doc);
     for (const relationship of state.semantic.relationships) {

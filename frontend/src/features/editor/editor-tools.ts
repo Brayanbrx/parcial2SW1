@@ -1,7 +1,14 @@
 import type { RelationshipKind } from '@uml/contracts';
 
 export type EditorTool =
-  'SELECT' | 'CLASS' | 'ASSOCIATION' | 'GENERALIZATION' | 'COMPOSITION' | 'AGGREGATION';
+  | 'SELECT'
+  | 'CLASS'
+  | 'ASSOCIATION'
+  | 'GENERALIZATION'
+  | 'COMPOSITION'
+  | 'AGGREGATION'
+  | 'DEPENDENCY'
+  | 'REALIZATION';
 
 export interface RelationshipToolDefinition {
   readonly tool: Exclude<EditorTool, 'SELECT' | 'CLASS'>;
@@ -12,6 +19,20 @@ export interface RelationshipToolDefinition {
 }
 
 export const RELATIONSHIP_TOOLS: readonly RelationshipToolDefinition[] = [
+  {
+    tool: 'DEPENDENCY',
+    kind: 'DEPENDENCY',
+    label: 'Dependencia',
+    description: 'El origen utiliza el destino',
+    shortcut: '5',
+  },
+  {
+    tool: 'REALIZATION',
+    kind: 'REALIZATION',
+    label: 'Realización',
+    description: 'Implementar una interfaz de destino',
+    shortcut: '6',
+  },
   {
     tool: 'ASSOCIATION',
     kind: 'ASSOCIATION',

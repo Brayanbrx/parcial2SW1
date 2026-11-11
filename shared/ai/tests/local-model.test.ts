@@ -42,14 +42,16 @@ describe('configuración del modelo local', () => {
     expect(() => loadAiConfig({ ...local, AI_LOCAL_BASE_URL: url })).toThrow(/AI_LOCAL_BASE_URL/);
   });
 
-  it('exige URL y modelo juntos y deja tiempo para caer a los proveedores', () => {
+  it('exige URL y modelo juntos y conserva un plazo separado para los proveedores', () => {
     expect(() => loadAiConfig({ AI_LOCAL_MODEL: 'gemma4:e4b' })).toThrow(/juntos/);
     expect(() => loadAiConfig({ AI_LOCAL_BASE_URL: 'http://localhost:11434/v1' })).toThrow(
       /juntos/,
     );
-    expect(() =>
-      loadAiConfig({ ...local, AI_LOCAL_TIMEOUT_MS: '120000', AI_CHAIN_TIMEOUT_MS: '120000' }),
-    ).toThrow(/AI_LOCAL_TIMEOUT_MS/);
+    const config = loadAiConfig(local);
+    const ports = createAiPorts(config);
+    expect(config.AI_LOCAL_TIMEOUT_MS).toBe(300_000);
+    expect(ports.local?.capabilities?.timeoutMs).toBe(420_000);
+    expect(ports.llm.capabilities?.timeoutMs).toBe(120_000);
     expect(() =>
       loadAiConfig({
         ...local,

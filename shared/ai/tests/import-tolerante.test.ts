@@ -65,6 +65,51 @@ function tolerante(proposal: BatchProposal, model = vacio) {
 }
 
 describe('importacion tolerante: lo irresoluble se omite, no bloquea', () => {
+  it('separa la firma del nombre de un método leído en una foto', () => {
+    const proposal = interpretarPropuesta(
+      'foto',
+      JSON.stringify({
+        operations: [
+          create('Pedido'),
+          { op: 'ADD_OPERATION', className: 'Pedido', operationName: '+ calcular(): Decimal' },
+        ],
+      }),
+      { tolerante: true },
+    );
+    expect(proposal.operations[1]).toMatchObject({
+      operationName: 'calcular',
+      returnType: 'Decimal',
+    });
+  });
+  it('conserva tipos declarados en la foto y multiplicidades UML numéricas', () => {
+    const proposal = interpretarPropuesta(
+      'foto',
+      JSON.stringify({
+        operations: [
+          create('Cliente'),
+          create('Pedido'),
+          { ...attr('Pedido', 'titular'), type: 'Cliente' },
+          { ...rel('Cliente', 'Pedido'), toMultiplicity: '2..5' },
+        ],
+      }),
+      { tolerante: true },
+    );
+    const outcome = tolerante(proposal);
+    expect(outcome.kind).toBe('BATCH');
+    if (outcome.kind !== 'BATCH') return;
+    const result = applyBatch(
+      { schemaVersion: '1.0.0', semantic: vacio, layout: { positions: {}, sizes: {} } },
+      outcome.batch,
+    );
+    expect(result.applied).toBe(true);
+    if (result.applied) {
+      expect(
+        result.state.semantic.classes.find((c) => c.displayName === 'Pedido')?.attributes[0]?.type,
+      ).toBe('Cliente');
+      expect(result.state.semantic.relationships[0]?.targetMultiplicity).toBe('2..5');
+    }
+  });
+
   it('una duda escrita junto a operaciones produce candidato y aviso, no pregunta', () => {
     const outcome = tolerante({
       operations: [create('Materia'), rel('Materia', 'Materia')],

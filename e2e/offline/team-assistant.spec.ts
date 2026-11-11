@@ -45,6 +45,8 @@ async function setup(
   status: 'FAILED' | 'INTERRUPTED' | 'CANCELLED',
   clarification = false,
   loseFirstResponse = false,
+  pendingStatus: 'QUEUED' | 'PROCESSING' = 'QUEUED',
+  faults: { sendDelayMs?: number; loseCancelResponse?: boolean } = {},
 ) {
   const messages: TeamMessage[] = [];
   const requests: TeamRequestBody[] = [];
@@ -107,7 +109,8 @@ async function setup(
       if (message?.authorKind !== 'USER' || message.kind === 'CHAT')
         throw new Error('Solicitud inexistente');
       messages[index] = { ...message, status: 'CANCELLED', updatedAt: stamp() };
-      await route.fulfill({ json: messages[index] });
+      if (faults.loseCancelResponse) await route.abort('connectionreset');
+      else await route.fulfill({ json: messages[index] });
     } else if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as TeamRequestBody;
       requests.push(body);
@@ -119,11 +122,13 @@ async function setup(
       const accepted = makeRequest(body);
       messages.push({
         ...accepted,
-        status: status === 'CANCELLED' ? 'QUEUED' : status,
+        status: status === 'CANCELLED' ? pendingStatus : status,
         errorCode: status === 'CANCELLED' ? null : 'team_ai_failed',
         updatedAt: stamp(),
       });
       if (loseFirstResponse && requests.length === 1) {
+        if (faults.sendDelayMs)
+          await new Promise((resolve) => setTimeout(resolve, faults.sendDelayMs));
         await route.abort('connectionreset');
         return;
       }
@@ -265,6 +270,66 @@ for (const status of ['FAILED', 'INTERRUPTED', 'CANCELLED'] as const) {
     expect(requests[0]!.clientRequestId).not.toBe(requests[1]!.clientRequestId);
   });
 }
+
+test('puede detener una inferencia activa y recuperar su texto', async ({ page }) => {
+  const { requests } = await setup(page, 'CANCELLED', false, false, 'PROCESSING');
+  await hablarConIa(page);
+  const input = page.getByTestId('entrada-asistente');
+  await input.fill('Revisa la relación entre Pedido y Cliente');
+  await page.getByTestId('enviar-asistente').click();
+  await expect(page.getByTestId('conversacion')).toContainText('Procesando');
+  await page.getByTestId('cancelar-solicitud').click();
+  await expect(page.getByTestId('conversacion')).toContainText('Solicitud cancelada');
+  await expect(input).toHaveValue('Revisa la relación entre Pedido y Cliente');
+  expect(requests).toHaveLength(1);
+});
+
+test('conserva la orden de cancelar si se pierde la confirmación de envío', async ({ page }) => {
+  await setup(page, 'CANCELLED', false, true, 'PROCESSING', { sendDelayMs: 800 });
+  await hablarConIa(page);
+  const input = page.getByTestId('entrada-asistente');
+  await input.fill('Revisa Pedido');
+  await page.getByTestId('enviar-asistente').click();
+  await page.getByTestId('cancelar-solicitud').click();
+  await expect(page.getByTestId('conversacion')).toContainText('Solicitud cancelada');
+  await expect(input).toHaveValue('Revisa Pedido');
+});
+
+test('recupera el texto tras perder la respuesta de una cancelación registrada', async ({
+  page,
+}) => {
+  await setup(page, 'CANCELLED', false, false, 'PROCESSING', { loseCancelResponse: true });
+  await hablarConIa(page);
+  const input = page.getByTestId('entrada-asistente');
+  await input.fill('Revisa Cliente');
+  await page.getByTestId('enviar-asistente').click();
+  await expect(input).toHaveValue('');
+  await expect(page.getByTestId('conversacion')).toContainText('Procesando');
+  await page.getByTestId('cancelar-solicitud').click();
+  await expect(page.getByTestId('conversacion')).toContainText('Solicitud cancelada');
+  await expect(input).toHaveValue('Revisa Cliente');
+  await expect(page.getByText('No se pudo contactar al servidor.', { exact: true })).toHaveCount(0);
+});
+
+test('cancelar desde el historial conserva otro borrador y permite reutilizar el texto cancelado', async ({
+  page,
+}) => {
+  await setup(page, 'CANCELLED', false, false, 'PROCESSING');
+  await hablarConIa(page);
+  const input = page.getByTestId('entrada-asistente');
+  await input.fill('Revisa la clase Pedido');
+  await page.getByTestId('enviar-asistente').click();
+  await expect(page.getByTestId('conversacion')).toContainText('Procesando');
+  await page.reload();
+  await expect(page.getByTestId('estado-conexion')).toHaveText('En vivo');
+  if (!(await input.isVisible())) await page.getByTestId('pestana-asistente').click();
+  await input.fill('Mi borrador sobre Factura');
+  await page.getByRole('button', { name: 'Cancelar esta solicitud' }).click();
+  await expect(page.getByTestId('conversacion')).toContainText('Solicitud cancelada');
+  await expect(input).toHaveValue('Mi borrador sobre Factura');
+  await page.getByRole('button', { name: 'Reintentar con este texto' }).click();
+  await expect(input).toHaveValue('Revisa la clase Pedido');
+});
 
 test('un comando de voz fallido conserva el borrador escrito y permite recuperar su transcripción', async ({
   page,

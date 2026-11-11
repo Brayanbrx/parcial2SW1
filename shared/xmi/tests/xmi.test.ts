@@ -19,14 +19,12 @@ function exportar(model: SemanticModel, modelName = 'Prueba'): string {
 }
 
 describe('integridad XML antes de importar', () => {
-  it('avisa al aproximar un intervalo finito y conserva que admite varios elementos', () => {
+  it('conserva un intervalo finito exactamente sin aproximarlo', () => {
     const parsed = parseXmi(
       '<xmi:XMI xmlns:xmi="x" xmlns:uml="u"><uml:Model xmi:type="uml:Model" name="Rango"><packagedElement xmi:type="uml:Class" xmi:id="a" name="Equipo"/><packagedElement xmi:type="uml:Class" xmi:id="b" name="Persona"/><packagedElement xmi:type="uml:Association" xmi:id="r"><ownedEnd type="a"/><ownedEnd type="b"><lowerValue value="2"/><upperValue value="5"/></ownedEnd></packagedElement></uml:Model></xmi:XMI>',
     );
-    expect(parsed.relationships[0]?.targetMultiplicity).toBe('1..*');
-    expect(parsed.warnings).toEqual([
-      expect.objectContaining({ reason: expect.stringContaining('2..5') }),
-    ]);
+    expect(parsed.relationships[0]?.targetMultiplicity).toBe('2..5');
+    expect(parsed.warnings).toEqual([]);
   });
 
   it.each([

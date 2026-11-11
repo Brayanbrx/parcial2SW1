@@ -110,7 +110,10 @@ export function ValidationPanel({ issues, onSelect }: ValidationPanelProps): Rea
                     if (primero !== undefined) onSelect(primero);
                   }}
                 >
-                  <span className="mensaje">{hallazgo.message}</span>
+                  <span className="mensaje">
+                    <strong>{hallazgo.scope === 'GENERATION' ? 'Generación: ' : 'UML: '}</strong>
+                    {hallazgo.message}
+                  </span>
                   {hallazgo.suggestion !== undefined && (
                     <span className="sugerencia">{hallazgo.suggestion}</span>
                   )}
