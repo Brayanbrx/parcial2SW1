@@ -83,11 +83,26 @@ export interface XmiRelationship extends Pick<
   readonly targetName: string;
   readonly sourceXmiId?: string;
   readonly targetXmiId?: string;
+  readonly associationClassXmiId?: string;
   readonly sourceMultiplicity: Multiplicity;
   readonly targetMultiplicity: Multiplicity;
   readonly sourceRole: string | null;
   readonly targetRole: string | null;
 }
+
+const XMI_CLASSIFIERS = new Set([
+  'uml:Class',
+  'uml:AssociationClass',
+  'uml:Interface',
+  'uml:Enumeration',
+  'uml:DataType',
+]);
+
+const XMI_CLASSIFIER_KINDS: Readonly<Partial<Record<string, ClassifierKind>>> = {
+  'uml:Interface': 'INTERFACE',
+  'uml:Enumeration': 'ENUMERATION',
+  'uml:DataType': 'DATA_TYPE',
+};
 
 /** Lo que el parser no supo traducir, para que el usuario lo vea. */
 export interface XmiWarning {
@@ -177,21 +192,13 @@ export function parseXmi(xml: string): XmiImport {
     ),
   ];
   for (const elemento of tiposDeclarados) {
-    if (
-      ![
-        'uml:PrimitiveType',
-        'uml:Class',
-        'uml:Interface',
-        'uml:Enumeration',
-        'uml:DataType',
-      ].includes(tipoXmi(elemento) ?? '')
-    )
-      continue;
+    const type = tipoXmi(elemento) ?? '';
+    if (type !== 'uml:PrimitiveType' && !XMI_CLASSIFIERS.has(type)) continue;
     const id = texto(elemento['@xmi:id']);
     const nombre = texto(elemento['@name']);
     if (id !== null && nombre !== null) {
       const conceptual = tipoConceptual(nombre);
-      if (tipoXmi(elemento) === 'uml:PrimitiveType') primitivos.set(id, conceptual ?? nombre);
+      if (type === 'uml:PrimitiveType') primitivos.set(id, conceptual ?? nombre);
       else {
         primitivos.set(id, nombre);
         clasificadores.add(id);
@@ -216,12 +223,8 @@ export function parseXmi(xml: string): XmiImport {
   );
 
   for (const elemento of elementos) {
-    if (
-      !['uml:Class', 'uml:Interface', 'uml:Enumeration', 'uml:DataType'].includes(
-        tipoXmi(elemento) ?? '',
-      )
-    )
-      continue;
+    const type = tipoXmi(elemento) ?? '';
+    if (!XMI_CLASSIFIERS.has(type)) continue;
     if (proxies.has(texto(elemento['@xmi:id']))) {
       warnings.push({
         element: texto(elemento['@name']) ?? 'conector auxiliar',
@@ -239,21 +242,12 @@ export function parseXmi(xml: string): XmiImport {
 
     const id = texto(elemento['@xmi:id']);
     if (id !== null) porId.set(id, nombre);
+    const kind = XMI_CLASSIFIER_KINDS[type];
 
     classes.push({
       xmiId: id === null ? null : fromXmiId(id),
       name: nombre,
-      ...(tipoXmi(elemento) === 'uml:Class'
-        ? {}
-        : {
-            kind: (
-              {
-                'uml:Interface': 'INTERFACE',
-                'uml:Enumeration': 'ENUMERATION',
-                'uml:DataType': 'DATA_TYPE',
-              } as Record<string, ClassifierKind>
-            )[tipoXmi(elemento) ?? ''],
-          }),
+      ...(kind === undefined ? {} : { kind }),
       ...(texto(elemento['@isAbstract']) === 'true' ? { isAbstract: true } : {}),
       ...(tipoXmi(elemento) === 'uml:Enumeration'
         ? {
@@ -290,14 +284,22 @@ export function parseXmi(xml: string): XmiImport {
       (extension['relationshipNotations'] as Nodo | undefined)?.['relationship'],
     )) {
       const r = relationships.find(
-        (item) => item.xmiId === fromXmiId(texto(n['@xmi:idref']) ?? ''),
+        (item) =>
+          (item.associationClassXmiId ?? item.xmiId) === fromXmiId(texto(n['@xmi:idref']) ?? ''),
       );
-      if (r !== undefined)
+      if (r !== undefined) {
+        if (r.associationClassXmiId !== undefined) {
+          const originalId = texto(n['@relationshipId']);
+          if (originalId !== null) Object.assign(r, { xmiId: fromXmiId(originalId) });
+          if (typeof n['@originalName'] === 'string')
+            Object.assign(r, { name: n['@originalName'] });
+        }
         for (const field of ['sourceNavigability', 'targetNavigability'] as const) {
           const value = texto(n[`@${field}`]);
           if (value === 'unspecified' || value === 'navigable' || value === 'nonNavigable')
             Object.assign(r, { [field]: value });
         }
+      }
     }
   const paquetes = comoLista(raiz['packagedElement']).filter(
     (item) => tipoXmi(item) === 'uml:Package',
@@ -672,7 +674,8 @@ function leerAsociaciones(
   );
 
   for (const elemento of elementos) {
-    if (tipoXmi(elemento) !== 'uml:Association') continue;
+    const type = tipoXmi(elemento);
+    if (type !== 'uml:Association' && type !== 'uml:AssociationClass') continue;
 
     const miembros = referenciasDe(elemento, 'memberEnd');
     const navegables = referenciasDe(elemento, 'navigableOwnedEnd');
@@ -740,6 +743,7 @@ function leerAsociaciones(
     const nombreDestino = claseDestino.name;
 
     const id = texto(elemento['@xmi:id']);
+    const associationClassId = type === 'uml:AssociationClass' ? id : null;
     const aggregation = texto((conector || legacyAggregation ? origen : destino)['@aggregation']);
     const kind: RelationshipKind | undefined =
       aggregation === 'composite'
@@ -750,7 +754,10 @@ function leerAsociaciones(
 
     // Cada extremo conserva la multiplicidad de la clase que referencia.
     relaciones.push({
-      xmiId: id === null ? null : fromXmiId(id),
+      xmiId: id === null || associationClassId !== null ? null : fromXmiId(id),
+      ...(associationClassId === null
+        ? {}
+        : { associationClassXmiId: fromXmiId(associationClassId) }),
       ...(kind === undefined ? {} : { kind }),
       sourceName: nombreOrigen,
       targetName: nombreDestino,
@@ -766,7 +773,9 @@ function leerAsociaciones(
         warnings,
         `${nombreOrigen} → ${nombreDestino}: destino`,
       ),
-      ...(texto(elemento['@name']) ? { name: texto(elemento['@name']) as string } : {}),
+      ...(associationClassId === null && texto(elemento['@name'])
+        ? { name: texto(elemento['@name']) as string }
+        : {}),
       ...(navegables.includes(texto(origen['@xmi:id']) ?? '')
         ? { sourceNavigability: 'navigable' as const }
         : {}),
@@ -789,12 +798,7 @@ function leerGeneralizaciones(
   const relaciones: XmiRelationship[] = [];
 
   for (const clase of elementos) {
-    if (
-      !['uml:Class', 'uml:Interface', 'uml:Enumeration', 'uml:DataType'].includes(
-        tipoXmi(clase) ?? '',
-      )
-    )
-      continue;
+    if (!XMI_CLASSIFIERS.has(tipoXmi(clase) ?? '')) continue;
     const sourceName = texto(clase['@name']);
     if (sourceName === null) continue;
     const sourceId = texto(clase['@xmi:id']);
@@ -876,9 +880,8 @@ function idDeExtremo(extremo: Nodo): string | null {
   return texto((extremo['type'] as Nodo | undefined)?.['@xmi:idref']) ?? texto(extremo['@type']);
 }
 
-/** Reifica la asociación como entidad con dos enlaces, antes de resolver nombres.
- * EA puede conectar la AssociationClass a dos ProxyConnector que señalan la
- * asociación real en classifier. No son participantes del dominio.
+/** Lee la clase y sus extremos por separado. Los archivos de EA con dos
+ * ProxyConnector conservan su conversión anterior a entidad intermedia.
  */
 function normalizarClasesAsociativas(
   elementos: readonly Nodo[],
@@ -891,6 +894,7 @@ function normalizarClasesAsociativas(
   const detalles = extensiones.flatMap((e) =>
     comoLista((e['elements'] as Nodo | undefined)?.['element']),
   );
+  const detallesPorId = new Map(detalles.map((e) => [texto(e['@xmi:idref']), e]));
   const proxies = new Map(
     detalles
       .filter((e) => tipoXmi(e) === 'uml:ProxyConnector')
@@ -898,6 +902,7 @@ function normalizarClasesAsociativas(
   );
   const omitidos = new Set<Nodo>();
   const convertidos = new Map<Nodo, Nodo>();
+  const homonimosEa = new Set<string>();
   const enlaces: Nodo[] = [];
 
   for (const clase of elementos.filter((e) => tipoXmi(e) === 'uml:AssociationClass')) {
@@ -927,7 +932,7 @@ function normalizarClasesAsociativas(
         return (
           participante === undefined ||
           proxies.has(idDeExtremo(e)) ||
-          !['uml:Class', 'uml:AssociationClass'].includes(tipoXmi(participante) ?? '')
+          !XMI_CLASSIFIERS.has(tipoXmi(participante) ?? '')
         );
       })
     ) {
@@ -938,7 +943,13 @@ function normalizarClasesAsociativas(
       });
       continue;
     }
-    if (base !== clase) omitidos.add(base);
+    if (base === clase) {
+      convertidos.set(clase, clase);
+      continue;
+    }
+    omitidos.add(base);
+    const paquete = texto((detallesPorId.get(id)?.['model'] as Nodo | undefined)?.['@package']);
+    if (paquete !== null) homonimosEa.add(JSON.stringify([paquete, nombre]));
     for (const [index, participante] of participantes.entries()) {
       const opuesto = participantes[1 - index]!;
       const endId = `${id}_participant_${index}`;
@@ -976,8 +987,8 @@ function normalizarClasesAsociativas(
     });
   }
 
-  // No fusionar clases por nombre: EA permite una clase vacía homónima aparte.
-  // Solo omitirla si no tiene contenido ni referencias semánticas entrantes.
+  // Los archivos antiguos de EA pueden incluir una tarjeta vacía con el nombre
+  // de la clase asociativa reificada. Exigir el mismo paquete y ausencia de enlaces.
   const referenciados = new Set<string>();
   const visitar = (valor: unknown): void => {
     if (valor === null || typeof valor !== 'object') return;
@@ -987,20 +998,22 @@ function normalizarClasesAsociativas(
       else visitar(child);
     }
   };
-  elementos.forEach(visitar);
+  if (homonimosEa.size > 0) elementos.forEach(visitar);
   for (const clase of elementos) {
     if (tipoXmi(clase) !== 'uml:Class' || referenciados.has(texto(clase['@xmi:id']) ?? ''))
       continue;
+    const detalle = detallesPorId.get(texto(clase['@xmi:id']));
+    const paquete = texto((detalle?.['model'] as Nodo | undefined)?.['@package']);
+    const nombre = texto(clase['@name']);
+    if (!homonimosEa.has(JSON.stringify([paquete, nombre]))) continue;
     if (
       Object.keys(clase).some(
         (key) => !['@xmi:type', '@xmi:id', '@name', '@visibility'].includes(key),
       )
     )
       continue;
-    const detalle = detalles.find((e) => e['@xmi:idref'] === clase['@xmi:id']);
     if (['links', 'attributes', 'operations'].some((key) => typeof detalle?.[key] === 'object'))
       continue;
-    if (![...convertidos.keys()].some((c) => c['@name'] === clase['@name'])) continue;
     omitidos.add(clase);
     warnings.push({
       element: texto(clase['@name']) ?? 'clase',
@@ -1008,8 +1021,8 @@ function normalizarClasesAsociativas(
         'Se omitió una clase homónima vacía y sin enlaces; se conserva la clase asociativa con sus atributos.',
     });
   }
-  // Si hay un homónimo con contenido, mantener ambas identidades y distinguir
-  // sus nombres para la propuesta, que referencia clases por nombre.
+  // Mantener las identidades de los demás homónimos y distinguir sus nombres
+  // para la propuesta, que referencia clases por nombre.
   const usados = new Set<string>();
   const nombres = new Set(elementos.map((e) => texto(e['@name'])?.toLowerCase()));
   return [
@@ -1018,7 +1031,11 @@ function normalizarClasesAsociativas(
       .map((e) => {
         const node = convertidos.get(e) ?? e;
         const nombre = texto(node['@name']);
-        if (tipoXmi(node) !== 'uml:Class' || nombre === null || proxies.has(texto(node['@xmi:id'])))
+        if (
+          !['uml:Class', 'uml:AssociationClass'].includes(tipoXmi(node) ?? '') ||
+          nombre === null ||
+          proxies.has(texto(node['@xmi:id']))
+        )
           return node;
         if (!usados.has(nombre.toLowerCase())) {
           usados.add(nombre.toLowerCase());

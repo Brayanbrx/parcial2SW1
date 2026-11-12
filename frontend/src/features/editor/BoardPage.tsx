@@ -815,6 +815,7 @@ function BoardSession({
             canWrite={canWrite}
             run={run}
             onSelect={setSelectedId}
+            onRevealClass={setClassToRevealId}
             collapsed={propiedadesPlegadas}
             onToggleCollapsed={alternarPropiedades}
           />

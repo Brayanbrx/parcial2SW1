@@ -46,7 +46,12 @@ export const MEMBER_FIELDS = [
   'isDerived',
   'isReadOnly',
 ] as const;
-export const RELATIONSHIP_FIELDS = ['name', 'sourceNavigability', 'targetNavigability'] as const;
+export const RELATIONSHIP_FIELDS = [
+  'name',
+  'sourceNavigability',
+  'targetNavigability',
+  'associationClassId',
+] as const;
 export const POSITIONS_KEY = 'positions';
 export const ATTRIBUTES_KEY = 'attributes';
 const LEGACY_ATTRIBUTE_ORDER_KEY = 'attributeOrder';
@@ -355,10 +360,27 @@ export function readSemanticModel(doc: Y.Doc): SemanticModel {
   const classes = [...classesMap(doc).entries()]
     .sort(([left], [right]) => compareIds(left, right))
     .map(([, value]) => readClass(value, doc));
+  const classIds = new Set(classes.filter((c) => (c.kind ?? 'CLASS') === 'CLASS').map((c) => c.id));
+  const linkedClasses = new Set<string>();
 
   const relationships = [...relationshipsMap(doc).entries()]
     .sort(([left], [right]) => compareIds(left, right))
-    .map(([, value]) => readRelationship(value));
+    .map(([, value]) => {
+      const relationship = readRelationship(value);
+      const id = relationship.associationClassId;
+      if (id === undefined) return relationship;
+      // El orden por ID hace que todas las réplicas elijan el mismo vínculo válido.
+      if (
+        (relationship.kind ?? 'ASSOCIATION') !== 'ASSOCIATION' ||
+        !classIds.has(id) ||
+        linkedClasses.has(id)
+      ) {
+        delete relationship.associationClassId;
+      } else {
+        linkedClasses.add(id);
+      }
+      return relationship;
+    });
 
   return { classes, relationships };
 }

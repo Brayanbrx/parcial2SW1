@@ -69,7 +69,8 @@ export function applyBatchToDocument(
   batch: CommandBatch,
   origin: unknown = LOCAL_ORIGIN,
 ): DocumentBatchOutcome {
-  const outcome = applyBatch(readBoardState(doc), batch);
+  const previous = readBoardState(doc);
+  const outcome = applyBatch(previous, batch);
 
   // RA-03: si algun comando no se puede ejecutar, no se escribe nada. Los
   // errores del modelo resultante si se escriben y quedan marcados: bloquean la
@@ -80,6 +81,7 @@ export function applyBatchToDocument(
 
   const types = indexUmlTypes(outcome.state.semantic.classes);
   doc.transact(() => {
+    removeCompetingAssociationClassLinks(doc, previous.semantic.relationships);
     if (metaMap(doc).get('schemaVersion') !== outcome.state.schemaVersion)
       metaMap(doc).set('schemaVersion', outcome.state.schemaVersion);
     for (const command of batch.commands) {
@@ -89,6 +91,25 @@ export function applyBatchToDocument(
   }, origin);
 
   return { applied: true, issues: outcome.issues };
+}
+
+function removeCompetingAssociationClassLinks(
+  doc: Y.Doc,
+  relationships: readonly UmlRelationship[],
+): void {
+  const owners = new Map<string, string>();
+  for (const relationship of relationships) {
+    if (relationship.associationClassId !== undefined)
+      owners.set(relationship.associationClassId, relationship.id);
+  }
+  if (owners.size === 0) return;
+
+  // Limpiar los vínculos descartados antes de que un comando quite el vínculo activo.
+  for (const [id, node] of relationshipsMap(doc)) {
+    const classId = node.get('associationClassId');
+    const owner = typeof classId === 'string' ? owners.get(classId) : undefined;
+    if (owner !== undefined && owner !== id) node.delete('associationClassId');
+  }
 }
 
 function writeAttributeMoves(doc: Y.Doc, commands: readonly Command[], model: SemanticModel): void {
@@ -160,6 +181,16 @@ function writeCommand(
       const target = findClass(resultado, command.payload.classId);
       const node = classesMap(doc).get(command.payload.classId);
       if (target === undefined || node === undefined) return;
+      if (command.payload.kind !== undefined && node.get('kind') !== target.kind) {
+        const activeLinks = new Set(
+          resultado.relationships
+            .filter((r) => r.associationClassId === target.id)
+            .map((r) => r.id),
+        );
+        for (const [id, relationship] of relationshipsMap(doc))
+          if (relationship.get('associationClassId') === target.id && !activeLinks.has(id))
+            relationship.delete('associationClassId');
+      }
       for (const field of CLASSIFIER_FIELDS)
         if (command.payload[field] !== undefined) node.set(field, target[field]);
       return;
@@ -225,9 +256,16 @@ function writeCommand(
 
       // Las relaciones que tocaban la clase se van con ella. Se toman del
       // resultado del dominio: las que ya no estan ahi son las que sobran.
-      const supervivientes = new Set(resultado.relationships.map((item) => item.id));
-      for (const relationshipId of [...relationshipsMap(doc).keys()]) {
-        if (!supervivientes.has(relationshipId)) relationshipsMap(doc).delete(relationshipId);
+      const supervivientes = new Map(resultado.relationships.map((item) => [item.id, item]));
+      const relationships = relationshipsMap(doc);
+      for (const [id, node] of relationships) {
+        const relationship = supervivientes.get(id);
+        if (relationship === undefined) relationships.delete(id);
+        else if (
+          node.get('associationClassId') === classId &&
+          relationship.associationClassId !== classId
+        )
+          node.delete('associationClassId');
       }
       return;
     }
@@ -310,6 +348,9 @@ function writeCommand(
       if (node === undefined) return;
 
       if (command.type === 'UPDATE_RELATIONSHIP') {
+        // Un vínculo invalidado por la fusión no debe reaparecer al volver a Asociación.
+        if (command.payload.kind !== undefined && relationship.associationClassId === undefined)
+          node.delete('associationClassId');
         for (const field of [
           'kind',
           'sourceRoleName',

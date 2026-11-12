@@ -13,6 +13,8 @@ const double kListPadding = 10;
 /// Alto de la tarjeta según cuántos atributos tiene (`altoDeNodo`).
 double nodeHeight(int attributes) => math.max(80, kHeaderHeight + kListPadding + attributes * kRowHeight);
 
+double _nodeWidth(int lineLength) => math.max(kNodeWidth, math.min(760.0, lineLength * 7.0 + 32));
+
 enum Side { left, right, top, bottom, loopSource, loopTarget }
 
 /// Punto de un lado donde se ancla la línea (los `Handle` de React Flow).
@@ -47,6 +49,7 @@ class EdgeRoute {
     required this.targetLabel,
     required this.sourceRoleLabel,
     required this.targetRoleLabel,
+    this.associationClassBounds,
   });
 
   final UmlRelationship relationship;
@@ -62,9 +65,19 @@ class EdgeRoute {
   final Offset targetLabel;
   final Offset sourceRoleLabel;
   final Offset targetRoleLabel;
+  final Rect? associationClassBounds;
 
   Offset get source => points.first;
   Offset get target => points.last;
+  Offset get midpoint => (sourceToward + targetToward) / 2;
+
+  (Offset, Offset)? get associationClassConnector {
+    final box = associationClassBounds;
+    if (box == null) return null;
+    final delta = midpoint - box.center;
+    final fraction = math.min(box.width / 2 / delta.dx.abs(), box.height / 2 / delta.dy.abs());
+    return fraction >= 1 ? null : (midpoint, box.center + delta * fraction);
+  }
 }
 
 /// Disposición completa del diagrama a partir del modelo y el layout.
@@ -78,10 +91,7 @@ class DiagramGeometry {
         ...c.operations.map((o) => o.notation),
         ...c.literals,
       ];
-      final naturalWidth = math.max(
-        kNodeWidth,
-        math.min(760.0, lines.map((s) => s.length * 7.0 + 32).reduce(math.max)),
-      );
+      final naturalWidth = _nodeWidth(lines.map((s) => s.length).reduce(math.max));
       final naturalHeight = math.max(
         80.0,
         44.0 +
@@ -100,6 +110,28 @@ class DiagramGeometry {
   final BoardLayout layout;
   final Map<String, Rect> rects = {};
   late final List<EdgeRoute> edges;
+
+  Offset associationClassPosition(UmlRelationship relationship, String name) {
+    final sourceId = relationship.sourceId;
+    final source = rects[sourceId];
+    final target = rects[relationship.targetId];
+    if (source == null || target == null) return const Offset(80, 80);
+    final union = source.expandToInclude(target);
+    final delta = target.center - source.center;
+    final below = delta.dx.abs() >= delta.dy.abs();
+    final loops = model.relationships.where((r) => r.sourceId == sourceId && r.targetId == sourceId).length;
+    final gap = relationship.sourceId == relationship.targetId ? 100 + math.max(0, loops - 1) * 28 : 100;
+    final size = Size(_nodeWidth(name.length), nodeHeight(0));
+    var position = below
+        ? Offset((source.center.dx + target.center.dx) / 2 - size.width / 2, union.bottom + gap)
+        : Offset(union.right + 100, (source.center.dy + target.center.dy) / 2 - size.height / 2);
+    final ordered = rects.values.toList()..sort((a, b) => below ? a.top.compareTo(b.top) : a.left.compareTo(b.left));
+    for (final box in ordered) {
+      if (!(position & size).overlaps(box.inflate(24))) continue;
+      position = below ? Offset(position.dx, box.bottom + 24) : Offset(box.right + 24, position.dy);
+    }
+    return position;
+  }
 
   /// Caja que contiene todas las clases, con aire para bucles y etiquetas.
   Rect get bounds {
@@ -139,6 +171,7 @@ class DiagramGeometry {
         targetLabel: Offset(t.dx + 18, t.dy + 18 + lane.index * 10),
         sourceRoleLabel: Offset(s.dx - 24, s.dy + 38 + lane.index * 14),
         targetRoleLabel: Offset(t.dx + 24, t.dy + 38 + lane.index * 14),
+        associationClassBounds: rects[r.associationClassId],
       );
     }
 
@@ -169,6 +202,7 @@ class DiagramGeometry {
       targetLabel: shifted(_labelNear(t, s)),
       sourceRoleLabel: shifted(_labelNear(s, t, separation: 42, vertical: 8)),
       targetRoleLabel: shifted(_labelNear(t, s, separation: 42, vertical: 8)),
+      associationClassBounds: rects[r.associationClassId],
     );
   }
 

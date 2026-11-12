@@ -1,6 +1,7 @@
 import {
   CONCEPTUAL_TYPES,
   VISIBILITY_SYMBOLS,
+  attributeMultiplicityLabel,
   operationNotation,
   MIN_CLASS_HEIGHT,
   MIN_CLASS_WIDTH,
@@ -460,10 +461,7 @@ function AttributeRow({
         {attribute.displayName}
         <span className="separador">: </span>
         <span className="tipo">{attribute.type}</span>
-        <span className="uml-multiplicity">
-          {' '}
-          [{attribute.multiplicity ?? (attribute.nullable ? '0..1' : '1')}]
-        </span>
+        {attributeMultiplicityLabel(attribute)}
         {attribute.defaultValue && <span> = {attribute.defaultValue}</span>}
         {attribute.isReadOnly && <span> {'{readOnly}'}</span>}
       </span>

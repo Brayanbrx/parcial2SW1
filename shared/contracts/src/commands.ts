@@ -167,6 +167,7 @@ const updateRelationship = z.object({
     kind: z.enum(RELATIONSHIP_KINDS).optional(),
     sourceRoleName: z.string().min(1).nullable().optional(),
     targetRoleName: z.string().min(1).nullable().optional(),
+    associationClassId: idSchema.nullable().optional(),
   }),
 });
 

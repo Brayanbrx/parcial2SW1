@@ -252,7 +252,7 @@ export function reviewText(issues: readonly ValidationIssue[], hintsOnly: boolea
       .slice(0, 8)
       .map(
         (issue) =>
-          `[${issue.code}] ${issue.message}\n${hintsOnly ? 'Pista: ' + (hints[issue.code] ?? 'Revisa la regla del modelo y los elementos señalados; puedes pedir orientación en Preguntar.') : 'Alternativa: ' + (issue.suggestion ?? 'Revisa los elementos implicados y solicita una revisión para analizar la regla.')}`,
+          `[${issue.code}] ${issue.scope === 'GENERATION' ? '[Generación] ' : issue.scope === 'UML' ? '[UML] ' : ''}${issue.message}\n${hintsOnly ? 'Pista: ' + (hints[issue.code] ?? 'Revisa la regla del modelo y los elementos señalados; puedes pedir orientación en Preguntar.') : 'Alternativa: ' + (issue.suggestion ?? 'Revisa los elementos implicados y solicita una revisión para analizar la regla.')}`,
       ),
     ...(issues.length > 8
       ? [`Hay ${issues.length - 8} errores nuevos adicionales; consulta el panel de validación.`]

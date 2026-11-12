@@ -38,8 +38,11 @@ class UmlAttribute {
   final String visibility;
   final bool isStatic, isDerived, isReadOnly;
   final String? multiplicity, defaultValue;
-  String get notation =>
-      '${visibilitySymbols[visibility] ?? '-'} ${isDerived ? '/' : ''}$name: $type [${multiplicity ?? (nullable ? '0..1' : '1')}]${defaultValue == null || defaultValue!.isEmpty ? '' : ' = $defaultValue'}${isReadOnly ? ' {readOnly}' : ''}';
+  String get notation {
+    final range = multiplicity;
+    final label = range == null || range == '0..1' || range == '1' ? '' : ' [$range]';
+    return '${visibilitySymbols[visibility] ?? '-'} ${isDerived ? '/' : ''}$name: $type$label${defaultValue == null || defaultValue!.isEmpty ? '' : ' = $defaultValue'}${isReadOnly ? ' {readOnly}' : ''}';
+  }
 
   factory UmlAttribute.fromJson(Map<String, dynamic> j) => UmlAttribute(
     id: j['id'] as String,
@@ -119,6 +122,7 @@ class UmlRelationship {
     this.name,
     this.sourceNavigability,
     this.targetNavigability,
+    this.associationClassId,
   });
   final String id;
   final String kind;
@@ -129,6 +133,7 @@ class UmlRelationship {
   final String? sourceRole;
   final String? targetRole;
   final String? name, sourceNavigability, targetNavigability;
+  final String? associationClassId;
 
   bool get isGeneralization => kind == 'GENERALIZATION';
   bool get isStructural => !['GENERALIZATION', 'DEPENDENCY', 'REALIZATION'].contains(kind);
@@ -145,6 +150,7 @@ class UmlRelationship {
     name: j['name'] as String?,
     sourceNavigability: j['sourceNavigability'] as String?,
     targetNavigability: j['targetNavigability'] as String?,
+    associationClassId: j['associationClassId'] as String?,
   );
 }
 

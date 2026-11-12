@@ -6,13 +6,14 @@ import {
   type UmlClass,
   type UmlRelationship,
 } from '@uml/contracts';
-import { ancestorsOf, buildInheritanceGraph } from '@uml/domain-core';
+import { ancestorsOf, buildInheritanceGraph, normalizeName, toWords } from '@uml/domain-core';
 import { useState } from 'react';
 import { gui, newId, type CommandBody } from './commands.js';
 import { IconoChevron } from '../../components/icons.js';
 import { reorderAttributes } from './attribute-order.js';
 import { ClassifierProperties, AttributeProperties, UmlInput } from './UmlProperties.js';
 import { multiplicityBounds } from '@uml/contracts';
+import { associationClassPosition, classifierSize } from './uml-layout.js';
 
 export interface InspectorProps {
   readonly state: BoardState;
@@ -20,6 +21,7 @@ export interface InspectorProps {
   readonly canWrite: boolean;
   run(...commands: readonly CommandBody[]): void;
   onSelect(elementId: string | null): void;
+  onRevealClass?(classId: string): void;
   /** Plegado, solo queda la cabecera: el espacio vuelve a la conversación. */
   readonly collapsed?: boolean;
   onToggleCollapsed?(): void;
@@ -54,10 +56,12 @@ export function Inspector(props: InspectorProps): React.JSX.Element {
   }
 
   const umlClass = state.semantic.classes.find((item) => item.id === selectedId);
-  if (umlClass !== undefined) return <ClassInspector {...props} umlClass={umlClass} />;
+  if (umlClass !== undefined)
+    return <ClassInspector key={umlClass.id} {...props} umlClass={umlClass} />;
 
   const relacion = state.semantic.relationships.find((item) => item.id === selectedId);
-  if (relacion !== undefined) return <RelationshipInspector {...props} relationship={relacion} />;
+  if (relacion !== undefined)
+    return <RelationshipInspector key={relacion.id} {...props} relationship={relacion} />;
 
   return (
     <aside className={clase('inspector', props.collapsed)}>
@@ -82,12 +86,15 @@ function ClassInspector({
   onToggleCollapsed,
 }: InspectorProps & { umlClass: UmlClass }): React.JSX.Element {
   const [nuevoAtributo, setNuevoAtributo] = useState('');
+  const association = state.semantic.relationships.find(
+    (r) => r.associationClassId === umlClass.id,
+  );
 
   return (
     <aside className={clase('inspector', collapsed)} data-testid="inspector-clase">
       <InspectorHeader
         title="Propiedades"
-        detail="Clase UML"
+        detail={association ? 'Clase de asociación' : 'Clase UML'}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
       />
@@ -114,6 +121,11 @@ function ClassInspector({
         canWrite={canWrite}
         run={run}
       />
+      {association && (
+        <button type="button" onClick={() => onSelect(association.id)}>
+          Ver asociación
+        </button>
+      )}
 
       <Herencia state={state} umlClass={umlClass} onSelect={onSelect} />
 
@@ -371,6 +383,7 @@ function RelationshipInspector({
   canWrite,
   run,
   onSelect,
+  onRevealClass,
   collapsed,
   onToggleCollapsed,
 }: InspectorProps & { relationship: UmlRelationship }): React.JSX.Element {
@@ -378,6 +391,26 @@ function RelationshipInspector({
     state.semantic.classes.find((item) => item.id === classId)?.displayName ?? '?';
   const relationshipKind = relationship.kind ?? 'ASSOCIATION';
   const esRecursiva = relationship.sourceClassId === relationship.targetClassId;
+  const linkedId = relationship.associationClassId;
+  const linkedClass = state.semantic.classes.find((c) => c.id === linkedId);
+
+  const addAssociationClass = () => {
+    const id = newId();
+    const label = relationship.name?.trim() ?? '';
+    const [firstWord] = toWords(label);
+    const base = firstWord && /^[a-z]/.test(firstWord) ? label : 'Clase de asociación';
+    const existingNames = new Set(state.semantic.classes.map((c) => c.codeName));
+    let name = base;
+    for (let suffix = 2; existingNames.has(normalizeName(name, 'CLASS').codeName); suffix++)
+      name = `${base} ${suffix}`;
+    const size = classifierSize({ displayName: name, attributes: [] });
+    run(
+      gui.createClass(id, name, associationClassPosition(state, relationship, size)),
+      gui.updateRelationship(relationship.id, { associationClassId: id }),
+    );
+    onSelect(id);
+    onRevealClass?.(id);
+  };
 
   return (
     <aside className={clase('inspector', collapsed)} data-testid="inspector-relacion">
@@ -395,7 +428,7 @@ function RelationshipInspector({
         <span>Tipo UML</span>
         <select
           value={relationshipKind}
-          disabled={!canWrite}
+          disabled={!canWrite || linkedId !== undefined}
           data-testid="tipo-relacion"
           onChange={(evento) =>
             run(
@@ -413,14 +446,40 @@ function RelationshipInspector({
         </select>
       </label>
 
-      <UmlInput
-        label="Nombre de relación"
-        value={relationship.name ?? ''}
-        disabled={!canWrite}
-        allowEmpty
-        onCommit={(name) => run(gui.updateRelationship(relationship.id, { name }))}
-      />
+      {linkedId === undefined && (
+        <UmlInput
+          label="Nombre de relación"
+          value={relationship.name ?? ''}
+          disabled={!canWrite}
+          allowEmpty
+          onCommit={(name) => run(gui.updateRelationship(relationship.id, { name }))}
+        />
+      )}
       <p className="pista-relacion">{RELATIONSHIP_HELP[relationshipKind]}</p>
+      {relationshipKind === 'ASSOCIATION' && linkedId === undefined && canWrite && (
+        <button type="button" onClick={addAssociationClass}>
+          Agregar clase de asociación
+        </button>
+      )}
+      {linkedId !== undefined && (
+        <>
+          {linkedClass && (
+            <button type="button" onClick={() => onSelect(linkedClass.id)}>
+              Ver clase «{linkedClass.displayName}»
+            </button>
+          )}
+          {canWrite && (
+            <button
+              type="button"
+              onClick={() =>
+                run(gui.updateRelationship(relationship.id, { associationClassId: null }))
+              }
+            >
+              Desvincular clase de asociación
+            </button>
+          )}
+        </>
+      )}
 
       {!['GENERALIZATION', 'DEPENDENCY', 'REALIZATION'].includes(relationshipKind) && (
         <>

@@ -11,6 +11,180 @@ const makeBatch = (...args: Parameters<typeof buildBatch>) =>
   commandBatchSchema.parse(buildBatch(...args));
 
 describe('edición colaborativa de elementos UML', () => {
+  it.each(['desvincular', 'eliminar'] as const)(
+    'conserva un solo vínculo concurrente y descarta el alternativo al %s el vínculo activo',
+    (action) => {
+      const left = new Y.Doc();
+      const right = new Y.Doc();
+      const alumno = umlId(1),
+        materia = umlId(2),
+        matricula = umlId(3);
+      const first = umlId(4),
+        second = umlId(5);
+      const actor = umlId(100);
+      expect(
+        applyBatchToDocument(
+          left,
+          makeBatch(
+            actor,
+            gui.createClass(alumno, 'Alumno'),
+            gui.createClass(materia, 'Materia'),
+            gui.createClass(matricula, 'Matrícula'),
+            gui.createRelationship(first, alumno, materia),
+            gui.createRelationship(second, alumno, materia),
+          ),
+        ).applied,
+      ).toBe(true);
+      Y.applyUpdate(right, Y.encodeStateAsUpdate(left));
+      expect(
+        applyBatchToDocument(
+          left,
+          makeBatch(actor, gui.updateRelationship(second, { associationClassId: matricula })),
+        ).applied,
+      ).toBe(true);
+      expect(
+        applyBatchToDocument(
+          right,
+          makeBatch(umlId(101), gui.updateRelationship(first, { associationClassId: matricula })),
+        ).applied,
+      ).toBe(true);
+      const update = Y.encodeStateAsUpdate(left);
+      Y.applyUpdate(left, Y.encodeStateAsUpdate(right));
+      Y.applyUpdate(right, update);
+      const merged = readBoardState(left);
+      expect(merged).toEqual(readBoardState(right));
+      expect(
+        merged.semantic.relationships
+          .filter((r) => r.associationClassId === matricula)
+          .map((r) => r.id),
+      ).toEqual([first]);
+
+      const edit =
+        action === 'eliminar'
+          ? gui.deleteRelationship(first)
+          : gui.updateRelationship(first, { associationClassId: null });
+      expect(applyBatchToDocument(left, makeBatch(actor, edit)).applied).toBe(true);
+      Y.applyUpdate(right, Y.encodeStateAsUpdate(left));
+      const after = readBoardState(right);
+      expect(after).toEqual(readBoardState(left));
+      expect(after.semantic.relationships.find((r) => r.id === second)).toBeDefined();
+      expect(after.semantic.relationships.some((r) => r.associationClassId !== undefined)).toBe(
+        false,
+      );
+      expect(after.semantic.classes.some((c) => c.id === matricula)).toBe(true);
+    },
+  );
+
+  it.each(['tipo de relación', 'tipo de clase', 'borrado de clase'] as const)(
+    'resuelve un cambio de %s concurrente con vincular una clase de asociación',
+    (conflict) => {
+      const left = new Y.Doc();
+      const right = new Y.Doc();
+      const alumno = umlId(1),
+        materia = umlId(2),
+        matricula = umlId(3),
+        relacion = umlId(4);
+      const actor = umlId(100);
+      expect(
+        applyBatchToDocument(
+          left,
+          makeBatch(
+            actor,
+            gui.createClass(alumno, 'Alumno'),
+            gui.createClass(materia, 'Materia'),
+            gui.createClass(matricula, 'Matrícula'),
+            gui.createRelationship(relacion, alumno, materia),
+          ),
+        ).applied,
+      ).toBe(true);
+      Y.applyUpdate(right, Y.encodeStateAsUpdate(left));
+      expect(
+        applyBatchToDocument(
+          left,
+          makeBatch(actor, gui.updateRelationship(relacion, { associationClassId: matricula })),
+        ).applied,
+      ).toBe(true);
+      const commands = {
+        'tipo de relación': [
+          gui.updateRelationship(relacion, { kind: 'GENERALIZATION' }),
+          gui.updateRelationship(relacion, { kind: 'ASSOCIATION' }),
+        ],
+        'tipo de clase': [
+          gui.updateClass(matricula, { kind: 'INTERFACE' }),
+          gui.updateClass(matricula, { kind: 'CLASS' }),
+        ],
+        'borrado de clase': [gui.deleteClass(matricula)],
+      } as const;
+      const [edit, restore] = commands[conflict];
+      expect(applyBatchToDocument(right, makeBatch(umlId(101), edit)).applied).toBe(true);
+      const update = Y.encodeStateAsUpdate(left);
+      Y.applyUpdate(left, Y.encodeStateAsUpdate(right));
+      Y.applyUpdate(right, update);
+      const merged = readBoardState(left);
+      expect(merged).toEqual(readBoardState(right));
+      expect(merged.semantic.classes.some((c) => c.id === matricula)).toBe(
+        conflict !== 'borrado de clase',
+      );
+      expect(merged.semantic.relationships[0]).toMatchObject({
+        kind: conflict === 'tipo de relación' ? 'GENERALIZATION' : 'ASSOCIATION',
+      });
+      expect(merged.semantic.relationships[0]).not.toHaveProperty('associationClassId');
+
+      if (restore !== undefined) {
+        expect(applyBatchToDocument(left, makeBatch(actor, restore)).applied).toBe(true);
+        expect(readBoardState(left).semantic.relationships[0]).not.toHaveProperty(
+          'associationClassId',
+        );
+      }
+    },
+  );
+
+  it('conserva el vínculo al combinar una clase de asociación con cambios de multiplicidad', () => {
+    const left = new Y.Doc();
+    const right = new Y.Doc();
+    const alumno = umlId(1),
+      materia = umlId(2),
+      matricula = umlId(3),
+      relacion = umlId(4);
+    const actor = umlId(100);
+    applyBatchToDocument(
+      left,
+      makeBatch(
+        actor,
+        gui.createClass(alumno, 'Alumno'),
+        gui.createClass(materia, 'Materia'),
+        gui.createRelationship(relacion, alumno, materia),
+      ),
+    );
+    Y.applyUpdate(right, Y.encodeStateAsUpdate(left));
+    expect(
+      applyBatchToDocument(
+        left,
+        makeBatch(
+          actor,
+          gui.createClass(matricula, 'Matrícula'),
+          gui.updateRelationship(relacion, { associationClassId: matricula }),
+        ),
+      ).applied,
+    ).toBe(true);
+    applyBatchToDocument(right, makeBatch(umlId(101), gui.changeMultiplicity(relacion, '0..*')));
+    const update = Y.encodeStateAsUpdate(left);
+    Y.applyUpdate(left, Y.encodeStateAsUpdate(right));
+    Y.applyUpdate(right, update);
+    expect(readBoardState(left)).toEqual(readBoardState(right));
+    expect(readBoardState(left).semantic.relationships[0]).toMatchObject({
+      associationClassId: matricula,
+      sourceMultiplicity: '0..*',
+      targetMultiplicity: '0..*',
+    });
+    const deletion = gui.deleteClass(matricula);
+    const undo = undoForDeletion(readBoardState(left), [deletion]);
+    expect(applyBatchToDocument(left, makeBatch(actor, deletion)).applied).toBe(true);
+    expect(readBoardState(left).semantic.relationships[0]).not.toHaveProperty('associationClassId');
+    expect(applyBatchToDocument(left, makeBatch(actor, ...undo!.commands)).applied).toBe(true);
+    expect(readBoardState(left).semantic.relationships[0]?.associationClassId).toBe(matricula);
+  });
+
   it('proyecta y persiste las propiedades nuevas sin perder las existentes', () => {
     const initial = uml251Fixture();
     const doc = new Y.Doc();

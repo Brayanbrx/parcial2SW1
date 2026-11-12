@@ -87,6 +87,80 @@ test('propone un nombre libre después de eliminar un parámetro intermedio', as
   await expect(fields.nth(2)).toHaveValue('parametro2');
 });
 
+test('crea una clase de asociación con atributos y recupera el vínculo al deshacer', async ({
+  page,
+}) => {
+  await enter(page);
+  await create(page, 'Alumno');
+  await create(page, 'Materia');
+  await page.getByTestId('tool-association').click();
+  await page.getByTestId('clase-Alumno').click();
+  await page.getByTestId('clase-Materia').click();
+  const association = page.locator('[data-relationship-kind="ASSOCIATION"]');
+  await page.getByTestId('multiplicidad-origen').fill('0..*');
+  await page.getByTestId('multiplicidad-origen').press('Tab');
+  await page.getByRole('button', { name: 'Agregar clase de asociación' }).click();
+  await page.getByTestId('nombre-clase').fill('Matrícula');
+
+  const connector = association.locator('.enlace-clase-asociacion');
+  await expect(connector).toHaveAttribute('stroke-dasharray', '7 4');
+  await expect(association.locator('.multiplicidad')).toHaveText(['0..*', '0..*']);
+
+  const nameField = page.getByRole('textbox', { name: 'Nombre del nuevo atributo' });
+  const add = page.getByRole('button', { name: 'Añadir', exact: true });
+  await nameField.fill('estado');
+  await add.click();
+  await nameField.fill('fecha');
+  await add.click();
+  const fecha = page.locator('.uml-attribute').filter({ hasText: 'fecha' });
+  await fecha.locator('summary').click();
+  const multiplicity = fecha.getByLabel('Multiplicidad de fecha');
+  await multiplicity.fill('1');
+  await multiplicity.press('Tab');
+  const card = page.getByRole('group', { name: /^Clase Matrícula,/ });
+  await expect(card).toContainText('fecha: String');
+  await expect(card).toContainText('estado: String');
+  await expect(card).not.toContainText(/\[(1|0\.\.1)\]/);
+
+  await page.reload();
+  await expect(page.getByTestId('estado-conexion')).toHaveText('En vivo');
+  await expect(connector).toHaveAttribute('stroke-dasharray', '7 4');
+  await card.getByText('Matrícula', { exact: true }).click();
+  await page.getByRole('button', { name: 'Eliminar clase', exact: true }).click();
+  await expect(connector).toHaveCount(0);
+  await expect(association.locator('.multiplicidad')).toHaveText(['0..*', '0..*']);
+  await page.getByRole('button', { name: 'Deshacer', exact: true }).click();
+  await expect(connector).toHaveAttribute('stroke-dasharray', '7 4');
+  await expect(card).toContainText('fecha: String');
+});
+
+test('mantiene los borradores de Propiedades en el elemento seleccionado', async ({ page }) => {
+  await enter(page);
+  await create(page, 'Alumno');
+  await create(page, 'Materia');
+  const atributo = page.getByRole('textbox', { name: 'Nombre del nuevo atributo' });
+  await atributo.fill('borrador');
+  await page.getByTestId('clase-Alumno').click();
+  await expect(atributo).toHaveValue('');
+
+  for (const [source, target] of [
+    ['Alumno', 'Materia'],
+    ['Materia', 'Alumno'],
+  ]) {
+    await page.getByTestId('tool-association').click();
+    await page.getByTestId(`clase-${source}`).click();
+    await page.getByTestId(`clase-${target}`).click();
+  }
+  const origen = page.getByTestId('multiplicidad-origen');
+  await origen.fill('rango incorrecto');
+  await origen.press('Tab');
+  await expect(origen).toHaveAttribute('aria-invalid', 'true');
+  const primera = page.getByRole('group', { name: 'ASSOCIATION entre Alumno y Materia' });
+  await primera.press('Enter');
+  await expect(origen).toHaveValue('1');
+  await expect(origen).toHaveAttribute('aria-invalid', 'false');
+});
+
 test('comparte interfaces, enumeraciones y realización entre dos navegadores', async ({
   page,
   browser,

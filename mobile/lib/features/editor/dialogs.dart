@@ -192,7 +192,7 @@ class RelationshipInput {
 Future<RelationshipInput?> editRelationship(BuildContext context, List<UmlClass> classes) {
   var kind = 'ASSOCIATION';
   var source = classes[0].id;
-  var target = classes[1].id;
+  var target = classes.length > 1 ? classes[1].id : source;
   var sm = '1';
   var tm = '0..*';
   final classOptions = [for (final c in classes) (c.id, c.name)];

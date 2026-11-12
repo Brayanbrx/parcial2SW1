@@ -1,5 +1,5 @@
 import type { RelationshipKind, UmlRelationship } from '@uml/contracts';
-import { getStraightPath, type Edge, type EdgeProps } from '@xyflow/react';
+import { getStraightPath, useInternalNode, type Edge, type EdgeProps } from '@xyflow/react';
 
 export interface AsociacionData extends Record<string, unknown> {
   readonly origen: string;
@@ -8,6 +8,7 @@ export interface AsociacionData extends Record<string, unknown> {
   readonly rolDestino: string | undefined;
   readonly kind: RelationshipKind;
   readonly name?: string | undefined;
+  readonly associationClassId?: string | undefined;
   readonly sourceNavigability?: UmlRelationship['sourceNavigability'];
   readonly targetNavigability?: UmlRelationship['targetNavigability'];
   readonly parallelIndex: number;
@@ -51,6 +52,10 @@ export function AsociacionEdge({
     ? rutaRecursiva(sourceX, sourceY, targetX, targetY, profundidadBucle)
     : rutaParalela(sourceX, sourceY, targetX, targetY, desplazamientoCarril);
   const path = ruta.path;
+  const centro = {
+    x: (ruta.sourceToward.x + ruta.targetToward.x) / 2,
+    y: (ruta.sourceToward.y + ruta.targetToward.y) / 2,
+  };
 
   const origen = esRecursiva
     ? { x: sourceX - 18, y: sourceY + 18 + parallelIndex * 10 }
@@ -92,6 +97,9 @@ export function AsociacionEdge({
         d={path}
         strokeDasharray={kind === 'DEPENDENCY' || kind === 'REALIZATION' ? '7 4' : undefined}
       />
+      {data?.associationClassId && (
+        <AssociationClassConnector classId={data.associationClassId} {...centro} />
+      )}
       <RelationshipMarker
         kind={kind}
         sourceX={sourceX}
@@ -104,13 +112,8 @@ export function AsociacionEdge({
         targetTowardY={ruta.targetToward.y}
       />
 
-      {data?.name && (
-        <text
-          className="rol-asociacion"
-          x={(sourceX + targetX) / 2 + ruta.normal.x * desplazamientoCarril}
-          y={(sourceY + targetY) / 2 + ruta.normal.y * desplazamientoCarril - 8}
-          textAnchor="middle"
-        >
+      {data?.name && !data.associationClassId && (
+        <text className="rol-asociacion" x={centro.x} y={centro.y - 8} textAnchor="middle">
           {data.name}
         </text>
       )}
@@ -155,6 +158,37 @@ export function AsociacionEdge({
         </text>
       )}
     </g>
+  );
+}
+
+function AssociationClassConnector({
+  classId,
+  x,
+  y,
+}: {
+  classId: string;
+  x: number;
+  y: number;
+}): React.JSX.Element | null {
+  const node = useInternalNode(classId);
+  const width = node?.measured.width ?? node?.width;
+  const height = node?.measured.height ?? node?.height;
+  if (!node || !width || !height) return null;
+  const centerX = node.internals.positionAbsolute.x + width / 2;
+  const centerY = node.internals.positionAbsolute.y + height / 2;
+  const dx = x - centerX;
+  const dy = y - centerY;
+  const fraction = Math.min(width / 2 / Math.abs(dx), height / 2 / Math.abs(dy));
+  if (fraction >= 1) return null;
+  return (
+    <line
+      className="asociacion-linea enlace-clase-asociacion"
+      x1={x}
+      y1={y}
+      x2={centerX + dx * fraction}
+      y2={centerY + dy * fraction}
+      strokeDasharray="7 4"
+    />
   );
 }
 

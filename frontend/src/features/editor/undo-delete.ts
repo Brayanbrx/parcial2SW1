@@ -110,6 +110,12 @@ export function undoForDeletion(
           payload: { classId, operation },
         })),
         ...linked.map(createRelationship),
+        ...relationships
+          .filter((item) => item.associationClassId === classId && !linked.includes(item))
+          .map((item): CommandBody => ({
+            type: 'UPDATE_RELATIONSHIP',
+            payload: { relationshipId: item.id, associationClassId: classId },
+          })),
       ],
       selectId: classId,
     };
@@ -162,10 +168,12 @@ function createRelationship(relationship: UmlRelationship): CommandBody {
       sourceMultiplicity: relationship.sourceMultiplicity,
       targetMultiplicity: relationship.targetMultiplicity,
       ...Object.fromEntries(
-        ['name', 'sourceNavigability', 'targetNavigability'].flatMap((key) => {
-          const value = relationship[key as keyof UmlRelationship];
-          return value === undefined ? [] : [[key, value]];
-        }),
+        ['name', 'sourceNavigability', 'targetNavigability', 'associationClassId'].flatMap(
+          (key) => {
+            const value = relationship[key as keyof UmlRelationship];
+            return value === undefined ? [] : [[key, value]];
+          },
+        ),
       ),
       ...(relationship.sourceRoleName === undefined
         ? {}

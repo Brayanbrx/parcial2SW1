@@ -70,6 +70,20 @@ export function validateGenerationModel(model: SemanticModel): ValidationIssue[]
     ...validateInheritance(model, inheritance),
     ...validateRelationships(model, inheritance),
     ...validateOrphanClasses(model),
+    ...model.relationships.flatMap((r) =>
+      r.associationClassId === undefined
+        ? []
+        : [
+            issue({
+              code: 'GENERATION_UNSUPPORTED_UML',
+              elementIds: [r.id, r.associationClassId],
+              message:
+                'El generador Spring/PostgreSQL todavía no transforma las clases de asociación.',
+              suggestion:
+                'Para generar código, modela la clase intermedia con dos asociaciones binarias.',
+            }),
+          ],
+    ),
     ...model.classes.flatMap((c) => {
       const unsupported =
         (c.kind !== undefined && c.kind !== 'CLASS') ||

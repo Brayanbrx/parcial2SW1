@@ -350,11 +350,7 @@ class _EdgesPainter extends CustomPainter {
       }
       final kind = e.relationship.kind;
       if (kind == 'DEPENDENCY' || kind == 'REALIZATION') {
-        for (final metric in path.computeMetrics()) {
-          for (var offset = 0.0; offset < metric.length; offset += 11) {
-            canvas.drawPath(metric.extractPath(offset, math.min(offset + 7, metric.length)), line);
-          }
-        }
+        _drawDashedPath(canvas, path, line);
       } else {
         canvas.drawPath(path, line);
       }
@@ -381,8 +377,14 @@ class _EdgesPainter extends CustomPainter {
       if (kind == 'DEPENDENCY') {
         _openArrow(canvas, e.target, e.targetToward, markerStroke);
       }
-      if (e.relationship.name case final name?) {
-        _label(canvas, name, (e.source + e.target) / 2 - const Offset(0, 12), italic: true);
+      if (e.associationClassConnector case (final start, final end)) {
+        final connector = Path()
+          ..moveTo(start.dx, start.dy)
+          ..lineTo(end.dx, end.dy);
+        _drawDashedPath(canvas, connector, line);
+      }
+      if (e.relationship.name case final name? when e.relationship.associationClassId == null) {
+        _label(canvas, name, e.midpoint - const Offset(0, 12), italic: true);
       }
       if (e.relationship.isStructural) {
         _navigation(canvas, e.source, e.sourceToward, e.relationship.sourceNavigability, markerStroke);
@@ -395,6 +397,14 @@ class _EdgesPainter extends CustomPainter {
         if (e.relationship.targetRole case final role?) {
           _label(canvas, role, e.targetRoleLabel, italic: true);
         }
+      }
+    }
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
+    for (final metric in path.computeMetrics()) {
+      for (var offset = 0.0; offset < metric.length; offset += 11) {
+        canvas.drawPath(metric.extractPath(offset, math.min(offset + 7, metric.length)), paint);
       }
     }
   }

@@ -42,7 +42,8 @@ void main() {
     expect(find.text('Pedido'), findsOneWidget);
     expect(find.text('PK'), findsNothing);
     expect(find.text('U'), findsNothing);
-    expect(find.textContaining('- fecha: DateTime [1]', findRichText: true), findsOneWidget);
+    expect(find.textContaining('- fecha: DateTime', findRichText: true), findsOneWidget);
+    expect(find.textContaining('[1]', findRichText: true), findsNothing);
   });
 
   testWidgets('una clase sin atributos conserva su nombre y no dibuja texto de ayuda', (tester) async {

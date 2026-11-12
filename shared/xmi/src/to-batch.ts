@@ -79,6 +79,19 @@ export function xmiToBatch(
   const resolvedNames = new Map(
     mapped.map(({ c, existing, classId }) => [classId, existing?.displayName ?? c.name]),
   );
+  const classKinds = new Map(
+    mapped.map(({ c, existing, classId }) => [
+      classId,
+      (existing ? existing.kind : c.kind) ?? 'CLASS',
+    ]),
+  );
+  const linkedAssociationClasses = new Set(
+    options.mode === 'ADD'
+      ? options.current.relationships.flatMap((r) =>
+          r.associationClassId === undefined ? [] : [r.associationClassId],
+        )
+      : [],
+  );
   const resolveType = (type: string, typeId?: string) => {
     const classId = typeId === undefined ? undefined : classesById.get(typeId);
     return (classId ? resolvedNames.get(classId) : undefined) ?? type;
@@ -215,9 +228,26 @@ export function xmiToBatch(
       });
       continue;
     }
+    const associationClassId =
+      r.associationClassXmiId === undefined ? undefined : classesById.get(r.associationClassXmiId);
+    if (
+      r.associationClassXmiId !== undefined &&
+      (!associationClassId ||
+        classKinds.get(associationClassId) !== 'CLASS' ||
+        associationClassId === sourceClassId ||
+        associationClassId === targetClassId ||
+        (r.kind ?? 'ASSOCIATION') !== 'ASSOCIATION')
+    ) {
+      skipped.push({
+        element: `${r.sourceName} → ${r.targetName}`,
+        reason: 'Se omitió la asociación porque su clase no se pudo vincular.',
+      });
+      continue;
+    }
     const value = {
       sourceClassId,
       targetClassId,
+      ...(associationClassId ? { associationClassId } : {}),
       ...(r.kind === undefined ? {} : { kind: r.kind }),
       sourceMultiplicity: r.sourceMultiplicity,
       targetMultiplicity: r.targetMultiplicity,
@@ -240,6 +270,14 @@ export function xmiToBatch(
       });
       continue;
     }
+    if (associationClassId && linkedAssociationClasses.has(associationClassId)) {
+      skipped.push({
+        element: `${r.sourceName} → ${r.targetName}`,
+        reason: 'Se conserva la asociación que ya está vinculada a la clase.',
+      });
+      continue;
+    }
+    if (associationClassId) linkedAssociationClasses.add(associationClassId);
     add(
       {
         type: 'CREATE_RELATIONSHIP',
@@ -282,6 +320,7 @@ function uniqueByName<T>(items: readonly T[], nameOf: (item: T) => string): Map<
 function equivalent(a: UmlRelationship, b: Omit<UmlRelationship, 'id'>): boolean {
   const kind = a.kind ?? 'ASSOCIATION';
   if (kind !== (b.kind ?? 'ASSOCIATION')) return false;
+  if (a.associationClassId !== b.associationClassId) return false;
   if ((a.name ?? '') !== (b.name ?? '')) return false;
   const ends = (reverse: boolean): boolean =>
     (reverse ? a.targetClassId : a.sourceClassId) === b.sourceClassId &&

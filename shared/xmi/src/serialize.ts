@@ -65,6 +65,27 @@ export function serializeToXmi251(model: SemanticModel, options: SerializeOption
   return serialize(model, options, true);
 }
 
+export function indexAssociationClassesForExport(
+  model: SemanticModel,
+): ReadonlyMap<string, UmlRelationship> {
+  const classIds = new Set(
+    model.classes.filter((c) => (c.kind ?? 'CLASS') === 'CLASS').map((c) => c.id),
+  );
+  const associationClasses = new Map<string, UmlRelationship>();
+  for (const r of model.relationships) {
+    if (
+      r.associationClassId !== undefined &&
+      classIds.has(r.associationClassId) &&
+      (r.kind ?? 'ASSOCIATION') === 'ASSOCIATION' &&
+      r.associationClassId !== r.sourceClassId &&
+      r.associationClassId !== r.targetClassId &&
+      !associationClasses.has(r.associationClassId)
+    )
+      associationClasses.set(r.associationClassId, r);
+  }
+  return associationClasses;
+}
+
 function serialize(model: SemanticModel, options: SerializeOptions, modern: boolean): string {
   const idDeTipo = new Map<string, string>(
     CONCEPTUAL_TYPES.map((tipo) => [tipo, `${XMI_ID_PREFIX}primitive_${tipo}`]),
@@ -108,6 +129,7 @@ function serialize(model: SemanticModel, options: SerializeOptions, modern: bool
     );
   }
 
+  const associationClasses = indexAssociationClassesForExport(model);
   for (const umlClass of model.classes) {
     lineas.push(
       ...serializarClase(
@@ -118,12 +140,18 @@ function serialize(model: SemanticModel, options: SerializeOptions, modern: bool
             (relationship.kind === 'GENERALIZATION' || relationship.kind === 'REALIZATION') &&
             relationship.sourceClassId === umlClass.id,
         ),
+        associationClasses.get(umlClass.id),
       ),
     );
   }
 
   for (const relationship of model.relationships) {
     if (relationship.kind === 'GENERALIZATION' || relationship.kind === 'REALIZATION') continue;
+    if (
+      relationship.associationClassId !== undefined &&
+      associationClasses.get(relationship.associationClassId) === relationship
+    )
+      continue;
     if (relationship.kind === 'DEPENDENCY') {
       lineas.push(
         `    <packagedElement xmi:type="uml:Dependency" xmi:id="${xmiId(relationship.id)}" name="${escapar(relationship.name ?? '')}" client="${xmiId(relationship.sourceClassId)}" supplier="${xmiId(relationship.targetClassId)}"/>`,
@@ -134,7 +162,7 @@ function serialize(model: SemanticModel, options: SerializeOptions, modern: bool
   }
 
   lineas.push('  </uml:Model>');
-  const extension = serializarExtension(model, options.layout);
+  const extension = serializarExtension(model, associationClasses, options.layout);
   lineas.push(
     ...(modern
       ? extension.map((line) => line.replace(/(<\/?xmi:)Extension\b/g, '$1extension'))
@@ -150,9 +178,20 @@ function serializarClase(
   umlClass: UmlClass,
   idDeTipo: ReadonlyMap<string, string>,
   generalizations: readonly UmlRelationship[],
+  association?: UmlRelationship,
 ): readonly string[] {
+  const tipo = association
+    ? 'AssociationClass'
+    : (
+        {
+          CLASS: 'Class',
+          INTERFACE: 'Interface',
+          ENUMERATION: 'Enumeration',
+          DATA_TYPE: 'DataType',
+        } as const
+      )[umlClass.kind ?? 'CLASS'];
   const lineas = [
-    `    <packagedElement xmi:type="uml:${({ CLASS: 'Class', INTERFACE: 'Interface', ENUMERATION: 'Enumeration', DATA_TYPE: 'DataType' } as const)[umlClass.kind ?? 'CLASS']}" xmi:id="${xmiId(umlClass.id)}" name="${escapar(umlClass.displayName)}" visibility="public"${umlClass.isAbstract ? ' isAbstract="true"' : ''}>`,
+    `    <packagedElement xmi:type="uml:${tipo}" xmi:id="${xmiId(umlClass.id)}" name="${escapar(umlClass.displayName)}" visibility="public"${umlClass.isAbstract ? ' isAbstract="true"' : ''}>`,
   ];
 
   for (const atributo of umlClass.attributes) {
@@ -177,6 +216,7 @@ function serializarClase(
     );
   }
 
+  if (association) lineas.push(...serializarExtremos(association, xmiId(umlClass.id)));
   lineas.push('    </packagedElement>');
   return lineas;
 }
@@ -249,11 +289,17 @@ function serializarOperacion(
 
 function serializarAsociacion(relationship: UmlRelationship): readonly string[] {
   const id = xmiId(relationship.id);
-  const extremoOrigen = `${id}_src`;
-  const extremoDestino = `${id}_tgt`;
-
   return [
     `    <packagedElement xmi:type="uml:Association" xmi:id="${id}" visibility="public"${relationship.name ? ` name="${escapar(relationship.name)}"` : ''}>`,
+    ...serializarExtremos(relationship, id),
+    '    </packagedElement>',
+  ];
+}
+
+function serializarExtremos(relationship: UmlRelationship, id: string): readonly string[] {
+  const extremoOrigen = `${xmiId(relationship.id)}_src`;
+  const extremoDestino = `${xmiId(relationship.id)}_tgt`;
+  return [
     `      <memberEnd xmi:idref="${extremoOrigen}"/>`,
     `      <memberEnd xmi:idref="${extremoDestino}"/>`,
     ...(relationship.sourceNavigability === 'navigable'
@@ -281,7 +327,6 @@ function serializarAsociacion(relationship: UmlRelationship): readonly string[] 
           ? { aggregation: 'shared' as const }
           : {}),
     }),
-    '    </packagedElement>',
   ];
 }
 
@@ -320,14 +365,24 @@ export function limites(multiplicidad: Multiplicity): { lower: string; upper: st
  * Solo la marca de unicidad. Va aparte y con nuestro nombre encima para que
  * quede claro que es nuestra, no una interpretacion del estandar.
  */
-function serializarExtension(model: SemanticModel, layout?: Layout): readonly string[] {
+function serializarExtension(
+  model: SemanticModel,
+  associationClasses: ReadonlyMap<string, UmlRelationship>,
+  layout?: Layout,
+): readonly string[] {
   const unicos = model.classes.flatMap((umlClass) =>
     umlClass.attributes.filter((atributo) => atributo.unique).map((atributo) => atributo.id),
   );
 
-  const notations = model.relationships.filter(
-    (r) => r.sourceNavigability !== undefined || r.targetNavigability !== undefined,
-  );
+  const notations = model.relationships.flatMap((r) => {
+    const linked =
+      r.associationClassId !== undefined && associationClasses.get(r.associationClassId) === r;
+    if (!linked && r.sourceNavigability === undefined && r.targetNavigability === undefined)
+      return [];
+    return [
+      `      <relationship xmi:idref="${xmiId(linked ? r.associationClassId! : r.id)}"${linked ? ` relationshipId="${r.id}"${r.name === undefined ? '' : ` originalName="${escapar(r.name)}"`}` : ''}${r.sourceNavigability ? ` sourceNavigability="${r.sourceNavigability}"` : ''}${r.targetNavigability ? ` targetNavigability="${r.targetNavigability}"` : ''}/>`,
+    ];
+  });
 
   return [
     `  <xmi:Extension extender="${EXTENDER_PROPIO}">`,
@@ -336,10 +391,7 @@ function serializarExtension(model: SemanticModel, layout?: Layout): readonly st
     ...unicos.map((id) => `      <attribute xmi:idref="${xmiId(id)}"/>`),
     '    </uniqueAttributes>',
     '    <relationshipNotations>',
-    ...notations.map(
-      (r) =>
-        `      <relationship xmi:idref="${xmiId(r.id)}"${r.sourceNavigability ? ` sourceNavigability="${r.sourceNavigability}"` : ''}${r.targetNavigability ? ` targetNavigability="${r.targetNavigability}"` : ''}/>`,
-    ),
+    ...notations,
     '    </relationshipNotations>',
     '    <layout>',
     ...model.classes.flatMap((c) => {

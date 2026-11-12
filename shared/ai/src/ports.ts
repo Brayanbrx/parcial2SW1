@@ -1,4 +1,4 @@
-import type { SemanticModel } from '@uml/contracts';
+import type { SemanticModel, ValidationIssue } from '@uml/contracts';
 import type { BatchProposal } from './proposal.js';
 import type { TeamContext } from './team-context.js';
 import type { ModelCapabilities } from './model-capabilities.js';
@@ -46,6 +46,7 @@ export interface TeachingPolicy {
 
 export interface AnswerIssue {
   readonly code: string;
+  readonly scope?: ValidationIssue['scope'];
   readonly severity: string;
   readonly message: string;
   readonly elementIds?: readonly string[];

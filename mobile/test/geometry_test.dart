@@ -78,6 +78,36 @@ void main() {
     final e = DiagramGeometry(model, BoardLayout(positions: {'A': Offset.zero})).edges.single;
     expect(e.points.first, Offset(240 * 0.42, 80));
     expect(e.points[1], Offset(240 * 0.42, 80 + 58));
+    expect(e.midpoint, const Offset(120, 138));
+  });
+
+  test('la clase de asociación se conecta al carril y sigue su tarjeta al moverla', () {
+    final linked = UmlRelationship.fromJson({
+      'id': 'r2',
+      'sourceClassId': 'A',
+      'targetClassId': 'B',
+      'sourceMultiplicity': '0..*',
+      'targetMultiplicity': '0..*',
+      'associationClassId': 'C',
+    });
+    final model = SemanticModel(
+      classes: [clase('A'), clase('B'), clase('C')],
+      relationships: [rel('r1', 'A', 'B'), linked],
+    );
+    final layout = BoardLayout(positions: {'A': Offset.zero, 'B': const Offset(500, 0), 'C': const Offset(250, 180)});
+    final original = DiagramGeometry(model, layout).edges.last.associationClassConnector;
+    final moved = DiagramGeometry(model, layout, overrides: {'C': const Offset(250, 260)}).edges.last.associationClassConnector;
+    expect(original, (const Offset(370, 52), const Offset(370, 180)));
+    expect(moved, (const Offset(370, 52), const Offset(370, 260)));
+  });
+
+  test('reserva espacio para una clase de asociación con nombre largo', () {
+    final relationship = rel('r', 'A', 'B');
+    final model = SemanticModel(classes: [clase('A'), clase('B'), clase('C')], relationships: [relationship]);
+    final layout = BoardLayout(positions: {'A': Offset.zero, 'B': const Offset(500, 0), 'C': const Offset(530, 180)});
+    final geometry = DiagramGeometry(model, layout);
+    final name = List.filled(4, 'RegistroAcademico').join();
+    expect(geometry.associationClassPosition(relationship, name), Offset(370 - (name.length * 7 + 32) / 2, 284));
   });
 
   test('ignora relaciones hacia clases que ya no existen', () {

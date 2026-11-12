@@ -1,6 +1,16 @@
 import { readFileSync } from 'node:fs';
-import { parseXmi, xmiToProposal } from '@uml/xmi';
+import { emptyBoardState } from '@uml/contracts';
+import { applyBatch, validateGenerationModel, validateUmlModel } from '@uml/domain-core';
+import {
+  parseXmi,
+  serializeToEnterpriseArchitect,
+  serializeToXmi,
+  serializeToXmi251,
+  xmiToBatch,
+  xmiToProposal,
+} from '@uml/xmi';
 import { describe, expect, it } from 'vitest';
+import { umlId } from '../../domain-core/tests/uml251-fixture.js';
 
 const real = new TextDecoder('windows-1252').decode(
   readFileSync(new URL('./fixtures/ea-association-class.xmi', import.meta.url)),
@@ -14,7 +24,7 @@ const association = `<packagedElement xmi:type="uml:AssociationClass" xmi:id="AC
 </packagedElement>`;
 const classes = `<packagedElement xmi:type="uml:Class" xmi:id="A" name="Estudiante"/><packagedElement xmi:type="uml:Class" xmi:id="B" name="Curso"/>`;
 
-describe('clases asociativas como entidades intermedias', () => {
+describe('clases de asociación en XMI', () => {
   it('PracticaProbar: recupera Inscripcion, sus cuatro tipos y sus tres enlaces', () => {
     const model = parseXmi(real);
     expect(model.classes.filter((c) => c.name === 'Inscripcion')).toHaveLength(1);
@@ -70,22 +80,17 @@ describe('clases asociativas como entidades intermedias', () => {
     ).toHaveLength(1);
   });
 
-  it('resuelve UML estándar, conserva los roles y cruza los límites hacia la entidad intermedia', () => {
+  it('resuelve UML estándar y conserva los roles y multiplicidades en sus extremos', () => {
     const model = parseXmi(wrap(classes + association));
     expect(model.relationships).toEqual([
       expect.objectContaining({
         sourceName: 'Estudiante',
-        targetName: 'Inscripcion',
+        targetName: 'Curso',
+        associationClassXmiId: 'AC',
         sourceRole: 'estudiante',
-        sourceMultiplicity: '1',
+        targetRole: 'curso',
+        sourceMultiplicity: '0..1',
         targetMultiplicity: '1..*',
-      }),
-      expect.objectContaining({
-        sourceName: 'Curso',
-        targetName: 'Inscripcion',
-        sourceRole: 'curso',
-        sourceMultiplicity: '1',
-        targetMultiplicity: '0..1',
       }),
     ]);
   });
@@ -102,7 +107,7 @@ describe('clases asociativas como entidades intermedias', () => {
         '<memberEnd xmi:idref="e1"/><memberEnd xmi:idref="e2"/></packagedElement>',
       );
     const model = parseXmi(wrap(body + ac));
-    expect(model.relationships).toHaveLength(2);
+    expect(model.relationships).toHaveLength(1);
     expect(model.classes.find((c) => c.name === 'Estudiante')?.attributes).toEqual([]);
   });
 
@@ -133,12 +138,98 @@ describe('clases asociativas como entidades intermedias', () => {
     expect(model.classes.find((c) => c.name === 'Inscripcion_2')?.attributes[0]?.name).toBe(
       'fecha',
     );
-    expect(model.relationships.every((r) => r.targetName === 'Inscripcion_2')).toBe(true);
+    expect(model.relationships[0]?.associationClassXmiId).toBe('AC');
+    expect(model.classes.find((c) => c.xmiId === 'AC')?.name).toBe('Inscripcion_2');
+  });
+
+  it('conserva una clase homónima vacía de otro paquete en XMI estándar', () => {
+    const otherPackage = `<packagedElement xmi:type="uml:Package" xmi:id="P" name="Archivo">
+      <packagedElement xmi:type="uml:Class" xmi:id="Other" name="Inscripcion"/>
+    </packagedElement>`;
+    const model = parseXmi(wrap(classes + association + otherPackage));
+    expect(model.classes.find((c) => c.xmiId === 'Other')).toMatchObject({
+      name: 'Inscripcion_2',
+      attributes: [],
+    });
+    expect(model.relationships[0]?.associationClassXmiId).toBe('AC');
   });
 
   it('distingue los dos roles de una asociación reflexiva', () => {
     const model = parseXmi(wrap(classes + association.replace('type="B"', 'type="A"')));
-    expect(model.relationships).toHaveLength(2);
-    expect(new Set(model.relationships.map((r) => r.targetRole)).size).toBe(2);
+    expect(model.relationships).toEqual([
+      expect.objectContaining({
+        sourceName: 'Estudiante',
+        targetName: 'Estudiante',
+        sourceRole: 'estudiante',
+        targetRole: 'curso',
+      }),
+    ]);
   });
+
+  it('conserva la orientación del conector de EA cuando exporta un vínculo duplicado como asociación ordinaria', () => {
+    const empty = emptyBoardState();
+    const batch = xmiToBatch(parseXmi(wrap(classes + association)), {
+      mode: 'REPLACE',
+      current: empty.semantic,
+      actorId: umlId(100),
+    }).batch;
+    const input = applyBatch(empty, batch);
+    if (!input.applied) throw new Error('No se importó el diagrama de prueba');
+    const original = input.state.semantic.relationships[0]!;
+    const fallback = {
+      ...original,
+      id: umlId(105),
+      sourceRoleName: 'origen',
+      targetRoleName: 'destino',
+    };
+    input.state.semantic.relationships.push(fallback);
+
+    const exported = serializeToEnterpriseArchitect(input.state.semantic, {
+      modelName: 'Inscripciones',
+    });
+    const roundTrip = parseXmi(exported);
+    expect(roundTrip.relationships.find((r) => r.xmiId === fallback.id)).toMatchObject({
+      sourceXmiId: fallback.sourceClassId,
+      targetXmiId: fallback.targetClassId,
+      sourceRole: 'origen',
+      targetRole: 'destino',
+    });
+    expect(
+      roundTrip.relationships.filter((r) => r.associationClassXmiId !== undefined),
+    ).toHaveLength(1);
+  });
+
+  it.each([serializeToXmi251, serializeToXmi, serializeToEnterpriseArchitect])(
+    'conserva la clase de asociación al exportar y volver a importar con $name',
+    (serialize) => {
+      const empty = emptyBoardState();
+      const options = { mode: 'REPLACE', current: empty.semantic, actorId: umlId(100) } as const;
+      const input = applyBatch(
+        empty,
+        xmiToBatch(parseXmi(wrap(classes + association)), options).batch,
+      );
+      if (!input.applied) throw new Error('No se importó el diagrama de prueba');
+      const linked = input.state.semantic.relationships[0]!;
+      expect(linked.associationClassId).toBe(
+        input.state.semantic.classes.find((c) => c.displayName === 'Inscripcion')?.id,
+      );
+      expect(validateUmlModel(input.state.semantic)).toEqual([]);
+      expect(validateGenerationModel(input.state.semantic)).toContainEqual(
+        expect.objectContaining({
+          code: 'GENERATION_UNSUPPORTED_UML',
+          elementIds: [linked.id, linked.associationClassId],
+        }),
+      );
+      linked.name = 'nombre anterior';
+      linked.sourceNavigability = 'nonNavigable';
+      const xml = serialize(input.state.semantic, { modelName: 'Inscripciones' });
+      expect(xml).toContain('xmi:type="uml:AssociationClass"');
+      expect(xml).not.toContain('xmi:type="uml:Association"');
+      const imported = parseXmi(xml);
+      expect(imported.warnings).toEqual([]);
+      const result = applyBatch(empty, xmiToBatch(imported, options).batch);
+      if (!result.applied) throw new Error('No se reimportó el diagrama exportado');
+      expect(result.state.semantic).toEqual(input.state.semantic);
+    },
+  );
 });

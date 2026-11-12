@@ -1,15 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { fixture } from '@uml/fixtures';
+import { validateModel } from '@uml/domain-core';
+import { uml251Fixture } from '../../domain-core/tests/uml251-fixture.js';
 import {
   describir,
   inferirTipoAtributo,
   interpretarPropuesta,
   mensajeDeConsulta,
   mensajeDePropuesta,
+  sistemaDeConsulta,
   SISTEMA_ASISTENTE,
 } from '../src/prompt.js';
 
 describe('contexto compacto sin pérdida de datos del modelo', () => {
+  it('envía las propiedades UML y el ámbito de los hallazgos al solicitar una revisión', () => {
+    const { semantic } = uml251Fixture();
+    const prompt = mensajeDeConsulta('Revisa la pizarra', semantic, validateModel(semantic));
+    expect(prompt).toContain('INTERFACE "Facturable"');
+    expect(prompt).toContain('DATA_TYPE "Dinero"');
+    expect(prompt).toContain('literales: ["PENDIENTE","PAGADO"]');
+    expect(prompt).toContain('CLASS abstracto "Documento"');
+    expect(prompt).toContain(
+      '"+ calcularTotal(inout impuesto: Decimal [0..1] = 0): Dinero [0..1]" abstracta',
+    );
+    expect(prompt).toContain('"+ crear(): Factura" estática');
+    expect(prompt).toContain('"# /etiquetas: String [2..5]');
+    expect(prompt).toContain('"Factura" realiza "Facturable"');
+    expect(prompt).toContain('"Factura" depende de "Dinero" (nombre: "utiliza")');
+    expect(prompt).toContain('navegabilidad destino: navigable');
+    expect(prompt).toContain('"scope":"GENERATION"');
+    expect(sistemaDeConsulta({ task: 'REVIEW', solutionMode: 'ON_REQUEST' })).toContain(
+      'Una asociación directa muchos a muchos es válida en UML.',
+    );
+  });
+
   it('conserva todas las clases, atributos, tipos, marcas y ambos roles', () => {
     const model = fixture('T01').model;
     const rel = model.relationships[0]!;

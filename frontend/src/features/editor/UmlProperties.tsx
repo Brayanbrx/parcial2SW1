@@ -177,7 +177,9 @@ export function ClassifierProperties({
         <span>Tipo de elemento</span>
         <select
           value={c.kind ?? 'CLASS'}
-          disabled={!canWrite}
+          disabled={
+            !canWrite || state.semantic.relationships.some((r) => r.associationClassId === c.id)
+          }
           data-testid="tipo-clasificador"
           onChange={(e) =>
             run(

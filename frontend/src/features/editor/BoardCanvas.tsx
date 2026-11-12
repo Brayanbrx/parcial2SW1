@@ -143,7 +143,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
   );
 
   const edges: AsociacionEdgeType[] = useMemo(() => {
-    const clasesExistentes = new Set(state.semantic.classes.map((item) => item.id));
+    const clasesExistentes = new Map(
+      state.semantic.classes.map((item) => [item.id, item.displayName]),
+    );
     const dibujables = state.semantic.relationships.filter(
       (relacion) =>
         clasesExistentes.has(relacion.sourceClassId) &&
@@ -162,6 +164,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         state.semantic.classes,
       );
       const carril = paralelas.get(relacion.id) ?? { index: 0, count: 1 };
+      const claseAsociacion =
+        relacion.associationClassId === undefined
+          ? undefined
+          : clasesExistentes.get(relacion.associationClassId);
 
       const arista: AsociacionEdgeType = {
         id: relacion.id,
@@ -171,7 +177,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         sourceHandle: lados.origen,
         targetHandle: lados.destino,
         selected: relacion.id === selectedId,
-        ariaLabel: `${relacion.kind ?? 'ASSOCIATION'} entre ${state.semantic.classes.find((item) => item.id === relacion.sourceClassId)?.displayName ?? 'clase'} y ${state.semantic.classes.find((item) => item.id === relacion.targetClassId)?.displayName ?? 'clase'}`,
+        ariaLabel: `${relacion.kind ?? 'ASSOCIATION'} entre ${clasesExistentes.get(relacion.sourceClassId)} y ${clasesExistentes.get(relacion.targetClassId)}${claseAsociacion === undefined ? '' : ` con clase de asociación ${claseAsociacion}`}`,
         data: {
           origen: relacion.sourceMultiplicity,
           destino: relacion.targetMultiplicity,
@@ -179,6 +185,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           rolDestino: relacion.targetRoleName,
           kind: relacion.kind ?? 'ASSOCIATION',
           name: relacion.name,
+          associationClassId:
+            claseAsociacion === undefined ? undefined : relacion.associationClassId,
           sourceNavigability: relacion.sourceNavigability,
           targetNavigability: relacion.targetNavigability,
           parallelIndex: carril.index,

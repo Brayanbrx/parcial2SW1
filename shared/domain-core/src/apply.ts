@@ -142,6 +142,18 @@ function applyCommand(draft: BoardState, command: Command): ValidationIssue[] {
       const target = findClass(draft, command.payload.classId);
       if (target === undefined) return [unknownClass(command.payload.classId)];
       const { classId: _classId, ...changes } = command.payload;
+      if (
+        changes.kind !== undefined &&
+        changes.kind !== 'CLASS' &&
+        draft.semantic.relationships.some((r) => r.associationClassId === target.id)
+      )
+        return [
+          issue(
+            'INVALID_UML_MODEL',
+            'Desvincula la clase de asociación antes de cambiar el tipo de elemento.',
+            [target.id],
+          ),
+        ];
       Object.assign(target, changes);
       return [];
     }
@@ -270,6 +282,8 @@ function deleteClass(draft: BoardState, command: CommandOf<'DELETE_CLASS'>): Val
   draft.semantic.relationships = draft.semantic.relationships.filter(
     (rel) => rel.sourceClassId !== classId && rel.targetClassId !== classId,
   );
+  for (const relationship of draft.semantic.relationships)
+    if (relationship.associationClassId === classId) delete relationship.associationClassId;
 
   delete draft.layout.positions[classId];
   delete draft.layout.sizes[classId];
@@ -439,11 +453,18 @@ function createRelationship(
     targetClassId: payload.targetClassId,
     sourceMultiplicity: payload.sourceMultiplicity,
     targetMultiplicity: payload.targetMultiplicity,
-    ...pickDefined(payload, ['name', 'sourceNavigability', 'targetNavigability']),
+    ...pickDefined(payload, [
+      'name',
+      'sourceNavigability',
+      'targetNavigability',
+      'associationClassId',
+    ]),
     ...(payload.sourceRoleName === undefined ? {} : { sourceRoleName: payload.sourceRoleName }),
     ...(payload.targetRoleName === undefined ? {} : { targetRoleName: payload.targetRoleName }),
   };
 
+  const issues = checkAssociationClass(draft, relationship, relationship.associationClassId);
+  if (issues.length > 0) return issues;
   draft.semantic.relationships.push(relationship);
   return [];
 }
@@ -458,6 +479,30 @@ function updateRelationship(
 
   if (kind === 'GENERALIZATION' && relationship.sourceClassId === relationship.targetClassId)
     return [invalidSelfGeneralization(relationshipId, relationship.sourceClassId)];
+  const { associationClassId } = command.payload;
+  if (
+    associationClassId &&
+    relationship.associationClassId &&
+    associationClassId !== relationship.associationClassId
+  )
+    return [
+      issue('INVALID_UML_MODEL', 'La asociación ya tiene una clase vinculada.', [
+        relationshipId,
+        relationship.associationClassId,
+      ]),
+    ];
+  const nextClassId =
+    associationClassId === undefined ? relationship.associationClassId : associationClassId;
+  if (kind !== undefined || associationClassId !== undefined) {
+    const issues = checkAssociationClass(
+      draft,
+      kind === undefined ? relationship : { ...relationship, kind },
+      nextClassId,
+    );
+    if (issues.length > 0) return issues;
+  }
+  if (associationClassId === null) delete relationship.associationClassId;
+  else if (associationClassId !== undefined) relationship.associationClassId = associationClassId;
   if (kind !== undefined) relationship.kind = kind;
   Object.assign(
     relationship,
@@ -478,6 +523,48 @@ function updateRelationship(
     relationship.targetRoleName = command.payload.targetRoleName;
   }
 
+  return [];
+}
+
+function checkAssociationClass(
+  draft: BoardState,
+  relationship: Pick<UmlRelationship, 'id' | 'kind' | 'sourceClassId' | 'targetClassId'>,
+  classId: string | null | undefined,
+): ValidationIssue[] {
+  if (classId === null || classId === undefined) return [];
+  const classifier = findClass(draft, classId);
+  if (classifier === undefined) return [unknownClass(classId)];
+  if ((relationship.kind ?? 'ASSOCIATION') !== 'ASSOCIATION')
+    return [
+      issue(
+        'INVALID_UML_MODEL',
+        'Desvincula la clase de asociación antes de cambiar el tipo de relación.',
+        [relationship.id, classId],
+      ),
+    ];
+  if (
+    (classifier.kind ?? 'CLASS') !== 'CLASS' ||
+    classId === relationship.sourceClassId ||
+    classId === relationship.targetClassId
+  )
+    return [
+      issue(
+        'INVALID_UML_MODEL',
+        'Selecciona una clase distinta de los extremos de la asociación.',
+        [relationship.id, classId],
+      ),
+    ];
+  if (
+    draft.semantic.relationships.some(
+      (r) => r.id !== relationship.id && r.associationClassId === classId,
+    )
+  )
+    return [
+      issue('INVALID_UML_MODEL', 'La clase ya está vinculada a otra asociación.', [
+        relationship.id,
+        classId,
+      ]),
+    ];
   return [];
 }
 

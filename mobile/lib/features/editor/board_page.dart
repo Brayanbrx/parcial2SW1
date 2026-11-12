@@ -256,7 +256,11 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
   }
 
   Future<void> _classifierProperties(UmlClass c) async {
-    final properties = await editClassifier(context, c);
+    final properties = await editClassifier(
+      context,
+      c,
+      associationClass: _model.relationships.any((r) => r.associationClassId == c.id),
+    );
     if (properties != null) {
       await _apply((b) => b.add('UPDATE_CLASS', {'classId': c.id, ...properties}));
     }
@@ -341,8 +345,8 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
   // --- Relaciones -------------------------------------------------------------
 
   Future<void> _createRelationship() async {
-    if (_model.classes.length < 2) {
-      showMessage(context, 'Necesitas al menos dos clases para crear una relación.');
+    if (_model.classes.isEmpty) {
+      showMessage(context, 'Crea una clase para empezar a agregar relaciones.');
       return;
     }
     final r = await editRelationship(context, _model.classes);
@@ -356,6 +360,43 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
         'sourceMultiplicity': r.sourceMultiplicity,
         'targetMultiplicity': r.targetMultiplicity,
       }),
+    );
+  }
+
+  Future<void> _createAssociationClass(UmlRelationship r) async {
+    final name = await askText(
+      context,
+      title: 'Agregar clase de asociación',
+      initial: r.name?.trim() ?? '',
+      action: 'Crear',
+    );
+    if (!mounted || name == null || name.isEmpty) return;
+    final id = newId();
+    final position = DiagramGeometry(_model, _layout).associationClassPosition(r, name);
+    final ok = await _apply(
+      (b) => b
+          .add('CREATE_CLASS', {
+            'classId': id,
+            'displayName': name,
+            'position': {'x': position.dx, 'y': position.dy},
+          })
+          .add('UPDATE_RELATIONSHIP', {
+            'relationshipId': r.id,
+            'associationClassId': id,
+          }),
+    );
+    if (ok && mounted) {
+      setState(() => _selectedId = id);
+      _tabs.animateTo(0);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _diagram.fit();
+      });
+    }
+  }
+
+  Future<void> _detachAssociationClass(UmlRelationship r) async {
+    await _apply(
+      (b) => b.add('UPDATE_RELATIONSHIP', {'relationshipId': r.id, 'associationClassId': null}),
     );
   }
 
@@ -376,7 +417,7 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
     await _apply((b) {
       b.add('UPDATE_RELATIONSHIP', {
         'relationshipId': r.id,
-        'name': fields['name'],
+        if (r.associationClassId == null) 'name': fields['name'],
         if (r.isStructural) ...{
           'sourceRoleName': fields['sourceRoleName'] == '' ? null : fields['sourceRoleName'],
           'targetRoleName': fields['targetRoleName'] == '' ? null : fields['targetRoleName'],
@@ -657,7 +698,10 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
               itemCount: rels.length,
               itemBuilder: (context, i) {
                 final r = rels[i];
-                final kind = relationshipKinds[r.kind] ?? r.kind;
+                final associationClassId = r.associationClassId;
+                final kind = associationClassId == null
+                    ? (relationshipKinds[r.kind] ?? r.kind)
+                    : 'Clase de asociación «${_model.className(associationClassId)}»';
                 return DecoratedBox(
                   decoration: BoxDecoration(
                     border: Border(bottom: BorderSide(color: c.borde)),
@@ -677,7 +721,24 @@ class _BoardPageState extends State<BoardPage> with SingleTickerProviderStateMix
                       style: TextStyle(color: c.textoSuave),
                     ),
                     onTap: _canWrite && !_saving ? () => _changeMultiplicity(r) : null,
-                    trailing: _canWrite
+                    trailing: _canWrite && r.kind == 'ASSOCIATION'
+                        ? PopupMenuButton<String>(
+                            tooltip: 'Acciones de la asociación',
+                            enabled: !_saving,
+                            itemBuilder: (_) => [
+                              if (associationClassId == null)
+                                const PopupMenuItem(value: 'add', child: Text('Agregar clase de asociación'))
+                              else
+                                const PopupMenuItem(value: 'detach', child: Text('Desvincular clase de asociación')),
+                              const PopupMenuItem(value: 'delete', child: Text('Eliminar relación')),
+                            ],
+                            onSelected: (action) => switch (action) {
+                              'add' => _createAssociationClass(r),
+                              'detach' => _detachAssociationClass(r),
+                              _ => _deleteRelationship(r),
+                            },
+                          )
+                        : _canWrite
                         ? IconButton(
                             tooltip: 'Eliminar relación',
                             icon: const Icon(Icons.delete_outline),

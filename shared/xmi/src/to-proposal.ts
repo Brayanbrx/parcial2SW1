@@ -1,5 +1,5 @@
 import type { SemanticModel } from '@uml/contracts';
-import type { XmiImport } from './parse.js';
+import type { XmiImport, XmiRelationship } from './parse.js';
 
 /**
  * De lo importado a una propuesta editable.
@@ -95,7 +95,8 @@ export function xmiToProposal(imported: XmiImport, options: ToProposalOptions): 
     }
   }
 
-  for (const relacion of imported.relationships) {
+  const relaciones = imported.relationships.flatMap((r) => relacionesParaPropuesta(r, imported));
+  for (const relacion of relaciones) {
     const origen = options.current.classes.find(
       (umlClass) => clave(umlClass.displayName) === clave(relacion.sourceName),
     );
@@ -157,10 +158,41 @@ export function xmiToProposal(imported: XmiImport, options: ToProposalOptions): 
   }
 
   const resumen =
-    `${imported.classes.length} clase(s) y ${imported.relationships.length} relacion(es)` +
+    `${imported.classes.length} clase(s) y ${relaciones.length} relacion(es)` +
     (options.mode === 'REPLACE' ? ', sustituyendo el contenido actual' : '');
 
   return { operations, rationale: resumen, ...(skipped.length === 0 ? {} : { skipped }) };
+}
+
+/** El formato de propuestas por nombre representa la clase con dos enlaces. */
+function relacionesParaPropuesta(
+  r: XmiRelationship,
+  imported: XmiImport,
+): readonly XmiRelationship[] {
+  if (r.associationClassXmiId === undefined) return [r];
+  const middle = imported.classes.find((c) => c.xmiId === r.associationClassXmiId);
+  if (middle === undefined) return [r];
+  const recursive = r.sourceName === r.targetName;
+  const link = (
+    sourceName: string,
+    sourceRole: string | null,
+    targetMultiplicity: string,
+    side: number,
+  ): XmiRelationship => ({
+    xmiId: null,
+    sourceName,
+    targetName: middle.name,
+    sourceRole,
+    targetRole: recursive
+      ? `${middle.name.charAt(0).toLowerCase()}${middle.name.slice(1)}${side}`
+      : null,
+    sourceMultiplicity: '1',
+    targetMultiplicity,
+  });
+  return [
+    link(r.sourceName, r.sourceRole, r.targetMultiplicity, 1),
+    link(r.targetName, r.targetRole, r.sourceMultiplicity, 2),
+  ];
 }
 
 function clave(nombre: string): string {

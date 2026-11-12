@@ -99,6 +99,8 @@ export const relationshipSchema = z.object({
   kind: z.enum(RELATIONSHIP_KINDS).optional(),
   sourceClassId: idSchema,
   targetClassId: idSchema,
+  /** Tarjeta que representa la parte de clase de esta asociación binaria. */
+  associationClassId: idSchema.optional(),
   sourceMultiplicity: multiplicitySchema,
   targetMultiplicity: multiplicitySchema,
   name: z.string().optional(),

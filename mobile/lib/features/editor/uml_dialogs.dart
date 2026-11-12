@@ -21,11 +21,12 @@ Future<Map<String, dynamic>?> editRelationshipProperties(BuildContext context, U
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextFormField(
-                initialValue: fields['name'] as String,
-                decoration: const InputDecoration(labelText: 'Nombre de relación'),
-                onChanged: (v) => fields['name'] = v,
-              ),
+              if (r.associationClassId == null)
+                TextFormField(
+                  initialValue: fields['name'] as String,
+                  decoration: const InputDecoration(labelText: 'Nombre de relación'),
+                  onChanged: (v) => fields['name'] = v,
+                ),
               if (r.isStructural)
                 for (final side in ['source', 'target']) ...[
                   Text(side == 'source' ? 'Origen' : 'Destino'),
@@ -74,7 +75,7 @@ Future<Map<String, dynamic>?> editRelationshipProperties(BuildContext context, U
   );
 }
 
-Future<Map<String, dynamic>?> editClassifier(BuildContext context, UmlClass c) {
+Future<Map<String, dynamic>?> editClassifier(BuildContext context, UmlClass c, {bool associationClass = false}) {
   var kind = c.kind;
   var abstract = c.isAbstract;
   var literals = c.literals.join('\n');
@@ -91,7 +92,7 @@ Future<Map<String, dynamic>?> editClassifier(BuildContext context, UmlClass c) {
                 initialValue: kind,
                 decoration: const InputDecoration(labelText: 'Tipo de elemento'),
                 items: [for (final e in classifierKinds.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
-                onChanged: (v) => set(() => kind = v!),
+                onChanged: associationClass ? null : (v) => set(() => kind = v!),
               ),
               if (kind == 'CLASS' || kind == 'DATA_TYPE')
                 SwitchListTile(

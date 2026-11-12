@@ -7,7 +7,12 @@ import {
   type UmlRelationship,
 } from '@uml/contracts';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { serializeToXmi, xmiId, type SerializeOptions } from './serialize.js';
+import {
+  indexAssociationClassesForExport,
+  serializeToXmi,
+  xmiId,
+  type SerializeOptions,
+} from './serialize.js';
 
 /** Perfil obtenido de fixtures/xmi/architect-practica1.xmi, exportado por EA.
  * Reutiliza la estructura semántica del serializador UML y añade el empaquetado,
@@ -97,7 +102,10 @@ export function serializeToEnterpriseArchitect(
   // EA interpreta el primer memberEnd como destino y el segundo como origen.
   // El orden de ownedEnd y sus propiedades sigue siendo origen/destino.
   for (const member of members) {
-    if (member['@xmi:type'] === 'uml:Association') {
+    if (
+      member['@xmi:type'] === 'uml:Association' ||
+      member['@xmi:type'] === 'uml:AssociationClass'
+    ) {
       member['memberEnd'] = list(member['memberEnd']).reverse();
     }
   }
@@ -124,9 +132,13 @@ export function serializeToEnterpriseArchitect(
   root['xmi:Extension'] = [extension, ...extensions.filter((item) => item !== extension)];
   extension['@extenderID'] = '6.5';
   const classExtensions = members.filter((element) =>
-    ['uml:Class', 'uml:Interface', 'uml:Enumeration', 'uml:DataType'].includes(
-      element['@xmi:type'] as string,
-    ),
+    [
+      'uml:Class',
+      'uml:Interface',
+      'uml:Enumeration',
+      'uml:DataType',
+      'uml:AssociationClass',
+    ].includes(element['@xmi:type'] as string),
   );
   extension['elements'] = {
     element: [
@@ -216,8 +228,19 @@ export function serializeToEnterpriseArchitect(
     classElement['attributes'] = { attribute: nativeAttributes };
     ((extension['elements'] as XmlElement)['element'] as XmlElement[]).push(classElement);
   }
+  const associationClassIds = new Map(
+    [...indexAssociationClassesForExport(model)].map(([classId, relationship]) => [
+      relationship.id,
+      classId,
+    ]),
+  );
+  const connectorIds = new Map(
+    model.relationships.map((r) => [r.id, eaId(associationClassIds.get(r.id) ?? r.id)]),
+  );
   extension['connectors'] = {
-    connector: model.relationships.map((relationship) => connector(relationship, model)),
+    connector: model.relationships.map((relationship) =>
+      connector(relationship, model, connectorIds.get(relationship.id)!),
+    ),
   };
   extension['primitivetypes'] = {
     packagedElement: {
@@ -234,7 +257,7 @@ export function serializeToEnterpriseArchitect(
       },
     },
   };
-  extension['diagrams'] = { diagram: diagram(model, options, packageId, diagramId) };
+  extension['diagrams'] = { diagram: diagram(model, options, packageId, diagramId, connectorIds) };
   // La cabecera sirve de selector de compatibilidad. Conservamos explícito
   // el productor real del archivo, sin alterar el bloque nativo de EA.
   return (builder.build(document) as string).replace(
@@ -290,7 +313,11 @@ function rewriteReferences(node: XmlElement, references: ReadonlyMap<string, str
   }
 }
 
-function connector(relationship: UmlRelationship, model: SemanticModel): XmlElement {
+function connector(
+  relationship: UmlRelationship,
+  model: SemanticModel,
+  connectorId: string,
+): XmlElement {
   const isGeneralization =
     relationship.kind === 'GENERALIZATION' ||
     relationship.kind === 'REALIZATION' ||
@@ -337,7 +364,7 @@ function connector(relationship: UmlRelationship, model: SemanticModel): XmlElem
     };
   };
   return {
-    '@xmi:idref': eaId(relationship.id),
+    '@xmi:idref': connectorId,
     source: end(true),
     target: end(false),
     properties: {
@@ -372,6 +399,7 @@ function diagram(
   options: EnterpriseArchitectOptions,
   packageId: string,
   diagramId: string,
+  connectorIds: ReadonlyMap<string, string>,
 ): XmlElement {
   const columns = Math.max(1, Math.ceil(Math.sqrt(model.classes.length)));
   const rowHeight = Math.max(180, ...model.classes.map((c) => 100 + c.attributes.length * 20));
@@ -429,7 +457,7 @@ function diagram(
         }),
         ...model.relationships.map((r) => ({
           '@geometry': 'SX=0;SY=0;EX=0;EY=0;Path=;',
-          '@subject': eaId(r.id),
+          '@subject': connectorIds.get(r.id)!,
           '@style': `Mode=3;SOID=${duid.get(r.sourceClassId) as string};EOID=${duid.get(r.targetClassId) as string};Color=-1;LWidth=0;Hidden=0;`,
         })),
       ],

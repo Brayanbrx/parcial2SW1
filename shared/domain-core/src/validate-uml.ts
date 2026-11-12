@@ -85,8 +85,32 @@ export function validateUmlModel(model: SemanticModel): ValidationIssue[] {
     }
   }
   const parents = new Map<string, string[]>();
+  const associationClasses = new Map<string, string>();
   for (const r of model.relationships) {
     checkId(r.id);
+    if (r.associationClassId !== undefined) {
+      const id = r.associationClassId;
+      const classifier = classes.get(id);
+      if (
+        !classifier ||
+        (classifier.kind ?? 'CLASS') !== 'CLASS' ||
+        (r.kind ?? 'ASSOCIATION') !== 'ASSOCIATION' ||
+        id === r.sourceClassId ||
+        id === r.targetClassId
+      )
+        add('La clase de asociación debe existir como clase y ser distinta de sus extremos.', [
+          r.id,
+          id,
+        ]);
+      const previous = associationClasses.get(id);
+      if (previous !== undefined)
+        add('Una clase de asociación solo puede vincularse a una asociación.', [
+          r.id,
+          previous,
+          id,
+        ]);
+      associationClasses.set(id, r.id);
+    }
     const source = classes.get(r.sourceClassId);
     const target = classes.get(r.targetClassId);
     if (source === undefined || target === undefined) {

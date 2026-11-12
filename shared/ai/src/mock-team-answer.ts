@@ -20,6 +20,7 @@ export function mockTeachingReview(options: AnswerOptions): string {
         [
           [c.id, c.displayName],
           ...c.attributes.map((a) => [a.id, `${c.displayName}.${a.displayName}`]),
+          ...(c.operations ?? []).map((o) => [o.id, `${c.displayName}.${o.displayName}()`]),
         ] as [string, string][],
     ),
   );
@@ -46,7 +47,7 @@ export function mockTeachingReview(options: AnswerOptions): string {
       : 'Revisión del modelo enviado:',
     ...issues.map((issue) =>
       [
-        `[${issue.severity}] ${issue.code}: ${issue.message}`,
+        `[${issue.severity}] ${issue.scope === 'GENERATION' ? '[Generación] ' : issue.scope === 'UML' ? '[UML] ' : ''}${issue.code}: ${issue.message}`,
         `Elementos: ${(issue.elementIds ?? []).map((id) => labels.get(id) ?? id).join(', ') || 'modelo'}.`,
         solutions && issue.suggestion
           ? `Solución sugerida: ${issue.suggestion}`
